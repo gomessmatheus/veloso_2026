@@ -1,0 +1,25 @@
+// firebase/firestore.rules
+// Cole este conteúdo em:
+// Firebase Console > Firestore Database > Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Acesso aberto para o time (sem login obrigatório)
+    // Qualquer pessoa com o link pode ler e escrever
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
+    // ─────────────────────────────────────────────────────
+    // OPCIONAL: Se quiser restringir por domínio de e-mail,
+    // substitua o bloco acima por:
+    //
+    // match /{document=**} {
+    //   allow read, write: if request.auth != null
+    //     && request.auth.token.email.matches('.*@seudominio\\.com');
+    // }
+    // ─────────────────────────────────────────────────────
+  }
+}

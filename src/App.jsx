@@ -534,21 +534,9 @@ function currBadge(cur) {
 
 // ─── Dashboard ────────────────────────────────────────────
 function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF }) {
-  const [bottomTab, setBottomTab] = useState("comissoes"); // "comissoes" | "nf"
 
-  const allCommEntries = useMemo(() => {
-    const all = [];
-    contracts.forEach(c => { getCommEntries(c).forEach(e => { all.push({ ...e, contractId: c.id, company: c.company, color: c.color }); }); });
-    return all;
-  }, [contracts]);
 
-  const allNFEntries = useMemo(() => {
-    const all = [];
-    contracts.forEach(c => { getNFEntries(c).forEach(e => { all.push({ ...e, contractId: c.id, company: c.company, color: c.color, currency: c.currency }); }); });
-    return all;
-  }, [contracts]);
 
-  const nfPendingCount = allNFEntries.filter(e => !e.isEmitted).length;
 
   const nextPay = useMemo(() => {
     const all = [];
@@ -621,7 +609,7 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
       </div>
 
       {/* Contract accordion list */}
-      <ContractList contracts={contracts} posts={posts} rates={rates} saveNote={saveNote} toggleComm={toggleComm} />
+      <ContractList contracts={contracts} posts={posts} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} />
 
       {/* Next payments */}
       {nextPay.length > 0 && (
@@ -651,73 +639,13 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
         </div>
       )}
 
-      {/* Comissões + NF tabbed block */}
-      {(allCommEntries.length > 0 || allNFEntries.length > 0) && (
-        <div className="blk">
-          <div className="blk-hd">
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <div className="tab-bar" style={{ margin: 0, border: "none", paddingBottom: 0 }}>
-                <div className={`tab-item${bottomTab === "comissoes" ? " act" : ""}`} onClick={() => setBottomTab("comissoes")}>Comissões</div>
-                <div className={`tab-item${bottomTab === "nf" ? " act" : ""}`} onClick={() => setBottomTab("nf")}>
-                  Notas Fiscais {nfPendingCount > 0 && <span style={{ marginLeft: 4, background: AMB, color: "#fff", borderRadius: "50%", width: 16, height: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>{nfPendingCount}</span>}
-                </div>
-              </div>
-            </div>
-            {bottomTab === "comissoes" && (
-              <div style={{ display: "flex", gap: 16, fontSize: 11 }}>
-                <span><span style={{ color: GRN, fontWeight: 700 }}>{fmtMoney(stats.commPaidBRL)}</span> <span style={{ color: MID }}>recebido</span></span>
-                <span><span style={{ color: stats.commPendBRL > 0 ? AMB : MID, fontWeight: 700 }}>{fmtMoney(stats.commPendBRL)}</span> <span style={{ color: MID }}>pendente</span></span>
-              </div>
-            )}
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            {bottomTab === "comissoes" && (
-              <table className="tbl">
-                <thead><tr>
-                  <th /><th>Empresa</th><th>Período / Parcela</th>
-                  <th className="num">Valor Comissão</th><th>Status</th>
-                </tr></thead>
-                <tbody>
-                  {allCommEntries.map((e, i) => (
-                    <tr key={i}>
-                      <td><span className="dot" style={{ background: e.color }} /></td>
-                      <td style={{ fontWeight: 600, fontSize: 12 }}>{e.company}</td>
-                      <td style={{ color: MID }}>{e.label}{e.date && <span style={{ marginLeft: 6, fontSize: 11 }}>{fmtDate(e.date)}</span>}</td>
-                      <td className="num" style={{ fontWeight: 700, color: RED }}>{e.amount > 0 ? fmtMoney(e.amount, e.currency) : "—"}</td>
-                      <td><StatusPill done={e.isPaid} onToggle={() => toggleCommPaid(e.contractId, e.key)} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {bottomTab === "nf" && (
-              <table className="tbl">
-                <thead><tr>
-                  <th /><th>Empresa</th><th>NF</th>
-                  <th className="num">Valor</th><th>Status</th>
-                </tr></thead>
-                <tbody>
-                  {allNFEntries.map((e, i) => (
-                    <tr key={i}>
-                      <td><span className="dot" style={{ background: e.color }} /></td>
-                      <td style={{ fontWeight: 600, fontSize: 12 }}>{e.company}</td>
-                      <td style={{ color: MID }}>{e.label}{e.date && <span style={{ marginLeft: 6, fontSize: 11 }}>{fmtDate(e.date)}</span>}</td>
-                      <td className="num" style={{ fontWeight: 700 }}>{e.amount > 0 ? fmtMoney(e.amount, e.currency) : "—"}</td>
-                      <td><StatusPill done={e.isEmitted} onToggle={() => toggleNF(e.contractId, e.key)} labelDone="✓ Emitida" labelPend="Pendente" /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
       )}
     </>
   );
 }
 
 // ─── Contract Accordion List (Dashboard) ─────────────────
-function ContractList({ contracts, posts, rates, saveNote, toggleComm }) {
+function ContractList({ contracts, posts, rates, saveNote, toggleComm, toggleCommPaid, toggleNF }) {
   const [open, setOpen] = useState(null);
 
   const toggle = id => setOpen(prev => prev === id ? null : id);
@@ -918,6 +846,71 @@ function ContractList({ contracts, posts, rates, saveNote, toggleComm }) {
                     <InlineNotes notes={c.notes} onSave={v => saveNote(c.id, v)} />
                   </div>
                 </div>
+
+                {/* Commission + NF rows */}
+                {(getCommEntries(c).length > 0 || getNFEntries(c).length > 0) && (
+                  <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+
+                    {getCommEntries(c).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>Comissões da Agência</span>
+                          <span style={{ color: RED, fontVariantNumeric: "tabular-nums" }}>
+                            {fmtMoney(getCommEntries(c).reduce((s, e) => s + e.amount, 0), c.currency)}
+                          </span>
+                        </div>
+                        <div style={{ border: `1px solid ${LN}`, background: "#fff" }}>
+                          {getCommEntries(c).map((e, i, arr) => (
+                            <div key={e.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderBottom: i < arr.length - 1 ? `1px solid ${LN}` : "none", gap: 10 }}>
+                              <div>
+                                <div style={{ fontSize: 11, fontWeight: 600 }}>{e.label}</div>
+                                {e.date && <div style={{ fontSize: 10, color: MID }}>{fmtDate(e.date)}</div>}
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: RED, fontVariantNumeric: "tabular-nums" }}>
+                                  {e.amount > 0 ? fmtMoney(e.amount, e.currency) : "—"}
+                                </span>
+                                <div className={`status-pill${e.isPaid ? " done" : " pend"}`} onClick={() => toggleCommPaid(c.id, e.key)}>
+                                  {e.isPaid ? "✓ Pago" : "Pendente"}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {getNFEntries(c).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>Notas Fiscais</span>
+                          <span style={{ color: MID, fontVariantNumeric: "tabular-nums" }}>
+                            {getNFEntries(c).filter(e => !e.isEmitted).length} pendente{getNFEntries(c).filter(e => !e.isEmitted).length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div style={{ border: `1px solid ${LN}`, background: "#fff" }}>
+                          {getNFEntries(c).map((e, i, arr) => (
+                            <div key={e.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderBottom: i < arr.length - 1 ? `1px solid ${LN}` : "none", gap: 10 }}>
+                              <div>
+                                <div style={{ fontSize: 11, fontWeight: 600 }}>{e.label}</div>
+                                {e.date && <div style={{ fontSize: 10, color: MID }}>{fmtDate(e.date)}</div>}
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                                  {e.amount > 0 ? fmtMoney(e.amount, e.currency) : "—"}
+                                </span>
+                                <div className={`status-pill${e.isEmitted ? " done" : " pend"}`} onClick={() => toggleNF(c.id, e.key)}>
+                                  {e.isEmitted ? "✓ Emitida" : "Pendente"}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
               </div>
             )}
           </div>

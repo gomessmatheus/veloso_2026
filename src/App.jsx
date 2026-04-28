@@ -39,10 +39,23 @@ function monthsBetween(start, end) {
   return (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
 }
 
+// Normalize: migrate old parc1/parc2 to installments array
+function getInstallments(c) {
+  if (c.installments && c.installments.length > 0) return c.installments;
+  // legacy migration
+  const arr = [];
+  if (c.parc1Deadline || c.parc1Value) arr.push({ value: Number(c.parc1Value)||0, date: c.parc1Deadline||"" });
+  if (c.parc2Deadline || c.parc2Value) arr.push({ value: Number(c.parc2Value)||0, date: c.parc2Deadline||"" });
+  return arr.length ? arr : [];
+}
 function contractTotal(c) {
   if (c.paymentType === "monthly") {
     const m = monthsBetween(c.contractStart, c.contractDeadline);
     return m ? (c.monthlyValue || 0) * m : 0;
+  }
+  if (c.paymentType === "split") {
+    const inst = getInstallments(c);
+    if (inst.length) return inst.reduce((s,i) => s + (Number(i.value)||0), 0);
   }
   return c.contractValue || 0;
 }
@@ -50,8 +63,9 @@ function contractTotal(c) {
 // Convert any contract value to BRL using supplied rates
 function toBRL(value, currency, rates) {
   if (currency === "BRL" || !currency) return value;
-  if (currency === "EUR") return value * (rates.eur || 0);
-  if (currency === "USD") return value * (rates.usd || 0);
+  // When rate is set, convert. When not set, include native value so total is never 0 for foreign contracts.
+  if (currency === "EUR") return rates.eur > 0 ? value * rates.eur : value;
+  if (currency === "USD") return rates.usd > 0 ? value * rates.usd : value;
   return value;
 }
 
@@ -87,10 +101,12 @@ function getCommEntries(c) {
     return entries;
   }
   if (c.paymentType === "split") {
-    return [
-      { key: "parc1", label: "1ª Parcela", amount: (c.parc1Value || 0) * COMM_RATE, currency: c.currency, date: c.parc1Deadline, isPaid: !!paid["parc1"] },
-      { key: "parc2", label: "2ª Parcela", amount: (c.parc2Value || 0) * COMM_RATE, currency: c.currency, date: c.parc2Deadline, isPaid: !!paid["parc2"] },
-    ];
+    const ORDINALS = ["1ª","2ª","3ª","4ª","5ª","6ª"];
+    return getInstallments(c).map((inst, i) => ({
+      key: `parc${i+1}`, label: `${ORDINALS[i]||`${i+1}ª`} Parcela`,
+      amount: (Number(inst.value)||0) * COMM_RATE, currency: c.currency,
+      date: inst.date, isPaid: !!paid[`parc${i+1}`]
+    }));
   }
   const total = contractTotal(c);
   return [{ key: "single", label: "Pagamento Único", amount: total * COMM_RATE, currency: c.currency, date: c.paymentDeadline, isPaid: !!paid["single"] }];
@@ -111,10 +127,12 @@ function getNFEntries(c) {
     return entries;
   }
   if (c.paymentType === "split") {
-    return [
-      { key: "parc1", label: "NF 1ª Parcela", amount: c.parc1Value || 0, currency: c.currency, date: c.parc1Deadline, isEmitted: !!nf["parc1"] },
-      { key: "parc2", label: "NF 2ª Parcela", amount: c.parc2Value || 0, currency: c.currency, date: c.parc2Deadline, isEmitted: !!nf["parc2"] },
-    ];
+    const ORDINALS = ["1ª","2ª","3ª","4ª","5ª","6ª"];
+    return getInstallments(c).map((inst, i) => ({
+      key: `parc${i+1}`, label: `NF ${ORDINALS[i]||`${i+1}ª`} Parcela`,
+      amount: Number(inst.value)||0, currency: c.currency,
+      date: inst.date, isEmitted: !!nf[`parc${i+1}`]
+    }));
   }
   const total = contractTotal(c);
   return [{ key: "single", label: "NF Única", amount: total, currency: c.currency, date: c.paymentDeadline, isEmitted: !!nf["single"] }];
@@ -126,70 +144,70 @@ const SEED = [
     contractValue:0, monthlyValue:30000, contractStart:"2026-06-01", currency:"BRL",
     contractDeadline:"2026-08-31", paymentType:"monthly",
     paymentDeadline:"", parc1Value:0, parc1Deadline:"", parc2Value:0, parc2Deadline:"",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:4, numStories:8, numCommunityLinks:2, numReposts:1,
     notes:"Embaixador chuteiras · R$30k/mês · jun–ago" },
   { id:"c1", company:"Play9 / GeTV", cnpj:"", color:"#C8102E",
     contractValue:200000, monthlyValue:0, contractStart:"", currency:"BRL",
     contractDeadline:"2026-07-15", paymentType:"split",
     paymentDeadline:"", parc1Value:100000, parc1Deadline:"2026-06-01", parc2Value:100000, parc2Deadline:"2026-07-15",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:0, numStories:0, numCommunityLinks:0, numReposts:0,
     notes:"Viagem Copa do Mundo — Brazil House / GeTV" },
   { id:"c2", company:"FlashScore", cnpj:"", color:"#1D4ED8",
     contractValue:36000, monthlyValue:0, contractStart:"", currency:"BRL",
     contractDeadline:"2026-07-31", paymentType:"single",
     paymentDeadline:"2026-07-31", parc1Value:0, parc1Deadline:"", parc2Value:0, parc2Deadline:"",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:8, numStories:13, numCommunityLinks:12, numReposts:1,
     notes:"8 reels + repost TikTok · 13 stories · 12 links (3x/mês)" },
   { id:"c3", company:"Coca-Cola", cnpj:"45.997.418/0001-53", color:"#DC2626",
     contractValue:100000, monthlyValue:0, contractStart:"", currency:"BRL",
     contractDeadline:"2026-07-15", paymentType:"split",
     paymentDeadline:"", parc1Value:50000, parc1Deadline:"2026-06-15", parc2Value:50000, parc2Deadline:"2026-07-15",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:3, numStories:0, numCommunityLinks:0, numReposts:0,
     notes:"3 reels Copa — 1 já entregue" },
   { id:"c4", company:"Kabum!", cnpj:"", color:"#F97316",
     contractValue:0, monthlyValue:0, contractStart:"", currency:"BRL",
     contractDeadline:"", paymentType:"single",
     paymentDeadline:"", parc1Value:0, parc1Deadline:"", parc2Value:0, parc2Deadline:"",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:0, numStories:0, numCommunityLinks:0, numReposts:0,
     notes:"Aguardando valores e escopo" },
   { id:"c5", company:"Tramontina", cnpj:"", color:"#0891B2",
     contractValue:98000, monthlyValue:0, contractStart:"", currency:"BRL",
     contractDeadline:"", paymentType:"single",
     paymentDeadline:"", parc1Value:0, parc1Deadline:"", parc2Value:0, parc2Deadline:"",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:0, numStories:0, numCommunityLinks:0, numReposts:0,
     notes:"Aguardando prazo e escopo" },
   { id:"c6", company:"Decolar", cnpj:"", color:"#059669",
     contractValue:14000, monthlyValue:0, contractStart:"", currency:"BRL",
     contractDeadline:"", paymentType:"single",
     paymentDeadline:"", parc1Value:0, parc1Deadline:"", parc2Value:0, parc2Deadline:"",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:0, numStories:0, numCommunityLinks:0, numReposts:1,
     notes:"1 TikTok" },
   { id:"c7", company:"Cacau Show", cnpj:"", color:"#92400E",
     contractValue:25000, monthlyValue:0, contractStart:"", currency:"BRL",
     contractDeadline:"", paymentType:"single",
     paymentDeadline:"", parc1Value:0, parc1Deadline:"", parc2Value:0, parc2Deadline:"",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:2, numStories:0, numCommunityLinks:0, numReposts:0,
     notes:"2 reels — 1 já entregue" },
   { id:"c8", company:"Paco Rabanne", cnpj:"", color:"#7C3AED",
     contractValue:2600, monthlyValue:0, contractStart:"", currency:"EUR",
     contractDeadline:"", paymentType:"single",
     paymentDeadline:"", parc1Value:0, parc1Deadline:"", parc2Value:0, parc2Deadline:"",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:1, numStories:0, numCommunityLinks:0, numReposts:0,
     notes:"1 reel · pagamento em euros" },
   { id:"c9", company:"Diamond Filmes", cnpj:"", color:"#BE185D",
     contractValue:18000, monthlyValue:0, contractStart:"", currency:"BRL",
     contractDeadline:"", paymentType:"single",
     paymentDeadline:"", parc1Value:0, parc1Deadline:"", parc2Value:0, parc2Deadline:"",
-    hasCommission:true, commPaid:{}, nfEmitted:{},
+    hasCommission:true, commPaid:{}, nfEmitted:{}, paymentDaysAfterNF:0,
     numPosts:1, numStories:0, numCommunityLinks:0, numReposts:0,
     notes:"1 reel" },
 ];
@@ -413,6 +431,7 @@ export default function App() {
       dp: del("post"), ds: del("story"), dl: del("link"), dr: drDone,
       views: posts.reduce((s, p) => s + (p.views || 0), 0),
       avgEng: engs.length ? engs.reduce((s, v) => s + v, 0) / engs.length : null,
+      nfPending: contracts.reduce((s, c) => s + getNFEntries(c).filter(e => !e.isEmitted).length, 0),
     };
   }, [contracts, posts, rates]);
 
@@ -427,15 +446,17 @@ export default function App() {
         const cur = new Date(s.getFullYear(), s.getMonth(), 1);
         while (cur <= e) { add(cur.toISOString().substr(0, 10), { label: `PGTO · ${c.company}`, color: c.color }); cur.setMonth(cur.getMonth() + 1); }
       } else if (c.paymentType === "split") {
-        if (c.parc1Deadline) add(c.parc1Deadline, { label: `1ª PARC · ${c.company}`, color: c.color });
-        if (c.parc2Deadline) add(c.parc2Deadline, { label: `2ª PARC · ${c.company}`, color: c.color });
+        const ORDINALS = ["1ª","2ª","3ª","4ª","5ª","6ª"];
+        getInstallments(c).forEach((inst, i) => {
+          if (inst.date) add(inst.date, { label: `${ORDINALS[i]||`${i+1}ª`} PARC · ${c.company}`, color: c.color });
+        });
       } else if (c.paymentDeadline) add(c.paymentDeadline, { label: `PGTO · ${c.company}`, color: c.color });
     });
     posts.forEach(p => {
       const c = contracts.find(x => x.id === p.contractId);
       if (!c) return;
       if (calFilter !== "all" && calFilter !== c.id) return;
-      add(p.publishDate, { label: p.title, color: c.color });
+      add(p.isPosted ? (p.publishDate||p.plannedDate) : p.plannedDate, { label: (p.isPosted?"":"📅 ")+p.title, color: c.color });
     });
     return ev;
   }, [contracts, posts, calFilter]);
@@ -469,12 +490,16 @@ export default function App() {
                 onBlur={e => sSave("copa6_usd", Number(e.target.value) || 0)} />
               <span className="rate-lbl">R$</span>
             </div>
+            <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 8px", border:"1px solid rgba(22,163,74,.35)", background:"rgba(22,163,74,.08)" }}>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:GRN }} />
+              <span style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:GRN }}>Ao Vivo</span>
+            </div>
             <span className="nav-date">{today.toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}</span>
           </div>
         </nav>
 
         <div className="page">
-          {view === "dashboard"  && <Dashboard  contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} />}
+          {view === "dashboard"  && <Dashboard  contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} />}
           {view === "contratos"  && <Contratos  contracts={contracts} posts={posts} saveC={saveC} setModal={setModal} toggleComm={toggleComm} saveNote={saveNote} rates={rates} />}
           {view === "posts"      && <Posts      contracts={contracts} posts={posts} saveP={saveP} setModal={setModal} />}
           {view === "calendário" && <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} />}
@@ -533,42 +558,23 @@ function currBadge(cur) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────
-function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF }) {
-
-
-
-
-  const nextPay = useMemo(() => {
-    const all = [];
-    contracts.forEach(c => {
-      if (c.paymentType === "monthly" && c.contractStart) {
-        const today = new Date();
-        const s = new Date(c.contractStart), e = new Date(c.contractDeadline || "2099-12-31");
-        const cur = new Date(s.getFullYear(), s.getMonth(), 1);
-        while (cur <= e) {
-          if (cur >= today) { all.push({ company: c.company, color: c.color, date: cur.toISOString().substr(0, 10), value: c.monthlyValue, currency: c.currency, label: "pgto mensal", hasComm: c.hasCommission }); break; }
-          cur.setMonth(cur.getMonth() + 1);
-        }
-      } else if (c.paymentType === "split") {
-        if (c.parc1Deadline) all.push({ company: c.company, color: c.color, date: c.parc1Deadline, value: c.parc1Value, currency: c.currency, label: "1ª parcela", hasComm: c.hasCommission });
-        if (c.parc2Deadline) all.push({ company: c.company, color: c.color, date: c.parc2Deadline, value: c.parc2Value, currency: c.currency, label: "2ª parcela", hasComm: c.hasCommission });
-      } else if (c.paymentDeadline) {
-        all.push({ company: c.company, color: c.color, date: c.paymentDeadline, value: contractTotal(c), currency: c.currency, label: "pagamento único", hasComm: c.hasCommission });
-      }
-    });
-    return all.sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8);
-  }, [contracts]);
-
-  const convNote = (value, currency) => {
-    if (currency === "EUR" && rates.eur > 0) return ` ≈ ${fmtMoney(value * rates.eur)}`;
-    if (currency === "USD" && rates.usd > 0) return ` ≈ ${fmtMoney(value * rates.usd)}`;
-    return "";
-  };
-
+// ─── Dashboard ────────────────────────────────────────────
+function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal }) {
   return (
     <>
-      <div className="phd">Dashboard — Copa 2026 <div className="rule" /></div>
+      {/* Page header */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, letterSpacing:".16em", textTransform:"uppercase", color:MID }}>
+            VELOSO 2026 — OP
+          </div>
+        </div>
+        <button className="btn red sm" onClick={() => setModal({ type:"contract", data:null })}>
+          + Novo Contrato
+        </button>
+      </div>
 
+      {/* KPIs */}
       <div className="kpi-row">
         <div className="kpi">
           <div className="kpi-lbl">Contratos</div>
@@ -576,13 +582,19 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
           <div className="kpi-sub">{contracts.filter(c => c.paymentType === "monthly").length} mensais</div>
         </div>
         <div className="kpi">
-          <div className="kpi-lbl">Volume Total BRL</div>
+          <div className="kpi-lbl">Volume BRL</div>
           <div className="kpi-val xs">{fmtMoney(stats.totalBRL)}</div>
           <div className="kpi-sub">
-            {[stats.totBrlNative > 0 ? fmtMoney(stats.totBrlNative) : null,
-              stats.totEur > 0 ? fmtMoney(stats.totEur, "EUR") : null,
-              stats.totUsd > 0 ? fmtMoney(stats.totUsd, "USD") : null]
-              .filter(Boolean).join(" + ")}
+            {stats.totEur > 0 && rates.eur === 0
+              ? <span style={{color:AMB}}>⚠ {fmtMoney(stats.totEur,"EUR")} sem cotação</span>
+              : stats.totEur > 0
+                ? <span>+ {fmtMoney(stats.totEur,"EUR")} ≈ {fmtMoney(stats.totEur*rates.eur)}</span>
+                : null}
+            {stats.totUsd > 0 && rates.usd === 0
+              ? <span style={{color:AMB}}> ⚠ {fmtMoney(stats.totUsd,"USD")} sem cotação</span>
+              : stats.totUsd > 0
+                ? <span> + {fmtMoney(stats.totUsd,"USD")} ≈ {fmtMoney(stats.totUsd*rates.usd)}</span>
+                : null}
           </div>
         </div>
         <div className="kpi">
@@ -591,80 +603,87 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
           <div className="kpi-sub">{fmtMoney(stats.commPaidBRL)} recebido</div>
         </div>
         <div className="kpi">
-          <div className="kpi-lbl">Comissão Pend.</div>
+          <div className="kpi-lbl">Com. Pendente</div>
           <div className="kpi-val sm" style={{ color: stats.commPendBRL > 0 ? AMB : GRN }}>{fmtMoney(stats.commPendBRL)}</div>
           <div className="kpi-sub">a receber</div>
         </div>
-        <div className="kpi"><div className="kpi-lbl">Posts/Reels</div><div className="kpi-val">{stats.dp}<span style={{ fontSize: 14, color: MID, fontWeight: 400 }}>/{stats.tp}</span></div><div className="kpi-sub">entregues</div></div>
-        <div className="kpi"><div className="kpi-lbl">Stories</div><div className="kpi-val">{stats.ds}<span style={{ fontSize: 14, color: MID, fontWeight: 400 }}>/{stats.ts}</span></div><div className="kpi-sub">entregues</div></div>
-        <div className="kpi"><div className="kpi-lbl">Links</div><div className="kpi-val">{stats.dl}<span style={{ fontSize: 14, color: MID, fontWeight: 400 }}>/{stats.tl}</span></div><div className="kpi-sub">comunidade</div></div>
-        <div className="kpi"><div className="kpi-lbl">Reposts</div><div className="kpi-val">{stats.dr}<span style={{ fontSize: 14, color: MID, fontWeight: 400 }}>/{stats.tr}</span></div><div className="kpi-sub">multi-rede</div></div>
+        <div className="kpi">
+          <div className="kpi-lbl">NF Pendentes</div>
+          <div className="kpi-val" style={{ color: stats.nfPending > 0 ? AMB : GRN }}>{stats.nfPending}</div>
+          <div className="kpi-sub">não emitidas</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-lbl">Posts/Reels</div>
+          <div className="kpi-val">{stats.dp}<span style={{ fontSize:14, color:MID, fontWeight:400 }}>/{stats.tp}</span></div>
+          <div className="kpi-sub">entregues</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-lbl">Stories</div>
+          <div className="kpi-val">{stats.ds}<span style={{ fontSize:14, color:MID, fontWeight:400 }}>/{stats.ts}</span></div>
+          <div className="kpi-sub">entregues</div>
+        </div>
         <div className="kpi">
           <div className="kpi-lbl">Engaj. Médio</div>
           <div className="kpi-val sm" style={{ color: stats.avgEng != null ? (stats.avgEng >= 3 ? GRN : stats.avgEng >= 1 ? AMB : MID) : MID }}>
             {stats.avgEng != null ? stats.avgEng.toFixed(2) + "%" : "—"}
           </div>
-          <div className="kpi-sub grn">auto</div>
+          <div className="kpi-sub" style={{ color:GRN }}>auto</div>
         </div>
       </div>
 
-      {/* Contract accordion list */}
-      <ContractList contracts={contracts} posts={posts} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} />
-
-      {/* Next payments */}
-      {nextPay.length > 0 && (
-        <div className="blk">
-          <div className="blk-hd"><span className="blk-ttl">Próximos Recebimentos</span></div>
-          <div style={{ padding: "0 14px" }}>
-            {nextPay.map((p, i) => {
-              const dl = daysLeft(p.date);
-              return (
-                <div key={i} className="dl-row">
-                  <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", minWidth: 40, textAlign: "right", color: dlColor(dl), lineHeight: 1 }}>{dl ?? ""}</div>
-                  <div style={{ width: 1, height: 28, background: LN }} />
-                  <span className="dot" style={{ background: p.color }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 12 }}>{p.company}</div>
-                    <div style={{ fontSize: 10, color: MID, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>{p.label} · {fmtDate(p.date)}</div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{p.value > 0 ? fmtMoney(p.value, p.currency) : "—"}</div>
-                    {p.value > 0 && p.currency !== "BRL" && <div style={{ fontSize: 10, color: MID }}>{convNote(p.value, p.currency)}</div>}
-                    {p.hasComm && p.value > 0 && <div style={{ fontSize: 10, color: RED }}>−{fmtMoney(p.value * COMM_RATE, p.currency)} comissão</div>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      )}
+      {/* Contract accordion */}
+      <ContractList
+        contracts={contracts} posts={posts} rates={rates}
+        saveNote={saveNote} toggleComm={toggleComm}
+        toggleCommPaid={toggleCommPaid} toggleNF={toggleNF}
+      />
     </>
   );
 }
 
-// ─── Contract Accordion List (Dashboard) ─────────────────
+// ─── Contract Accordion List ──────────────────────────────
 function ContractList({ contracts, posts, rates, saveNote, toggleComm, toggleCommPaid, toggleNF }) {
   const [open, setOpen] = useState(null);
 
+  // NF detail state: { [contractId]: { [key]: { number, date, notes } } }
+  const [nfDetails, setNfDetails] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("copa6_nfd") || "{}"); } catch { return {}; }
+  });
+  const saveNfDetail = (contractId, key, field, value) => {
+    setNfDetails(prev => {
+      const next = { ...prev, [contractId]: { ...(prev[contractId]||{}), [key]: { ...(prev[contractId]?.[key]||{}), [field]: value } } };
+      localStorage.setItem("copa6_nfd", JSON.stringify(next));
+      return next;
+    });
+  };
+
   const toggle = id => setOpen(prev => prev === id ? null : id);
 
+  // total deliveries for NF status label
+  const nfStatus = (c) => {
+    const entries = getNFEntries(c);
+    if (!entries.length) return null;
+    const allDone = entries.every(e => e.isEmitted);
+    const noneDone = entries.every(e => !e.isEmitted);
+    if (allDone) return "emitida";
+    if (noneDone) return "nao";
+    return "parcial";
+  };
+
   return (
-    <div className="blk" style={{ marginBottom: 14 }}>
-      {/* Header row */}
-      <div style={{ display: "grid", gridTemplateColumns: "4px 1fr 140px 100px 90px 140px 56px", alignItems: "center", padding: "7px 14px 7px 0", borderBottom: `2px solid ${LN}`, gap: 0 }}>
-        <div />
-        <div style={{ paddingLeft: 14, fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID }}>Patrocinador</div>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, textAlign: "right" }}>Valor</div>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, textAlign: "right", paddingRight: 8 }}>Comissão</div>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, textAlign: "center" }}>Progresso</div>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, paddingLeft: 12 }}>Prazo pgto.</div>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, textAlign: "right", paddingRight: 14 }}>Dias</div>
+    <div className="blk" style={{ marginBottom:14 }}>
+      {/* Table header */}
+      <div style={{ display:"grid", gridTemplateColumns:"4px 1fr 150px 120px 1fr 140px 32px", borderBottom:`2px solid ${LN}`, background:SUF }}>
+        {["","EMPRESA","VALOR TOTAL","PRAZO","ENTREGAS","NOTA FISCAL",""].map((h,i) => (
+          <div key={i} style={{ padding:"7px 10px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID,
+            textAlign: i===2||i===3 ? "right" : "left" }}>{h}</div>
+        ))}
       </div>
 
       {contracts.length === 0 && (
-        <div style={{ padding: "40px 14px", textAlign: "center", color: MID, fontSize: 12 }}>Nenhum contrato cadastrado.</div>
+        <div style={{ padding:"40px 14px", textAlign:"center", color:MID, fontSize:12 }}>
+          Nenhum contrato cadastrado.
+        </div>
       )}
 
       {contracts.map(c => {
@@ -672,245 +691,271 @@ function ContractList({ contracts, posts, rates, saveNote, toggleComm, toggleCom
         const cp = posts.filter(p => p.contractId === c.id && p.type === "post").length;
         const cs = posts.filter(p => p.contractId === c.id && p.type === "story").length;
         const cl = posts.filter(p => p.contractId === c.id && p.type === "link").length;
-        const cr = posts.filter(p => p.contractId === c.id).reduce((s, p) => s + postRepostCount(p), 0);
-        const total = contractTotal(c);
-        const dl = daysLeft(c.contractDeadline);
+        const cr = posts.filter(p => p.contractId === c.id).reduce((s,p) => s + postRepostCount(p), 0);
+        const total  = contractTotal(c);
+        const dl     = daysLeft(c.contractDeadline);
         const totDel = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
-        const doneDel = cp + cs + cl + cr;
-        const pct = totDel ? Math.min(100, doneDel / totDel * 100) : 0;
+        const doneDel= cp + cs + cl + cr;
+        const pct    = totDel ? Math.min(100, doneDel / totDel * 100) : 0;
+        const status = nfStatus(c);
+        const commEntries = getCommEntries(c);
+        const nfEntries   = getNFEntries(c);
 
-        let payShort;
-        if (c.paymentType === "monthly") {
-          const months = monthsBetween(c.contractStart, c.contractDeadline);
-          payShort = `${fmtMoney(c.monthlyValue)}/mês · ${months || "?"}m`;
-        } else if (c.paymentType === "split") {
-          payShort = `1ª ${fmtDate(c.parc1Deadline)} · 2ª ${fmtDate(c.parc2Deadline)}`;
-        } else {
-          payShort = fmtDate(c.paymentDeadline);
-        }
-
-        const deliveryBars = [
-          { lbl: "Posts/Reels", done: cp, total: c.numPosts,            color: c.color   },
-          { lbl: "Stories",     done: cs, total: c.numStories,           color: "#7C3AED" },
-          { lbl: "Links",       done: cl, total: c.numCommunityLinks,    color: "#059669" },
-          { lbl: "Reposts",     done: cr, total: c.numReposts,           color: "#0891B2" },
-        ].filter(b => b.total > 0);
+        // NF pill
+        const NfPill = () => {
+          if (!nfEntries.length) return <span style={{ color:MID, fontSize:11 }}>—</span>;
+          if (status === "emitida") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", background:`${GRN}18`, border:`1px solid ${GRN}44`, color:GRN }}>✓ Emitida</span>;
+          if (status === "parcial") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", background:`${AMB}18`, border:`1px solid ${AMB}44`, color:AMB }}>Parcial</span>;
+          return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", background:`${RED}10`, border:`1px solid ${RED}44`, color:RED }}>Não Emitida</span>;
+        };
 
         return (
-          <div key={c.id} style={{ borderBottom: `1px solid ${LN}` }}>
-            {/* ── Summary row (always visible) ── */}
+          <div key={c.id} style={{ borderBottom:`1px solid ${LN}` }}>
+            {/* Summary row */}
             <div
               onClick={() => toggle(c.id)}
-              style={{ display: "grid", gridTemplateColumns: "4px 1fr 140px 100px 90px 140px 56px", alignItems: "center", cursor: "pointer", background: isOpen ? SUF : "#fff", transition: "background .1s" }}
-              onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = SUF; }}
-              onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "#fff"; }}
+              style={{ display:"grid", gridTemplateColumns:"4px 1fr 150px 120px 1fr 140px 32px", alignItems:"center", cursor:"pointer",
+                background: isOpen ? SUF : "#fff", transition:"background .1s" }}
             >
               {/* Color bar */}
-              <div style={{ width: 4, background: c.color, alignSelf: "stretch", minHeight: 48 }} />
+              <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }} />
 
-              {/* Name + badges */}
-              <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                <span style={{ fontWeight: 700, fontSize: 13 }}>{c.company}</span>
+              {/* Company */}
+              <div style={{ padding:"12px 10px", display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                <span style={{ fontWeight:700, fontSize:13 }}>{c.company}</span>
                 {currBadge(c.currency)}
                 {c.paymentType === "monthly" && <span className="badge b-monthly">Mensal</span>}
                 {total === 0 && <span className="badge b-tbd">TBD</span>}
-                <span style={{ fontSize: 11, color: isOpen ? BLK : MID, marginLeft: 2, transition: "color .1s" }}>{isOpen ? "▲" : "▼"}</span>
               </div>
 
               {/* Value */}
-              <div style={{ textAlign: "right", paddingRight: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+              <div style={{ padding:"12px 10px", textAlign:"right" }}>
+                <div style={{ fontWeight:700, fontSize:13, fontVariantNumeric:"tabular-nums" }}>
                   {total > 0 ? fmtMoney(total, c.currency) : "—"}
                 </div>
-                {total > 0 && c.currency !== "BRL" && rates.eur > 0 && c.currency === "EUR" &&
-                  <div style={{ fontSize: 10, color: MID }}>≈ {fmtMoney(total * rates.eur)}</div>}
-                {total > 0 && c.currency !== "BRL" && rates.usd > 0 && c.currency === "USD" &&
-                  <div style={{ fontSize: 10, color: MID }}>≈ {fmtMoney(total * rates.usd)}</div>}
+                {total > 0 && c.currency === "EUR" && rates.eur > 0 &&
+                  <div style={{ fontSize:10, color:MID }}>≈R$ {fmtMoney(total * rates.eur).replace("R$","").trim()}</div>}
+                {total > 0 && c.currency === "USD" && rates.usd > 0 &&
+                  <div style={{ fontSize:10, color:MID }}>≈R$ {fmtMoney(total * rates.usd).replace("R$","").trim()}</div>}
               </div>
 
-              {/* Commission */}
-              <div style={{ textAlign: "right", paddingRight: 8 }}>
-                {c.hasCommission && total > 0
-                  ? <span style={{ fontSize: 12, color: RED, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(total * COMM_RATE, c.currency)}</span>
-                  : <span style={{ fontSize: 11, color: MID }}>—</span>}
-              </div>
-
-              {/* Progress bar */}
-              <div style={{ padding: "0 8px" }}>
-                <div style={{ height: 4, background: SUF, marginBottom: 3 }}>
-                  <div style={{ height: 4, background: pct === 100 ? GRN : c.color, width: `${pct}%`, transition: "width .4s" }} />
-                </div>
-                <div style={{ fontSize: 9, color: MID, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
-                  {totDel > 0 ? `${doneDel}/${totDel}` : "—"}
-                </div>
-              </div>
-
-              {/* Payment */}
-              <div style={{ paddingLeft: 12, fontSize: 11, color: MID, whiteSpace: "nowrap" }}>{payShort}</div>
-
-              {/* Days */}
-              <div style={{ textAlign: "right", paddingRight: 14 }}>
-                {dl != null ? (
+              {/* Deadline */}
+              <div style={{ padding:"12px 10px", textAlign:"right" }}>
+                {c.contractDeadline ? (
                   <>
-                    <div style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: dlColor(dl), lineHeight: 1 }}>{dl}</div>
-                    <div style={{ fontSize: 8, color: MID, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>dias</div>
+                    <div style={{ fontSize:12, fontWeight:600, color: dlColor(dl) }}>{fmtDate(c.contractDeadline)}</div>
+                    <div style={{ fontSize:10, color: dlColor(dl), fontVariantNumeric:"tabular-nums" }}>{dl != null ? `${dl}d` : ""}</div>
                   </>
-                ) : <span style={{ color: MID }}>—</span>}
+                ) : <span style={{ color:MID }}>—</span>}
+              </div>
+
+              {/* Deliveries */}
+              <div style={{ padding:"12px 10px" }}>
+                {totDel > 0 ? (
+                  <>
+                    <div style={{ height:3, background:LN, marginBottom:4 }}>
+                      <div style={{ height:3, background: pct===100 ? GRN : c.color, width:`${pct}%`, transition:"width .4s" }} />
+                    </div>
+                    <div style={{ fontSize:11, color:MID }}>{doneDel}/{totDel} entregas</div>
+                  </>
+                ) : <span style={{ fontSize:11, color:MID, fontStyle:"italic" }}>A definir</span>}
+              </div>
+
+              {/* NF status */}
+              <div style={{ padding:"12px 10px" }}><NfPill /></div>
+
+              {/* Chevron */}
+              <div style={{ padding:"12px 6px", textAlign:"center", fontSize:11, color:MID }}>
+                {isOpen ? "▲" : "›"}
               </div>
             </div>
 
-            {/* ── Expanded detail panel ── */}
+            {/* ── Expanded panel ── */}
             {isOpen && (
-              <div style={{ background: "#FAFAF8", borderTop: `1px solid ${LN}`, padding: "18px 18px 18px 22px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
+              <div style={{ background:"#FAFAF8", borderTop:`1px solid ${LN}` }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:0 }}>
 
-                  {/* Deliveries */}
-                  <div>
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 10 }}>Entregas</div>
-                    {deliveryBars.length > 0 ? deliveryBars.map(b => (
-                      <div key={b.lbl} style={{ marginBottom: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, fontSize: 11 }}>
-                          <span style={{ fontWeight: 600 }}>{b.lbl}</span>
-                          <span style={{ fontVariantNumeric: "tabular-nums", color: b.done >= b.total ? GRN : BLK, fontWeight: b.done >= b.total ? 700 : 400 }}>{b.done}/{b.total}</span>
+                  {/* Col 1: Entregas + financeiro + obs */}
+                  <div style={{ padding:"18px 20px", borderRight:`1px solid ${LN}` }}>
+                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:MID, marginBottom:12 }}>Entregas</div>
+                    {[
+                      { lbl:"Posts / Reels", done:cp, total:c.numPosts, color:c.color },
+                      { lbl:"Stories",       done:cs, total:c.numStories, color:"#7C3AED" },
+                      { lbl:"Links Comun.",  done:cl, total:c.numCommunityLinks, color:"#059669" },
+                      { lbl:"Reposts / TT",  done:cr, total:c.numReposts, color:"#0891B2" },
+                    ].filter(b => b.total > 0 || b.done > 0).map(b => (
+                      <div key={b.lbl} style={{ marginBottom:8 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:3 }}>
+                          <span style={{ fontWeight:600 }}>{b.lbl}</span>
+                          <span style={{ fontVariantNumeric:"tabular-nums", color: b.total===0&&b.done>0?"#1D4ED8":b.done >= b.total&&b.total>0 ? GRN : BLK, fontWeight: (b.done >= b.total&&b.total>0)||( b.total===0&&b.done>0) ? 700 : 400 }}>{b.done}{b.total>0?`/${b.total}`:" extra"}</span>
                         </div>
-                        <div style={{ height: 3, background: LN }}>
-                          <div style={{ height: 3, background: b.color, width: `${b.total ? Math.min(100, b.done / b.total * 100) : 0}%` }} />
+                        <div style={{ height:3, background:LN }}>
+                          <div style={{ height:3, background:b.done>b.total&&b.total>0?AMB:b.color, width:`${b.total ? Math.min(100,b.done/b.total*100) : b.done>0?100:0}%` }} />
                         </div>
                       </div>
-                    )) : <div style={{ fontSize: 11, color: MID, fontStyle: "italic" }}>Escopo a definir</div>}
-                  </div>
+                    ))}
+                    {c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts === 0 &&
+                      <div style={{ fontSize:11, color:MID, fontStyle:"italic", marginBottom:8 }}>Escopo a definir</div>}
 
-                  {/* Financial details */}
-                  <div>
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 10 }}>Financeiro</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                        <span style={{ color: MID }}>Valor total</span>
-                        <span style={{ fontWeight: 700 }}>{total > 0 ? fmtMoney(total, c.currency) : "A definir"}</span>
-                      </div>
+                    {/* Payment info */}
+                    <div style={{ marginTop:12, paddingTop:10, borderTop:`1px solid ${LN}`, fontSize:11 }}>
+                      <div style={{ fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", fontSize:9, color:MID, marginBottom:6 }}>Pagamento</div>
                       {c.paymentType === "monthly" && (
-                        <>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                            <span style={{ color: MID }}>Valor mensal</span>
-                            <span style={{ fontWeight: 600 }}>{fmtMoney(c.monthlyValue, c.currency)}</span>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                            <span style={{ color: MID }}>Período</span>
-                            <span>{fmtDate(c.contractStart)} → {fmtDate(c.contractDeadline)}</span>
-                          </div>
-                        </>
+                        <div style={{ color:MID }}>{fmtMoney(c.monthlyValue)}/mês · {monthsBetween(c.contractStart,c.contractDeadline)||"?"}m · {fmtDate(c.contractStart)} → {fmtDate(c.contractDeadline)}</div>
                       )}
                       {c.paymentType === "split" && (
-                        <>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                            <span style={{ color: MID }}>1ª parcela</span>
-                            <span>{fmtMoney(c.parc1Value, c.currency)} · {fmtDate(c.parc1Deadline)}</span>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                            <span style={{ color: MID }}>2ª parcela</span>
-                            <span>{fmtMoney(c.parc2Value, c.currency)} · {fmtDate(c.parc2Deadline)}</span>
-                          </div>
-                        </>
-                      )}
-                      {c.paymentType === "single" && c.paymentDeadline && (
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                          <span style={{ color: MID }}>Pagamento</span>
-                          <span>{fmtDate(c.paymentDeadline)}</span>
+                        <div style={{ color:MID }}>
+                          {getInstallments(c).map((inst,i) => {
+                            const ORDINALS = ["1ª","2ª","3ª","4ª","5ª","6ª"];
+                            return <span key={i}>{i>0?" · ":""}{ORDINALS[i]||`${i+1}ª`} {fmtMoney(inst.value,c.currency)} {fmtDate(inst.date)}</span>;
+                          })}
                         </div>
                       )}
-                      <div style={{ borderTop: `1px solid ${LN}`, paddingTop: 7, display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                        <span style={{ color: MID }}>Comissão agência</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <CommToggle on={c.hasCommission} onToggle={() => toggleComm(c.id)} />
-                          {c.hasCommission && total > 0 && <span style={{ color: RED, fontWeight: 700 }}>{fmtMoney(total * COMM_RATE, c.currency)}</span>}
-                        </div>
-                      </div>
-                      {c.cnpj && (
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                          <span style={{ color: MID }}>CNPJ</span>
-                          <span style={{ fontFamily: "monospace", fontSize: 11 }}>{c.cnpj}</span>
-                        </div>
-                      )}
-                      {c.contractDeadline && (
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                          <span style={{ color: MID }}>Prazo contrato</span>
-                          <span style={{ color: dlColor(dl), fontWeight: dl != null && dl <= 7 ? 700 : 400 }}>{fmtDate(c.contractDeadline)}</span>
-                        </div>
+                      {c.paymentType === "single" && (
+                        <div style={{ color:MID }}>{fmtDate(c.paymentDeadline)}</div>
                       )}
                     </div>
-                  </div>
 
-                  {/* Notes */}
-                  <div>
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 10 }}>Observações</div>
+                    {/* Payment condition */}
+                    {Number(c.paymentDaysAfterNF) > 0 && (
+                      <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
+                        <span style={{ color:MID }}>Pgto:</span>
+                        <span style={{ fontWeight:700 }}>{c.paymentDaysAfterNF} dias</span>
+                        <span style={{ color:MID }}>após emissão da NF</span>
+                      </div>
+                    )}
+                    {/* Payment condition */}
+                    {Number(c.paymentDaysAfterNF) > 0 && (
+                      <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
+                        <span style={{ color:MID }}>Pgto:</span>
+                        <span style={{ fontWeight:700 }}>{c.paymentDaysAfterNF} dias</span>
+                        <span style={{ color:MID }}>após emissão da NF</span>
+                      </div>
+                    )}
+                    {/* Comm toggle */}
+                    <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:8 }}>
+                      <CommToggle on={c.hasCommission} onToggle={() => toggleComm(c.id)} label />
+                    </div>
+
+                    {/* Notes */}
                     <InlineNotes notes={c.notes} onSave={v => saveNote(c.id, v)} />
                   </div>
-                </div>
 
-                {/* Commission + NF rows */}
-                {(getCommEntries(c).length > 0 || getNFEntries(c).length > 0) && (
-                  <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                  {/* Col 2: Comissões */}
+                  <div style={{ padding:"18px 20px", borderRight:`1px solid ${LN}` }}>
+                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:MID, marginBottom:12, display:"flex", justifyContent:"space-between" }}>
+                      <span>Comissões da Agência</span>
+                      {commEntries.length > 0 && <span style={{ color:RED }}>{fmtMoney(commEntries.reduce((s,e)=>s+e.amount,0), c.currency)}</span>}
+                    </div>
 
-                    {getCommEntries(c).length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span>Comissões da Agência</span>
-                          <span style={{ color: RED, fontVariantNumeric: "tabular-nums" }}>
-                            {fmtMoney(getCommEntries(c).reduce((s, e) => s + e.amount, 0), c.currency)}
-                          </span>
-                        </div>
-                        <div style={{ border: `1px solid ${LN}`, background: "#fff" }}>
-                          {getCommEntries(c).map((e, i, arr) => (
-                            <div key={e.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderBottom: i < arr.length - 1 ? `1px solid ${LN}` : "none", gap: 10 }}>
-                              <div>
-                                <div style={{ fontSize: 11, fontWeight: 600 }}>{e.label}</div>
-                                {e.date && <div style={{ fontSize: 10, color: MID }}>{fmtDate(e.date)}</div>}
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: RED, fontVariantNumeric: "tabular-nums" }}>
-                                  {e.amount > 0 ? fmtMoney(e.amount, e.currency) : "—"}
-                                </span>
-                                <div className={`status-pill${e.isPaid ? " done" : " pend"}`} onClick={() => toggleCommPaid(c.id, e.key)}>
-                                  {e.isPaid ? "✓ Pago" : "Pendente"}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                    {commEntries.length === 0 && (
+                      <div style={{ fontSize:11, color:MID, fontStyle:"italic" }}>Sem comissão neste contrato</div>
                     )}
 
-                    {getNFEntries(c).length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span>Notas Fiscais</span>
-                          <span style={{ color: MID, fontVariantNumeric: "tabular-nums" }}>
-                            {getNFEntries(c).filter(e => !e.isEmitted).length} pendente{getNFEntries(c).filter(e => !e.isEmitted).length !== 1 ? "s" : ""}
-                          </span>
+                    {commEntries.map((e, i, arr) => (
+                      <div key={e.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom: i < arr.length-1 ? `1px solid ${LN}` : "none", gap:8 }}>
+                        <div>
+                          <div style={{ fontSize:12, fontWeight:600 }}>{e.label}</div>
+                          {e.date && <div style={{ fontSize:10, color:MID }}>{fmtDate(e.date)}</div>}
                         </div>
-                        <div style={{ border: `1px solid ${LN}`, background: "#fff" }}>
-                          {getNFEntries(c).map((e, i, arr) => (
-                            <div key={e.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderBottom: i < arr.length - 1 ? `1px solid ${LN}` : "none", gap: 10 }}>
-                              <div>
-                                <div style={{ fontSize: 11, fontWeight: 600 }}>{e.label}</div>
-                                {e.date && <div style={{ fontSize: 10, color: MID }}>{fmtDate(e.date)}</div>}
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                                  {e.amount > 0 ? fmtMoney(e.amount, e.currency) : "—"}
-                                </span>
-                                <div className={`status-pill${e.isEmitted ? " done" : " pend"}`} onClick={() => toggleNF(c.id, e.key)}>
-                                  {e.isEmitted ? "✓ Emitida" : "Pendente"}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                        <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                          <span style={{ fontSize:12, fontWeight:700, color:RED, fontVariantNumeric:"tabular-nums" }}>{e.amount > 0 ? fmtMoney(e.amount, e.currency) : "—"}</span>
+                          <div className={`status-pill${e.isPaid ? " done" : " pend"}`} onClick={() => toggleCommPaid(c.id, e.key)}>
+                            {e.isPaid ? "✓ Pago" : "Pendente"}
+                          </div>
                         </div>
                       </div>
-                    )}
+                    ))}
 
+                    {commEntries.length > 0 && (
+                      <div style={{ marginTop:10, paddingTop:8, borderTop:`1px solid ${LN}`, display:"flex", justifyContent:"space-between", fontSize:11 }}>
+                        <span style={{ color:MID }}>Recebido:</span>
+                        <span style={{ fontWeight:700, color: commEntries.filter(e=>e.isPaid).length > 0 ? GRN : MID, fontVariantNumeric:"tabular-nums" }}>
+                          {fmtMoney(commEntries.filter(e=>e.isPaid).reduce((s,e)=>s+e.amount,0), c.currency)}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
+
+                  {/* Col 3: Nota Fiscal */}
+                  <div style={{ padding:"18px 20px" }}>
+                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:MID, marginBottom:12 }}>Nota Fiscal</div>
+
+                    {nfEntries.length === 0 && (
+                      <div style={{ fontSize:11, color:MID, fontStyle:"italic" }}>Sem NF configurada</div>
+                    )}
+
+                    {nfEntries.map((e, i, arr) => {
+                      const det = nfDetails?.[c.id]?.[e.key] || {};
+                      return (
+                        <div key={e.key} style={{ marginBottom: i < arr.length-1 ? 16 : 0, paddingBottom: i < arr.length-1 ? 16 : 0, borderBottom: i < arr.length-1 ? `1px solid ${LN}` : "none" }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                            <span style={{ fontSize:11, fontWeight:600 }}>{e.label}</span>
+                            {e.amount > 0 && <span style={{ fontSize:11, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{fmtMoney(e.amount, e.currency)}</span>}
+                          </div>
+
+                          {/* Status */}
+                          <div style={{ marginBottom:8 }}>
+                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, marginBottom:4 }}>Status</div>
+                            <div className={`status-pill${e.isEmitted ? " done" : " pend"}`} onClick={() => toggleNF(c.id, e.key)}
+                              style={{ width:"100%", justifyContent:"center" }}>
+                              {e.isEmitted ? "✓ Emitida" : "Não emitida"}
+                            </div>
+                          </div>
+
+                          {/* NF Number */}
+                          <div style={{ marginBottom:8 }}>
+                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, marginBottom:4 }}>Número da NF</div>
+                            <input
+                              style={{ width:"100%", padding:"6px 8px", border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:12, outline:"none", background:"#fff" }}
+                              placeholder="Ex: 1234"
+                              value={det.number || ""}
+                              onChange={ev => saveNfDetail(c.id, e.key, "number", ev.target.value)}
+                              onClick={ev => ev.stopPropagation()}
+                            />
+                          </div>
+
+                          {/* Emission date */}
+                          <div style={{ marginBottom:8 }}>
+                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, marginBottom:4 }}>Data de Emissão</div>
+                            <input type="date"
+                              style={{ width:"100%", padding:"6px 8px", border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:12, outline:"none", background:"#fff" }}
+                              value={det.date || ""}
+                              onChange={ev => saveNfDetail(c.id, e.key, "date", ev.target.value)}
+                              onClick={ev => ev.stopPropagation()}
+                            />
+                          </div>
+
+                          {/* Expected payment date */}
+                          {Number(c.paymentDaysAfterNF) > 0 && det.date && (
+                            <div style={{ marginBottom:8, padding:"6px 8px", background:`${GRN}10`, border:`1px solid ${GRN}33` }}>
+                              <div style={{ fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:GRN, marginBottom:2 }}>Pgto previsto</div>
+                              <div style={{ fontSize:12, fontWeight:700, color:GRN, fontVariantNumeric:"tabular-nums" }}>
+                                {(() => {
+                                  const d = new Date(det.date);
+                                  d.setDate(d.getDate() + Number(c.paymentDaysAfterNF));
+                                  return fmtDate(d.toISOString().substr(0,10));
+                                })()}
+                              </div>
+                              <div style={{ fontSize:10, color:GRN }}>+{c.paymentDaysAfterNF} dias após NF</div>
+                            </div>
+                          )}
+                          {/* NF Notes */}
+                          <div>
+                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, marginBottom:4 }}>Observações NF</div>
+                            <textarea
+                              style={{ width:"100%", padding:"6px 8px", border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:11, outline:"none", background:"#fff", resize:"vertical", minHeight:52 }}
+                              placeholder="Competência, empresa tomadora, ISS…"
+                              value={det.notes || ""}
+                              onChange={ev => saveNfDetail(c.id, e.key, "notes", ev.target.value)}
+                              onClick={ev => ev.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -930,8 +975,10 @@ function Contratos({ contracts, posts, saveC, setModal, toggleComm, saveNote, ra
     }
     if (c.paymentType === "split") return (
       <div style={{ fontSize: 11, lineHeight: 1.7 }}>
-        <div><b style={{ color: MID }}>1ª</b> {c.parc1Value > 0 ? fmtMoney(c.parc1Value, c.currency) : "—"} · {fmtDate(c.parc1Deadline)}</div>
-        <div><b style={{ color: MID }}>2ª</b> {c.parc2Value > 0 ? fmtMoney(c.parc2Value, c.currency) : "—"} · {fmtDate(c.parc2Deadline)}</div>
+        {getInstallments(c).map((inst,i) => {
+          const ORDINALS = ["1ª","2ª","3ª","4ª","5ª","6ª"];
+          return <div key={i}><b style={{ color: MID }}>{ORDINALS[i]||`${i+1}ª`}</b> {inst.value>0?fmtMoney(inst.value,c.currency):"—"} · {fmtDate(inst.date)}</div>;
+        })}
       </div>
     );
     return <span style={{ fontSize: 12 }}>{fmtDate(c.paymentDeadline)}</span>;
@@ -1011,7 +1058,7 @@ function Contratos({ contracts, posts, saveC, setModal, toggleComm, saveNote, ra
 function Posts({ contracts, posts, saveP, setModal }) {
   const [filter, setFilter] = useState("all");
   const filtered = [...(filter === "all" ? posts : posts.filter(p => p.contractId === filter))]
-    .sort((a, b) => new Date(b.publishDate) - new Date(a.publishDate));
+    .sort((a, b) => new Date(b.publishDate||b.plannedDate||0) - new Date(a.publishDate||a.plannedDate||0));
   const del = async id => { if (confirm("Excluir?")) await saveP(posts.filter(p => p.id !== id)); };
   const BADGE = { post: "b-post", story: "b-story", link: "b-link", repost: "b-repost", tiktok: "b-tiktok" };
   const LABEL = { post: "Reel/Post", story: "Story", link: "Link", repost: "Repost", tiktok: "TikTok" };
@@ -1036,8 +1083,8 @@ function Posts({ contracts, posts, saveP, setModal }) {
       <div className="blk" style={{ overflowX: "auto" }}>
         <table className="tbl">
           <thead><tr>
-            <th>Data</th><th>Tipo</th><th>Título</th><th>Contrato</th><th>Redes</th>
-            <th className="num">Views/Impr.</th><th className="num">Alcance</th>
+            <th>Planejado</th><th>Status</th><th>Tipo</th><th>Título</th><th>Contrato</th><th>Redes</th>
+            <th className="num">Views</th><th className="num">Alcance</th>
             <th className="num">Curtidas</th><th className="num">Coment.</th><th className="num">Shares</th><th className="num">Saves</th>
             <th className="num">Engaj.%</th><th>Link</th><th />
           </tr></thead>
@@ -1048,7 +1095,17 @@ function Posts({ contracts, posts, saveP, setModal }) {
               const reposts = postRepostCount(p);
               return (
                 <tr key={p.id}>
-                  <td style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{fmtDate(p.publishDate)}</td>
+                  <td style={{ whiteSpace:"nowrap", fontVariantNumeric:"tabular-nums" }}>
+                    <div>{fmtDate(p.plannedDate || p.publishDate)}</div>
+                    {p.isPosted && p.publishDate && p.publishDate !== p.plannedDate &&
+                      <div style={{ fontSize:9, color:MID }}>pub. {fmtDate(p.publishDate)}</div>}
+                  </td>
+                  <td>
+                    {p.isPosted
+                      ? <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 7px", fontSize:9, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", background:`${GRN}18`, border:`1px solid ${GRN}44`, color:GRN }}>✓ Publicado</span>
+                      : <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 7px", fontSize:9, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", background:SUF, border:`1px solid ${LN}`, color:MID }}>Planejado</span>
+                    }
+                  </td>
                   <td><span className={`badge ${BADGE[p.type] || "b-post"}`}>{LABEL[p.type] || p.type}</span></td>
                   <td style={{ maxWidth: 180, fontWeight: 500 }}>
                     {p.title}
@@ -1071,7 +1128,7 @@ function Posts({ contracts, posts, saveP, setModal }) {
                 </tr>
               );
             })}
-            {filtered.length === 0 && <tr><td colSpan={14} style={{ textAlign: "center", padding: 36, color: MID }}>Nenhum post.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={15} style={{ textAlign: "center", padding: 36, color: MID }}>Nenhum post.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1143,22 +1200,27 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
     company: "", cnpj: "", contractDeadline: "", contractValue: "", currency: "BRL",
     monthlyValue: "", contractStart: "",
     paymentType: "single", paymentDeadline: "",
+    installments: modal.data ? getInstallments(modal.data) : [{ value:"", date:"" }, { value:"", date:"" }],
     parc1Value: "", parc1Deadline: "", parc2Value: "", parc2Deadline: "",
-    hasCommission: true, commPaid: {}, nfEmitted: {},
+    hasCommission: true, commPaid: {}, nfEmitted: {}, paymentDaysAfterNF: 0,
     numPosts: 0, numStories: 0, numCommunityLinks: 0, numReposts: 0,
     color: CONTRACT_COLORS[contracts.length % CONTRACT_COLORS.length],
     notes: ""
   });
-  const [pct, setPct] = useState(50);
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
-  const syncPct = (p, totalOverride) => {
-    const total = totalOverride !== undefined ? totalOverride : Number(f.contractValue) || 0;
-    const v1 = Math.round(total * (p / 100));
-    setF(x => ({ ...x, parc1Value: v1, parc2Value: total - v1 }));
-    setPct(p);
-  };
+  const setInst = (i, field, val) => setF(x => {
+    const inst = [...(x.installments||[])];
+    inst[i] = { ...inst[i], [field]: val };
+    return { ...x, installments: inst };
+  });
+  const addInst    = () => setF(x => ({ ...x, installments: [...(x.installments||[]), { value:"", date:"" }] }));
+  const removeInst = i  => setF(x => ({ ...x, installments: (x.installments||[]).filter((_,j)=>j!==i) }));
   const months = f.paymentType === "monthly" ? monthsBetween(f.contractStart, f.contractDeadline) : null;
-  const liveTotal = f.paymentType === "monthly" ? (months ? (Number(f.monthlyValue) || 0) * months : 0) : Number(f.contractValue) || 0;
+  const liveTotal = f.paymentType === "monthly"
+    ? (months ? (Number(f.monthlyValue)||0)*months : 0)
+    : f.paymentType === "split"
+      ? (f.installments||[]).reduce((s,i)=>s+(Number(i.value)||0),0)
+      : Number(f.contractValue)||0;
 
   const handleSave = async () => {
     if (!f.company) return alert("Preencha o nome da empresa.");
@@ -1168,8 +1230,12 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
       monthlyValue: Number(f.monthlyValue) || 0,
       numPosts: Number(f.numPosts) || 0, numStories: Number(f.numStories) || 0,
       numCommunityLinks: Number(f.numCommunityLinks) || 0, numReposts: Number(f.numReposts) || 0,
-      parc1Value: Number(f.parc1Value) || 0, parc2Value: Number(f.parc2Value) || 0,
-      commPaid: f.commPaid || {}, nfEmitted: f.nfEmitted || {}
+      installments: f.paymentType === "split"
+        ? (f.installments||[]).map(i=>({ value: Number(i.value)||0, date: i.date||"" }))
+        : [],
+      parc1Value: 0, parc2Value: 0, parc1Deadline: "", parc2Deadline: "",
+      commPaid: f.commPaid || {}, nfEmitted: f.nfEmitted || {},
+      paymentDaysAfterNF: Number(f.paymentDaysAfterNF) || 0
     };
     if (isEdit) await saveC(contracts.map(c => c.id === entry.id ? entry : c));
     else await saveC([...contracts, entry]);
@@ -1225,32 +1291,49 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
           </div>
         ) : f.paymentType === "split" ? (
           <>
-            <div className="fgrid c3" style={{ marginBottom: 12 }}>
-              <div className="field"><label className="flbl">Valor Total</label>
-                <input type="number" value={f.contractValue} onChange={e => { set("contractValue", e.target.value); syncPct(pct, Number(e.target.value) || 0); }} placeholder="0" /></div>
+            <div className="fgrid c3" style={{ marginBottom:12 }}>
               <div className="field"><label className="flbl">Moeda</label>
                 <select value={f.currency} onChange={e => set("currency", e.target.value)}>
                   <option value="BRL">BRL</option><option value="EUR">EUR</option><option value="USD">USD</option>
                 </select></div>
               <div className="field">
-                <label className="flbl" style={{ display: "flex", alignItems: "center", gap: 8 }}>Comissão 20%
+                <label className="flbl" style={{ display:"flex", alignItems:"center", gap:8 }}>Comissão 20%
                   <CommToggle on={f.hasCommission} onToggle={() => set("hasCommission", !f.hasCommission)} />
                 </label>
-                <input readOnly className={f.hasCommission ? "red-ro" : ""} value={f.hasCommission && f.contractValue ? fmtMoney(Number(f.contractValue) * COMM_RATE, f.currency) : "Desativada"} />
+                <input readOnly className={f.hasCommission ? "red-ro" : ""} value={f.hasCommission && liveTotal > 0 ? fmtMoney(liveTotal * COMM_RATE, f.currency) : "Desativada"} />
+              </div>
+              <div className="field"><label className="flbl">Total Calculado</label>
+                <input readOnly value={liveTotal > 0 ? fmtMoney(liveTotal, f.currency) : "—"} />
               </div>
             </div>
-            <div style={{ marginBottom: 10 }}>
-              <div className="flbl" style={{ marginBottom: 5 }}>Divisão: {pct}% / {100 - pct}%{Number(f.contractValue) > 0 ? ` = ${fmtMoney(Math.round(Number(f.contractValue) * pct / 100), f.currency)} / ${fmtMoney(Number(f.contractValue) - Math.round(Number(f.contractValue) * pct / 100), f.currency)}` : ""}</div>
-              <input type="range" min="10" max="90" step="5" value={pct} onChange={e => syncPct(Number(e.target.value))} style={{ width: "100%" }} />
+
+            {/* Dynamic installment rows */}
+            {(f.installments||[]).map((inst, i) => {
+              const ORDINALS = ["1ª","2ª","3ª","4ª","5ª","6ª"];
+              return (
+                <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 32px", gap:8, marginBottom:8, alignItems:"end" }}>
+                  <div className="field">
+                    <label className="flbl">{ORDINALS[i]||`${i+1}ª`} Parcela — Valor</label>
+                    <input type="number" placeholder="0" value={inst.value}
+                      onChange={e => setInst(i, "value", e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <label className="flbl">{ORDINALS[i]||`${i+1}ª`} Parcela — Data</label>
+                    <input type="date" value={inst.date}
+                      onChange={e => setInst(i, "date", e.target.value)} />
+                  </div>
+                  <button className="btn ghost sm" style={{ color:RED, padding:"7px 8px", alignSelf:"flex-end" }}
+                    onClick={() => removeInst(i)}
+                    disabled={(f.installments||[]).length <= 2}>×</button>
+                </div>
+              );
+            })}
+            <button className="btn sm" style={{ marginBottom:12 }} onClick={addInst}>+ Adicionar Parcela</button>
+
+            <div className="fgrid" style={{ marginTop:4 }}>
+              <div className="field"><label className="flbl">Prazo Final do Contrato</label>
+                <input type="date" value={f.contractDeadline} onChange={e => set("contractDeadline", e.target.value)} /></div>
             </div>
-            <div className="fgrid">
-              <div className="field"><label className="flbl">1ª Parcela — Valor</label><input type="number" value={f.parc1Value} onChange={e => set("parc1Value", e.target.value)} /></div>
-              <div className="field"><label className="flbl">1ª Parcela — Data</label><input type="date" value={f.parc1Deadline} onChange={e => set("parc1Deadline", e.target.value)} /></div>
-              <div className="field"><label className="flbl">2ª Parcela — Valor</label><input type="number" value={f.parc2Value} onChange={e => set("parc2Value", e.target.value)} /></div>
-              <div className="field"><label className="flbl">2ª Parcela — Data</label><input type="date" value={f.parc2Deadline} onChange={e => set("parc2Deadline", e.target.value)} /></div>
-            </div>
-            <div style={{ marginTop: 12 }}><div className="field"><label className="flbl">Prazo Final do Contrato</label>
-              <input type="date" value={f.contractDeadline} onChange={e => set("contractDeadline", e.target.value)} /></div></div>
           </>
         ) : (
           <>
@@ -1277,6 +1360,22 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
           </>
         )}
 
+        <div className="srule">Condição de Pagamento</div>
+        <div className="fgrid">
+          <div className="field">
+            <label className="flbl">Pgto após emissão da NF</label>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <input type="number" min="0" max="365" value={f.paymentDaysAfterNF||""} placeholder="Não se aplica"
+                onChange={e => set("paymentDaysAfterNF", e.target.value)}
+                style={{flex:1}} />
+              {Number(f.paymentDaysAfterNF)>0 && (
+                <span style={{fontSize:11,color:MID,whiteSpace:"nowrap"}}>dias corridos</span>
+              )}
+            </div>
+            <span style={{fontSize:9,color:MID,marginTop:2}}>Ex: 30 = pagamento em 30 dias após NF. Deixe vazio se não se aplica.</span>
+          </div>
+        </div>
+
         <div className="srule">Entregas Contratadas</div>
         <div className="fgrid c4">
           {[["numPosts", "Posts/Reels"], ["numStories", "Stories"], ["numCommunityLinks", "Links Comun."], ["numReposts", "Reposts/TikTok"]].map(([k, lbl]) => (
@@ -1298,7 +1397,8 @@ function PostModal({ modal, setModal, contracts, posts, saveP }) {
   const isEdit = !!modal.data;
   const [f, setF] = useState(modal.data || {
     contractId: contracts[0]?.id || "", title: "", link: "", type: "post",
-    publishDate: new Date().toISOString().substr(0, 10),
+    plannedDate: new Date().toISOString().substr(0, 10),
+    publishDate: "", isPosted: false,
     views: "", reach: "", likes: "", comments: "", shares: "", saves: "", networks: []
   });
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
@@ -1319,7 +1419,9 @@ function PostModal({ modal, setModal, contracts, posts, saveP }) {
       views: Number(f.views) || 0, reach: Number(f.reach) || 0,
       likes: Number(f.likes) || 0, comments: Number(f.comments) || 0,
       shares: Number(f.shares) || 0, saves: Number(f.saves) || 0,
-      networks: f.networks || []
+      networks: f.networks || [],
+      plannedDate: f.plannedDate || "", publishDate: f.isPosted ? (f.publishDate || f.plannedDate) : "",
+      isPosted: !!f.isPosted
     };
     if (isEdit) await saveP(posts.map(p => p.id === entry.id ? entry : p));
     else await saveP([...posts, entry]);
@@ -1349,8 +1451,26 @@ function PostModal({ modal, setModal, contracts, posts, saveP }) {
             </select></div>
           <div className="field fcol"><label className="flbl">Título / Descrição</label>
             <input value={f.title} onChange={e => set("title", e.target.value)} placeholder="ex: Reel Copa 2026 — Abertura" /></div>
-          <div className="field"><label className="flbl">Data de Publicação</label>
-            <input type="date" value={f.publishDate} onChange={e => set("publishDate", e.target.value)} /></div>
+          <div className="field"><label className="flbl">Data Planejada</label>
+            <input type="date" value={f.plannedDate} onChange={e => set("plannedDate", e.target.value)} /></div>
+          <div className="field" style={{ justifyContent:"flex-end" }}>
+            <label className="flbl">Status de Postagem</label>
+            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0" }}>
+              <label style={{ display:"flex", alignItems:"center", gap:7, cursor:"pointer", userSelect:"none" }}>
+                <input type="checkbox" checked={!!f.isPosted} onChange={e => set("isPosted", e.target.checked)}
+                  style={{ width:15, height:15, cursor:"pointer", accentColor:GRN }} />
+                <span style={{ fontSize:12, fontWeight:600, color: f.isPosted ? GRN : MID }}>
+                  {f.isPosted ? "✓ Publicado" : "Não publicado ainda"}
+                </span>
+              </label>
+            </div>
+          </div>
+          {f.isPosted && (
+            <div className="field">
+              <label className="flbl">Data Real de Publicação</label>
+              <input type="date" value={f.publishDate || f.plannedDate} onChange={e => set("publishDate", e.target.value)} />
+            </div>
+          )}
           <div className="field"><label className="flbl">Link do Post</label>
             <input value={f.link} onChange={e => set("link", e.target.value)} placeholder="https://instagram.com/reel/..." /></div>
         </div>
@@ -1364,8 +1484,8 @@ function PostModal({ modal, setModal, contracts, posts, saveP }) {
           ))}
         </div>
         {extraNets > 0 && (
-          <div className="net-hint">
-            ✓ {extraNets} repost{extraNets > 1 ? "s" : ""} contabilizado{extraNets > 1 ? "s" : ""} automaticamente ({(f.networks || []).slice(1).join(", ")})
+          <div style={{fontSize:10,color:"#1D4ED8",fontStyle:"normal",fontWeight:700,marginTop:6}}>
+            ✓ +{extraNets} repost{extraNets>1?"s":""} contabilizado{extraNets>1?"s":""} automaticamente ({(f.networks||[]).slice(1).join(", ")})
           </div>
         )}
 

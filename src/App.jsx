@@ -620,121 +620,8 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
         </div>
       </div>
 
-      {/* Contract list */}
-      <div className="blk" style={{ marginBottom: 14, overflowX: "auto" }}>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th /><th>Patrocinador</th>
-              <th className="num">Valor</th>
-              <th className="num">Comissão</th>
-              <th>Pagamento</th>
-              <th style={{ minWidth: 180 }}>Entregas</th>
-              <th style={{ minWidth: 120 }}>Progresso</th>
-              <th className="num">Prazo</th>
-              <th>Observações</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {contracts.map(c => {
-              const cp = posts.filter(p => p.contractId === c.id && p.type === "post").length;
-              const cs = posts.filter(p => p.contractId === c.id && p.type === "story").length;
-              const cl = posts.filter(p => p.contractId === c.id && p.type === "link").length;
-              const cr = posts.filter(p => p.contractId === c.id).reduce((s, p) => s + postRepostCount(p), 0);
-              const total = contractTotal(c);
-              const dl = daysLeft(c.contractDeadline);
-              const totDeliveries = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
-              const doneDeliveries = cp + cs + cl + cr;
-              const pct = totDeliveries ? Math.min(100, doneDeliveries / totDeliveries * 100) : 0;
-
-              const deliveryBars = [
-                { lbl: "Posts", done: cp, total: c.numPosts, color: c.color },
-                { lbl: "Stories", done: cs, total: c.numStories, color: "#7C3AED" },
-                { lbl: "Links", done: cl, total: c.numCommunityLinks, color: "#059669" },
-                { lbl: "Rep.", done: cr, total: c.numReposts, color: "#0891B2" },
-              ].filter(b => b.total > 0);
-
-              let payText;
-              if (c.paymentType === "monthly") {
-                const months = monthsBetween(c.contractStart, c.contractDeadline);
-                payText = `${fmtMoney(c.monthlyValue)}/mês · ${months || "?"}m`;
-              } else if (c.paymentType === "split") {
-                payText = `1ª ${fmtDate(c.parc1Deadline)} · 2ª ${fmtDate(c.parc2Deadline)}`;
-              } else {
-                payText = fmtDate(c.paymentDeadline);
-              }
-
-              return (
-                <tr key={c.id}>
-                  <td style={{ width: 4, padding: 0 }}>
-                    <div style={{ width: 4, background: c.color, alignSelf: "stretch", minHeight: 40 }} />
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 700 }}>{c.company}</span>
-                      {currBadge(c.currency)}
-                      {c.paymentType === "monthly" && <span className="badge b-monthly">Mensal</span>}
-                      {total === 0 && <span className="badge b-tbd">TBD</span>}
-                    </div>
-                  </td>
-                  <td className="num">
-                    <div style={{ fontWeight: 700 }}>{total > 0 ? fmtMoney(total, c.currency) : "—"}</div>
-                    {total > 0 && c.currency !== "BRL" && (rates.eur > 0 || rates.usd > 0) &&
-                      <div style={{ fontSize: 10, color: MID }}>{convNote(total, c.currency)}</div>}
-                  </td>
-                  <td className="num">
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                      <CommToggle on={c.hasCommission} onToggle={() => toggleComm(c.id)} />
-                      {c.hasCommission && total > 0 &&
-                        <span style={{ fontSize: 11, color: RED, fontWeight: 700 }}>{fmtMoney(total * COMM_RATE, c.currency)}</span>}
-                    </div>
-                  </td>
-                  <td style={{ fontSize: 11, color: MID, whiteSpace: "nowrap" }}>{payText}</td>
-                  <td>
-                    {deliveryBars.length > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {deliveryBars.map(b => (
-                          <div key={b.lbl} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 9, color: MID, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", minWidth: 36 }}>{b.lbl}</span>
-                            <div style={{ flex: 1, height: 3, background: SUF, minWidth: 60 }}>
-                              <div style={{ height: 3, background: b.color, width: `${b.total ? Math.min(100, b.done / b.total * 100) : 0}%` }} />
-                            </div>
-                            <span style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", minWidth: 28, textAlign: "right", color: b.done >= b.total && b.total > 0 ? GRN : BLK, fontWeight: b.done >= b.total && b.total > 0 ? 700 : 400 }}>{b.done}/{b.total}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : <span style={{ fontSize: 11, color: MID, fontStyle: "italic" }}>A definir</span>}
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ flex: 1, height: 4, background: SUF, minWidth: 60 }}>
-                        <div style={{ height: 4, background: pct === 100 ? GRN : c.color, width: `${pct}%`, transition: "width .4s" }} />
-                      </div>
-                      <span style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: MID, whiteSpace: "nowrap" }}>{doneDeliveries}/{totDeliveries}</span>
-                    </div>
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    {dl != null ? (
-                      <div>
-                        <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: dlColor(dl), lineHeight: 1 }}>{dl}</div>
-                        <div style={{ fontSize: 9, color: MID, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>dias</div>
-                      </div>
-                    ) : <span style={{ color: MID, fontSize: 11 }}>—</span>}
-                  </td>
-                  <td style={{ maxWidth: 200 }}>
-                    <InlineNotes notes={c.notes} onSave={v => saveNote(c.id, v)} />
-                  </td>
-                  <td />
-                </tr>
-              );
-            })}
-            {contracts.length === 0 && (
-              <tr><td colSpan={10} style={{ textAlign: "center", padding: 40, color: MID }}>Nenhum contrato cadastrado.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Contract accordion list */}
+      <ContractList contracts={contracts} posts={posts} rates={rates} saveNote={saveNote} toggleComm={toggleComm} />
 
       {/* Next payments */}
       {nextPay.length > 0 && (
@@ -826,6 +713,217 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
         </div>
       )}
     </>
+  );
+}
+
+// ─── Contract Accordion List (Dashboard) ─────────────────
+function ContractList({ contracts, posts, rates, saveNote, toggleComm }) {
+  const [open, setOpen] = useState(null);
+
+  const toggle = id => setOpen(prev => prev === id ? null : id);
+
+  return (
+    <div className="blk" style={{ marginBottom: 14 }}>
+      {/* Header row */}
+      <div style={{ display: "grid", gridTemplateColumns: "4px 1fr 140px 100px 90px 140px 56px", alignItems: "center", padding: "7px 14px 7px 0", borderBottom: `2px solid ${LN}`, gap: 0 }}>
+        <div />
+        <div style={{ paddingLeft: 14, fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID }}>Patrocinador</div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, textAlign: "right" }}>Valor</div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, textAlign: "right", paddingRight: 8 }}>Comissão</div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, textAlign: "center" }}>Progresso</div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, paddingLeft: 12 }}>Prazo pgto.</div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: MID, textAlign: "right", paddingRight: 14 }}>Dias</div>
+      </div>
+
+      {contracts.length === 0 && (
+        <div style={{ padding: "40px 14px", textAlign: "center", color: MID, fontSize: 12 }}>Nenhum contrato cadastrado.</div>
+      )}
+
+      {contracts.map(c => {
+        const isOpen = open === c.id;
+        const cp = posts.filter(p => p.contractId === c.id && p.type === "post").length;
+        const cs = posts.filter(p => p.contractId === c.id && p.type === "story").length;
+        const cl = posts.filter(p => p.contractId === c.id && p.type === "link").length;
+        const cr = posts.filter(p => p.contractId === c.id).reduce((s, p) => s + postRepostCount(p), 0);
+        const total = contractTotal(c);
+        const dl = daysLeft(c.contractDeadline);
+        const totDel = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
+        const doneDel = cp + cs + cl + cr;
+        const pct = totDel ? Math.min(100, doneDel / totDel * 100) : 0;
+
+        let payShort;
+        if (c.paymentType === "monthly") {
+          const months = monthsBetween(c.contractStart, c.contractDeadline);
+          payShort = `${fmtMoney(c.monthlyValue)}/mês · ${months || "?"}m`;
+        } else if (c.paymentType === "split") {
+          payShort = `1ª ${fmtDate(c.parc1Deadline)} · 2ª ${fmtDate(c.parc2Deadline)}`;
+        } else {
+          payShort = fmtDate(c.paymentDeadline);
+        }
+
+        const deliveryBars = [
+          { lbl: "Posts/Reels", done: cp, total: c.numPosts,            color: c.color   },
+          { lbl: "Stories",     done: cs, total: c.numStories,           color: "#7C3AED" },
+          { lbl: "Links",       done: cl, total: c.numCommunityLinks,    color: "#059669" },
+          { lbl: "Reposts",     done: cr, total: c.numReposts,           color: "#0891B2" },
+        ].filter(b => b.total > 0);
+
+        return (
+          <div key={c.id} style={{ borderBottom: `1px solid ${LN}` }}>
+            {/* ── Summary row (always visible) ── */}
+            <div
+              onClick={() => toggle(c.id)}
+              style={{ display: "grid", gridTemplateColumns: "4px 1fr 140px 100px 90px 140px 56px", alignItems: "center", cursor: "pointer", background: isOpen ? SUF : "#fff", transition: "background .1s" }}
+              onMouseEnter={e => { if (!isOpen) e.currentTarget.style.background = SUF; }}
+              onMouseLeave={e => { if (!isOpen) e.currentTarget.style.background = "#fff"; }}
+            >
+              {/* Color bar */}
+              <div style={{ width: 4, background: c.color, alignSelf: "stretch", minHeight: 48 }} />
+
+              {/* Name + badges */}
+              <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>{c.company}</span>
+                {currBadge(c.currency)}
+                {c.paymentType === "monthly" && <span className="badge b-monthly">Mensal</span>}
+                {total === 0 && <span className="badge b-tbd">TBD</span>}
+                <span style={{ fontSize: 11, color: isOpen ? BLK : MID, marginLeft: 2, transition: "color .1s" }}>{isOpen ? "▲" : "▼"}</span>
+              </div>
+
+              {/* Value */}
+              <div style={{ textAlign: "right", paddingRight: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+                  {total > 0 ? fmtMoney(total, c.currency) : "—"}
+                </div>
+                {total > 0 && c.currency !== "BRL" && rates.eur > 0 && c.currency === "EUR" &&
+                  <div style={{ fontSize: 10, color: MID }}>≈ {fmtMoney(total * rates.eur)}</div>}
+                {total > 0 && c.currency !== "BRL" && rates.usd > 0 && c.currency === "USD" &&
+                  <div style={{ fontSize: 10, color: MID }}>≈ {fmtMoney(total * rates.usd)}</div>}
+              </div>
+
+              {/* Commission */}
+              <div style={{ textAlign: "right", paddingRight: 8 }}>
+                {c.hasCommission && total > 0
+                  ? <span style={{ fontSize: 12, color: RED, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(total * COMM_RATE, c.currency)}</span>
+                  : <span style={{ fontSize: 11, color: MID }}>—</span>}
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ padding: "0 8px" }}>
+                <div style={{ height: 4, background: SUF, marginBottom: 3 }}>
+                  <div style={{ height: 4, background: pct === 100 ? GRN : c.color, width: `${pct}%`, transition: "width .4s" }} />
+                </div>
+                <div style={{ fontSize: 9, color: MID, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
+                  {totDel > 0 ? `${doneDel}/${totDel}` : "—"}
+                </div>
+              </div>
+
+              {/* Payment */}
+              <div style={{ paddingLeft: 12, fontSize: 11, color: MID, whiteSpace: "nowrap" }}>{payShort}</div>
+
+              {/* Days */}
+              <div style={{ textAlign: "right", paddingRight: 14 }}>
+                {dl != null ? (
+                  <>
+                    <div style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: dlColor(dl), lineHeight: 1 }}>{dl}</div>
+                    <div style={{ fontSize: 8, color: MID, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>dias</div>
+                  </>
+                ) : <span style={{ color: MID }}>—</span>}
+              </div>
+            </div>
+
+            {/* ── Expanded detail panel ── */}
+            {isOpen && (
+              <div style={{ background: "#FAFAF8", borderTop: `1px solid ${LN}`, padding: "18px 18px 18px 22px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
+
+                  {/* Deliveries */}
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 10 }}>Entregas</div>
+                    {deliveryBars.length > 0 ? deliveryBars.map(b => (
+                      <div key={b.lbl} style={{ marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, fontSize: 11 }}>
+                          <span style={{ fontWeight: 600 }}>{b.lbl}</span>
+                          <span style={{ fontVariantNumeric: "tabular-nums", color: b.done >= b.total ? GRN : BLK, fontWeight: b.done >= b.total ? 700 : 400 }}>{b.done}/{b.total}</span>
+                        </div>
+                        <div style={{ height: 3, background: LN }}>
+                          <div style={{ height: 3, background: b.color, width: `${b.total ? Math.min(100, b.done / b.total * 100) : 0}%` }} />
+                        </div>
+                      </div>
+                    )) : <div style={{ fontSize: 11, color: MID, fontStyle: "italic" }}>Escopo a definir</div>}
+                  </div>
+
+                  {/* Financial details */}
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 10 }}>Financeiro</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                        <span style={{ color: MID }}>Valor total</span>
+                        <span style={{ fontWeight: 700 }}>{total > 0 ? fmtMoney(total, c.currency) : "A definir"}</span>
+                      </div>
+                      {c.paymentType === "monthly" && (
+                        <>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                            <span style={{ color: MID }}>Valor mensal</span>
+                            <span style={{ fontWeight: 600 }}>{fmtMoney(c.monthlyValue, c.currency)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                            <span style={{ color: MID }}>Período</span>
+                            <span>{fmtDate(c.contractStart)} → {fmtDate(c.contractDeadline)}</span>
+                          </div>
+                        </>
+                      )}
+                      {c.paymentType === "split" && (
+                        <>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                            <span style={{ color: MID }}>1ª parcela</span>
+                            <span>{fmtMoney(c.parc1Value, c.currency)} · {fmtDate(c.parc1Deadline)}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                            <span style={{ color: MID }}>2ª parcela</span>
+                            <span>{fmtMoney(c.parc2Value, c.currency)} · {fmtDate(c.parc2Deadline)}</span>
+                          </div>
+                        </>
+                      )}
+                      {c.paymentType === "single" && c.paymentDeadline && (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                          <span style={{ color: MID }}>Pagamento</span>
+                          <span>{fmtDate(c.paymentDeadline)}</span>
+                        </div>
+                      )}
+                      <div style={{ borderTop: `1px solid ${LN}`, paddingTop: 7, display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                        <span style={{ color: MID }}>Comissão agência</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <CommToggle on={c.hasCommission} onToggle={() => toggleComm(c.id)} />
+                          {c.hasCommission && total > 0 && <span style={{ color: RED, fontWeight: 700 }}>{fmtMoney(total * COMM_RATE, c.currency)}</span>}
+                        </div>
+                      </div>
+                      {c.cnpj && (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                          <span style={{ color: MID }}>CNPJ</span>
+                          <span style={{ fontFamily: "monospace", fontSize: 11 }}>{c.cnpj}</span>
+                        </div>
+                      )}
+                      {c.contractDeadline && (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                          <span style={{ color: MID }}>Prazo contrato</span>
+                          <span style={{ color: dlColor(dl), fontWeight: dl != null && dl <= 7 ? 700 : 400 }}>{fmtDate(c.contractDeadline)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: MID, marginBottom: 10 }}>Observações</div>
+                    <InlineNotes notes={c.notes} onSave={v => saveNote(c.id, v)} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

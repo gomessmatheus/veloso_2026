@@ -620,69 +620,120 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
         </div>
       </div>
 
-      {/* Contract cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(285px,1fr))", gap: 13, marginBottom: 14 }}>
-        {contracts.map(c => {
-          const cp = posts.filter(p => p.contractId === c.id && p.type === "post").length;
-          const cs = posts.filter(p => p.contractId === c.id && p.type === "story").length;
-          const cl = posts.filter(p => p.contractId === c.id && p.type === "link").length;
-          const cr = posts.filter(p => p.contractId === c.id).reduce((s, p) => s + postRepostCount(p), 0);
-          const total = contractTotal(c);
-          const bars = [
-            { lbl: "Posts/Reels", done: cp, total: c.numPosts, color: c.color },
-            { lbl: "Stories",     done: cs, total: c.numStories, color: "#7C3AED" },
-            { lbl: "Links",       done: cl, total: c.numCommunityLinks, color: "#059669" },
-            { lbl: "Reposts",     done: cr, total: c.numReposts, color: "#0891B2" },
-          ].filter(b => b.total > 0);
-          const dl = daysLeft(c.contractDeadline);
-          let payLine;
-          if (c.paymentType === "monthly") {
-            const months = monthsBetween(c.contractStart, c.contractDeadline);
-            payLine = <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{ color: MID }}>{fmtMoney(c.monthlyValue)}/mês · {months || "?"} meses</span>
-              <span className="badge b-monthly">Mensal</span>
-            </span>;
-          } else if (c.paymentType === "split") {
-            payLine = <span style={{ color: MID }}>1ª {fmtDate(c.parc1Deadline)} · 2ª {fmtDate(c.parc2Deadline)}</span>;
-          } else {
-            payLine = <span style={{ color: MID }}>Pgto: {fmtDate(c.paymentDeadline)}</span>;
-          }
-          return (
-            <div key={c.id} className="blk">
-              <div className="blk-hd" style={{ borderLeft: `4px solid ${c.color}`, paddingLeft: 10 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span className="blk-ttl-lg">{c.company}</span>
-                    {currBadge(c.currency)}
-                    {total === 0 && <span className="badge b-tbd">TBD</span>}
-                  </div>
-                  <div className="blk-ttl" style={{ marginTop: 2 }}>
-                    {total > 0 ? fmtMoney(total, c.currency) : "Valor a definir"}
-                    {total > 0 && c.currency !== "BRL" && (rates.eur > 0 || rates.usd > 0) && <span style={{ color: MID }}>{convNote(total, c.currency)}</span>}
-                    {c.contractDeadline ? ` · prazo ${fmtDate(c.contractDeadline)}` : ""}
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, paddingLeft: 10, flexShrink: 0 }}>
-                  {dl != null && <div style={{ textAlign: "right" }}><div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: dlColor(dl), lineHeight: 1 }}>{dl}</div><div style={{ fontSize: 9, color: MID, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>dias</div></div>}
-                  <CommToggle on={c.hasCommission} onToggle={() => toggleComm(c.id)} />
-                </div>
-              </div>
-              <div className="blk-bd">
-                {bars.length > 0 ? bars.map(b => (
-                  <div key={b.lbl} className="prow">
-                    <div className="pmeta"><span style={{ fontWeight: 600 }}>{b.lbl}</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{b.done}/{b.total}</span></div>
-                    <div className="pbg"><div className="pfill" style={{ width: `${b.total ? Math.min(100, b.done / b.total * 100) : 0}%`, background: b.color }} /></div>
-                  </div>
-                )) : <div style={{ fontSize: 11, color: MID, marginBottom: 8, fontStyle: "italic" }}>Escopo a definir</div>}
-                <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontSize: 11, borderTop: `1px solid ${LN}`, paddingTop: 8, flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-                  {payLine}
-                  {total > 0 && c.hasCommission && <span style={{ color: RED, fontWeight: 700, flexShrink: 0 }}>Com.: {fmtMoney(total * COMM_RATE, c.currency)}</span>}
-                </div>
-                <InlineNotes notes={c.notes} onSave={v => saveNote(c.id, v)} />
-              </div>
-            </div>
-          );
-        })}
+      {/* Contract list */}
+      <div className="blk" style={{ marginBottom: 14, overflowX: "auto" }}>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th /><th>Patrocinador</th>
+              <th className="num">Valor</th>
+              <th className="num">Comissão</th>
+              <th>Pagamento</th>
+              <th style={{ minWidth: 180 }}>Entregas</th>
+              <th style={{ minWidth: 120 }}>Progresso</th>
+              <th className="num">Prazo</th>
+              <th>Observações</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {contracts.map(c => {
+              const cp = posts.filter(p => p.contractId === c.id && p.type === "post").length;
+              const cs = posts.filter(p => p.contractId === c.id && p.type === "story").length;
+              const cl = posts.filter(p => p.contractId === c.id && p.type === "link").length;
+              const cr = posts.filter(p => p.contractId === c.id).reduce((s, p) => s + postRepostCount(p), 0);
+              const total = contractTotal(c);
+              const dl = daysLeft(c.contractDeadline);
+              const totDeliveries = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
+              const doneDeliveries = cp + cs + cl + cr;
+              const pct = totDeliveries ? Math.min(100, doneDeliveries / totDeliveries * 100) : 0;
+
+              const deliveryBars = [
+                { lbl: "Posts", done: cp, total: c.numPosts, color: c.color },
+                { lbl: "Stories", done: cs, total: c.numStories, color: "#7C3AED" },
+                { lbl: "Links", done: cl, total: c.numCommunityLinks, color: "#059669" },
+                { lbl: "Rep.", done: cr, total: c.numReposts, color: "#0891B2" },
+              ].filter(b => b.total > 0);
+
+              let payText;
+              if (c.paymentType === "monthly") {
+                const months = monthsBetween(c.contractStart, c.contractDeadline);
+                payText = `${fmtMoney(c.monthlyValue)}/mês · ${months || "?"}m`;
+              } else if (c.paymentType === "split") {
+                payText = `1ª ${fmtDate(c.parc1Deadline)} · 2ª ${fmtDate(c.parc2Deadline)}`;
+              } else {
+                payText = fmtDate(c.paymentDeadline);
+              }
+
+              return (
+                <tr key={c.id}>
+                  <td style={{ width: 4, padding: 0 }}>
+                    <div style={{ width: 4, background: c.color, alignSelf: "stretch", minHeight: 40 }} />
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 700 }}>{c.company}</span>
+                      {currBadge(c.currency)}
+                      {c.paymentType === "monthly" && <span className="badge b-monthly">Mensal</span>}
+                      {total === 0 && <span className="badge b-tbd">TBD</span>}
+                    </div>
+                  </td>
+                  <td className="num">
+                    <div style={{ fontWeight: 700 }}>{total > 0 ? fmtMoney(total, c.currency) : "—"}</div>
+                    {total > 0 && c.currency !== "BRL" && (rates.eur > 0 || rates.usd > 0) &&
+                      <div style={{ fontSize: 10, color: MID }}>{convNote(total, c.currency)}</div>}
+                  </td>
+                  <td className="num">
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                      <CommToggle on={c.hasCommission} onToggle={() => toggleComm(c.id)} />
+                      {c.hasCommission && total > 0 &&
+                        <span style={{ fontSize: 11, color: RED, fontWeight: 700 }}>{fmtMoney(total * COMM_RATE, c.currency)}</span>}
+                    </div>
+                  </td>
+                  <td style={{ fontSize: 11, color: MID, whiteSpace: "nowrap" }}>{payText}</td>
+                  <td>
+                    {deliveryBars.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {deliveryBars.map(b => (
+                          <div key={b.lbl} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 9, color: MID, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", minWidth: 36 }}>{b.lbl}</span>
+                            <div style={{ flex: 1, height: 3, background: SUF, minWidth: 60 }}>
+                              <div style={{ height: 3, background: b.color, width: `${b.total ? Math.min(100, b.done / b.total * 100) : 0}%` }} />
+                            </div>
+                            <span style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", minWidth: 28, textAlign: "right", color: b.done >= b.total && b.total > 0 ? GRN : BLK, fontWeight: b.done >= b.total && b.total > 0 ? 700 : 400 }}>{b.done}/{b.total}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <span style={{ fontSize: 11, color: MID, fontStyle: "italic" }}>A definir</span>}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, height: 4, background: SUF, minWidth: 60 }}>
+                        <div style={{ height: 4, background: pct === 100 ? GRN : c.color, width: `${pct}%`, transition: "width .4s" }} />
+                      </div>
+                      <span style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: MID, whiteSpace: "nowrap" }}>{doneDeliveries}/{totDeliveries}</span>
+                    </div>
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    {dl != null ? (
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: dlColor(dl), lineHeight: 1 }}>{dl}</div>
+                        <div style={{ fontSize: 9, color: MID, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>dias</div>
+                      </div>
+                    ) : <span style={{ color: MID, fontSize: 11 }}>—</span>}
+                  </td>
+                  <td style={{ maxWidth: 200 }}>
+                    <InlineNotes notes={c.notes} onSave={v => saveNote(c.id, v)} />
+                  </td>
+                  <td />
+                </tr>
+              );
+            })}
+            {contracts.length === 0 && (
+              <tr><td colSpan={10} style={{ textAlign: "center", padding: 40, color: MID }}>Nenhum contrato cadastrado.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Next payments */}

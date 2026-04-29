@@ -659,337 +659,209 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
 function ContractList({ contracts, posts, rates, saveNote, toggleComm, toggleCommPaid, toggleNF }) {
   const [open, setOpen] = useState(null);
 
-  // NF detail state: { [contractId]: { [key]: { number, date, notes } } }
   const [nfDetails, setNfDetails] = useState(() => {
     try { return JSON.parse(localStorage.getItem("copa6_nfd") || "{}"); } catch { return {}; }
   });
-  const saveNfDetail = (contractId, key, field, value) => {
+  const saveNfDetail = (cid, key, field, val) =>
     setNfDetails(prev => {
-      const next = { ...prev, [contractId]: { ...(prev[contractId]||{}), [key]: { ...(prev[contractId]?.[key]||{}), [field]: value } } };
-      localStorage.setItem("copa6_nfd", JSON.stringify(next));
-      return next;
+      const n = { ...prev, [cid]: { ...(prev[cid]||{}), [key]: { ...(prev[cid]?.[key]||{}), [field]: val } } };
+      localStorage.setItem("copa6_nfd", JSON.stringify(n));
+      return n;
     });
-  };
 
-  const toggle = id => setOpen(prev => prev === id ? null : id);
-
-  // Cronograma state: { [contractId]: [ { id, fase, date, resp, status, note } ] }
   const [cronos, setCronos] = useState(() => {
     try { return JSON.parse(localStorage.getItem("copa6_cron") || "{}"); } catch { return {}; }
   });
-  const saveCronos = (contractId, arr) => {
+  const saveCronos = (cid, arr) =>
     setCronos(prev => {
-      const next = { ...prev, [contractId]: arr };
-      localStorage.setItem("copa6_cron", JSON.stringify(next));
-      return next;
+      const n = { ...prev, [cid]: arr };
+      localStorage.setItem("copa6_cron", JSON.stringify(n));
+      return n;
     });
-  };
-  const addMilestone = (contractId) => {
-    const arr = [...(cronos[contractId]||[]), { id: Math.random().toString(36).substr(2,6), fase:"", date:"", resp:"", status:"pendente", note:"" }];
-    saveCronos(contractId, arr);
-  };
-  const updateMilestone = (contractId, milId, field, val) => {
-    const arr = (cronos[contractId]||[]).map(m => m.id===milId ? {...m, [field]:val} : m);
-    saveCronos(contractId, arr);
-  };
-  const removeMilestone = (contractId, milId) => {
-    const arr = (cronos[contractId]||[]).filter(m => m.id!==milId);
-    saveCronos(contractId, arr);
-  };
-  const FASE_OPTIONS = ["Envio briefing","Envio roteiro","Aprovação roteiro","Gravação","Edição","Envio para aprovação","Aprovação final","Publicação Reel","Publicação TikTok","Publicação Stories","Publicação YouTube","Pagamento","NF emissão","Outro"];
-  const STATUS_COLORS = { pendente:["#FAEEDA","#633806"], "em andamento":["#E6F1FB","#0C447C"], aprovado:["#EAF3DE","#27500A"], publicado:["#EEEDFE","#3C3489"], cancelado:["#FCEBEB","#791F1F"] };
+  const addMilestone    = cid => saveCronos(cid, [...(cronos[cid]||[]), { id: Math.random().toString(36).substr(2,6), fase:"", date:"", resp:"", status:"pendente", note:"" }]);
+  const updateMilestone = (cid, mid, field, val) => saveCronos(cid, (cronos[cid]||[]).map(m => m.id===mid ? {...m,[field]:val} : m));
+  const removeMilestone = (cid, mid) => saveCronos(cid, (cronos[cid]||[]).filter(m => m.id!==mid));
 
-  // total deliveries for NF status label
-  const nfStatus = (c) => {
-    const entries = getNFEntries(c);
-    if (!entries.length) return null;
-    const allDone = entries.every(e => e.isEmitted);
-    const noneDone = entries.every(e => !e.isEmitted);
-    if (allDone) return "emitida";
-    if (noneDone) return "nao";
+  const FASES = ["Envio briefing","Envio roteiro","Aprovação roteiro","Gravação","Edição","Envio para aprovação","Aprovação final","Publicação Reel","Publicação TikTok","Publicação Stories","Publicação YouTube","Pagamento","NF emissão","Outro"];
+  const ST_CLR = { pendente:["#FAEEDA","#633806"], "em andamento":["#E6F1FB","#0C447C"], aprovado:["#EAF3DE","#27500A"], publicado:["#EEEDFE","#3C3489"], cancelado:["#FCEBEB","#791F1F"] };
+
+  const nfStatus = c => {
+    const e = getNFEntries(c);
+    if (!e.length) return null;
+    if (e.every(x=>x.isEmitted)) return "emitida";
+    if (e.every(x=>!x.isEmitted)) return "nao";
     return "parcial";
   };
 
+  const toggle = id => setOpen(p => p===id ? null : id);
+
   return (
     <div className="blk" style={{ marginBottom:14 }}>
-      {/* Table header */}
       <div style={{ display:"grid", gridTemplateColumns:"4px 1fr 150px 120px 1fr 140px 32px", borderBottom:`2px solid ${LN}`, background:SUF }}>
         {["","EMPRESA","VALOR TOTAL","PRAZO","ENTREGAS","NOTA FISCAL",""].map((h,i) => (
-          <div key={i} style={{ padding:"7px 10px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID,
-            textAlign: i===2||i===3 ? "right" : "left" }}>{h}</div>
+          <div key={i} style={{ padding:"7px 10px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, textAlign:i===2||i===3?"right":"left" }}>{h}</div>
         ))}
       </div>
 
-      {contracts.length === 0 && (
-        <div style={{ padding:"40px 14px", textAlign:"center", color:MID, fontSize:12 }}>
-          Nenhum contrato cadastrado.
-        </div>
+      {contracts.length===0 && (
+        <div style={{ padding:"40px 14px", textAlign:"center", color:MID, fontSize:12 }}>Nenhum contrato cadastrado.</div>
       )}
 
       {contracts.map(c => {
-        const isOpen = open === c.id;
-        const cp = posts.filter(p => p.contractId === c.id && p.type === "post").length;
-        const cs = posts.filter(p => p.contractId === c.id && p.type === "story").length;
-        const cl = posts.filter(p => p.contractId === c.id && p.type === "link").length;
-        const cr = posts.filter(p => p.contractId === c.id).reduce((s,p) => s + postRepostCount(p), 0);
+        const isOpen = open===c.id;
+        const cp = posts.filter(p=>p.contractId===c.id&&p.type==="post").length;
+        const cs = posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
+        const cl = posts.filter(p=>p.contractId===c.id&&p.type==="link").length;
+        const cr = posts.filter(p=>p.contractId===c.id).reduce((s,p)=>s+postRepostCount(p),0);
         const total  = contractTotal(c);
         const dl     = daysLeft(c.contractDeadline);
-        const totDel = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
-        const doneDel= cp + cs + cl + cr;
-        const pct    = totDel ? Math.min(100, doneDel / totDel * 100) : 0;
-        const status = nfStatus(c);
-        const commEntries = getCommEntries(c);
-        const nfEntries   = getNFEntries(c);
+        const totDel = c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
+        const doneDel= cp+cs+cl+cr;
+        const pct    = totDel ? Math.min(100,doneDel/totDel*100) : 0;
+        const st     = nfStatus(c);
+        const nfEntries  = getNFEntries(c);
+        const commEntries= getCommEntries(c);
+        const milestones = cronos[c.id]||[];
 
-        // NF pill
+        const convNote = (v,cur) => {
+          if(cur==="EUR"&&rates.eur>0) return ` ≈ ${fmtMoney(v*rates.eur)}`;
+          if(cur==="USD"&&rates.usd>0) return ` ≈ ${fmtMoney(v*rates.usd)}`;
+          return "";
+        };
+
         const NfPill = () => {
-          if (!nfEntries.length) return <span style={{ color:MID, fontSize:11 }}>—</span>;
-          if (status === "emitida") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", background:`${GRN}18`, border:`1px solid ${GRN}44`, color:GRN }}>✓ Emitida</span>;
-          if (status === "parcial") return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", background:`${AMB}18`, border:`1px solid ${AMB}44`, color:AMB }}>Parcial</span>;
-          return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", background:`${RED}10`, border:`1px solid ${RED}44`, color:RED }}>Não Emitida</span>;
+          if(!nfEntries.length) return <span style={{color:MID,fontSize:11}}>—</span>;
+          if(st==="emitida") return <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 9px",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",background:`${GRN}18`,border:`1px solid ${GRN}44`,color:GRN}}>✓ Emitida</span>;
+          if(st==="parcial") return <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 9px",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",background:`${AMB}18`,border:`1px solid ${AMB}44`,color:AMB}}>Parcial</span>;
+          return <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 9px",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",background:`${RED}10`,border:`1px solid ${RED}44`,color:RED}}>Não Emitida</span>;
         };
 
         return (
-          <div key={c.id} style={{ borderBottom:`1px solid ${LN}` }}>
-            {/* Summary row */}
-            <div
-              onClick={() => toggle(c.id)}
-              style={{ display:"grid", gridTemplateColumns:"4px 1fr 150px 120px 1fr 140px 32px", alignItems:"center", cursor:"pointer",
-                background: isOpen ? SUF : "#fff", transition:"background .1s" }}
-            >
-              {/* Color bar */}
-              <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }} />
+          <div key={c.id} style={{borderBottom:`1px solid ${LN}`}}>
 
-              {/* Company */}
-              <div style={{ padding:"12px 10px", display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                <span style={{ fontWeight:700, fontSize:13 }}>{c.company}</span>
+            {/* ── Summary row ── */}
+            <div onClick={()=>toggle(c.id)}
+              style={{display:"grid",gridTemplateColumns:"4px 1fr 150px 120px 1fr 140px 32px",alignItems:"center",cursor:"pointer",background:isOpen?SUF:"#fff",transition:"background .1s"}}>
+              <div style={{background:c.color,alignSelf:"stretch",minHeight:48}}/>
+              <div style={{padding:"12px 10px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <span style={{fontWeight:700,fontSize:13}}>{c.company}</span>
                 {currBadge(c.currency)}
-                {c.paymentType === "monthly" && <span className="badge b-monthly">Mensal</span>}
-                {total === 0 && <span className="badge b-tbd">TBD</span>}
+                {c.paymentType==="monthly"&&<span className="badge b-monthly">Mensal</span>}
+                {total===0&&<span className="badge b-tbd">TBD</span>}
               </div>
-
-              {/* Value */}
-              <div style={{ padding:"12px 10px", textAlign:"right" }}>
-                <div style={{ fontWeight:700, fontSize:13, fontVariantNumeric:"tabular-nums" }}>
-                  {total > 0 ? fmtMoney(total, c.currency) : "—"}
-                </div>
-                {total > 0 && c.currency === "EUR" && rates.eur > 0 &&
-                  <div style={{ fontSize:10, color:MID }}>≈R$ {fmtMoney(total * rates.eur).replace("R$","").trim()}</div>}
-                {total > 0 && c.currency === "USD" && rates.usd > 0 &&
-                  <div style={{ fontSize:10, color:MID }}>≈R$ {fmtMoney(total * rates.usd).replace("R$","").trim()}</div>}
+              <div style={{padding:"12px 10px",textAlign:"right"}}>
+                <div style={{fontWeight:700,fontSize:13,fontVariantNumeric:"tabular-nums"}}>{total>0?fmtMoney(total,c.currency):"—"}</div>
+                {total>0&&c.currency!=="BRL"&&<div style={{fontSize:10,color:MID}}>{convNote(total,c.currency)}</div>}
               </div>
-
-              {/* Deadline */}
-              <div style={{ padding:"12px 10px", textAlign:"right" }}>
-                {c.contractDeadline ? (
-                  <>
-                    <div style={{ fontSize:12, fontWeight:600, color: dlColor(dl) }}>{fmtDate(c.contractDeadline)}</div>
-                    <div style={{ fontSize:10, color: dlColor(dl), fontVariantNumeric:"tabular-nums" }}>{dl != null ? `${dl}d` : ""}</div>
-                  </>
-                ) : <span style={{ color:MID }}>—</span>}
+              <div style={{padding:"12px 10px",textAlign:"right"}}>
+                {c.contractDeadline
+                  ? <><div style={{fontSize:12,fontWeight:600,color:dlColor(dl)}}>{fmtDate(c.contractDeadline)}</div><div style={{fontSize:10,color:dlColor(dl),fontVariantNumeric:"tabular-nums"}}>{dl!=null?`${dl}d`:""}</div></>
+                  : <span style={{color:MID}}>—</span>}
               </div>
-
-              {/* Deliveries */}
-              <div style={{ padding:"12px 10px" }}>
-                {totDel > 0 ? (
-                  <>
-                    <div style={{ height:3, background:LN, marginBottom:4 }}>
-                      <div style={{ height:3, background: pct===100 ? GRN : c.color, width:`${pct}%`, transition:"width .4s" }} />
-                    </div>
-                    <div style={{ fontSize:11, color:MID }}>{doneDel}/{totDel} entregas</div>
-                  </>
-                ) : <span style={{ fontSize:11, color:MID, fontStyle:"italic" }}>A definir</span>}
+              <div style={{padding:"12px 10px"}}>
+                {totDel>0
+                  ? <><div style={{height:3,background:LN,marginBottom:4}}><div style={{height:3,background:pct===100?GRN:c.color,width:`${pct}%`,transition:"width .4s"}}/></div><div style={{fontSize:11,color:MID}}>{doneDel}/{totDel} entregas</div></>
+                  : <span style={{fontSize:11,color:MID,fontStyle:"italic"}}>A definir</span>}
               </div>
-
-              {/* NF status */}
-              <div style={{ padding:"12px 10px" }}><NfPill /></div>
-
-              {/* Chevron */}
-              <div style={{ padding:"12px 6px", textAlign:"center", fontSize:11, color:MID }}>
-                {isOpen ? "▲" : "›"}
-              </div>
+              <div style={{padding:"12px 10px"}}><NfPill/></div>
+              <div style={{padding:"12px 6px",textAlign:"center",fontSize:11,color:MID}}>{isOpen?"▲":"›"}</div>
             </div>
 
             {/* ── Expanded panel ── */}
             {isOpen && (
-              <div style={{ background:"#FAFAF8", borderTop:`1px solid ${LN}` }}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:0 }}>
+              <div style={{background:"#FAFAF8",borderTop:`1px solid ${LN}`}}>
 
-                  {/* Col 1: Entregas + financeiro + obs */}
-                  <div style={{ padding:"18px 20px", borderRight:`1px solid ${LN}` }}>
-                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:MID, marginBottom:12 }}>Entregas</div>
+                {/* 3-col row: entregas | comissoes | NF */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0,borderBottom:`1px solid ${LN}`}}>
+
+                  {/* Col 1 */}
+                  <div style={{padding:"18px 20px",borderRight:`1px solid ${LN}`}}>
+                    <div style={{fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:MID,marginBottom:12}}>Entregas</div>
                     {[
-                      { lbl:"Posts / Reels", done:cp, total:c.numPosts, color:c.color },
-                      { lbl:"Stories",       done:cs, total:c.numStories, color:"#7C3AED" },
-                      { lbl:"Links Comun.",  done:cl, total:c.numCommunityLinks, color:"#059669" },
-                      { lbl:"Reposts / TT",  done:cr, total:c.numReposts, color:"#0891B2" },
-                    ].filter(b => b.total > 0 || b.done > 0).map(b => (
-                      <div key={b.lbl} style={{ marginBottom:8 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:3 }}>
-                          <span style={{ fontWeight:600 }}>{b.lbl}</span>
-                          <span style={{ fontVariantNumeric:"tabular-nums", color: b.total===0&&b.done>0?"#1D4ED8":b.done >= b.total&&b.total>0 ? GRN : BLK, fontWeight: (b.done >= b.total&&b.total>0)||( b.total===0&&b.done>0) ? 700 : 400 }}>{b.done}{b.total>0?`/${b.total}`:" extra"}</span>
+                      {lbl:"Posts / Reels",done:cp,total:c.numPosts,color:c.color},
+                      {lbl:"Stories",done:cs,total:c.numStories,color:"#7C3AED"},
+                      {lbl:"Links Comun.",done:cl,total:c.numCommunityLinks,color:"#059669"},
+                      {lbl:"Reposts / TT",done:cr,total:c.numReposts,color:"#0891B2"},
+                    ].filter(b=>b.total>0||b.done>0).map(b=>(
+                      <div key={b.lbl} style={{marginBottom:8}}>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}>
+                          <span style={{fontWeight:600}}>{b.lbl}</span>
+                          <span style={{fontVariantNumeric:"tabular-nums",color:b.done>=b.total&&b.total>0?GRN:BLK,fontWeight:b.done>=b.total&&b.total>0?700:400}}>{b.done}/{b.total}</span>
                         </div>
-                        <div style={{ height:3, background:LN }}>
-                          <div style={{ height:3, background:b.done>b.total&&b.total>0?AMB:b.color, width:`${b.total ? Math.min(100,b.done/b.total*100) : b.done>0?100:0}%` }} />
-                        </div>
+                        <div style={{height:3,background:LN}}><div style={{height:3,background:b.color,width:`${b.total?Math.min(100,b.done/b.total*100):b.done>0?100:0}%`}}/></div>
                       </div>
                     ))}
-                    {c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts === 0 &&
-                      <div style={{ fontSize:11, color:MID, fontStyle:"italic", marginBottom:8 }}>Escopo a definir</div>}
-
-                    {/* Payment info */}
-                    <div style={{ marginTop:12, paddingTop:10, borderTop:`1px solid ${LN}`, fontSize:11 }}>
-                      <div style={{ fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", fontSize:9, color:MID, marginBottom:6 }}>Pagamento</div>
-                      {c.paymentType === "monthly" && (
-                        <div style={{ color:MID }}>{fmtMoney(c.monthlyValue)}/mês · {monthsBetween(c.contractStart,c.contractDeadline)||"?"}m · {fmtDate(c.contractStart)} → {fmtDate(c.contractDeadline)}</div>
-                      )}
-                      {c.paymentType === "split" && (
-                        <div style={{ color:MID }}>
-                          {getInstallments(c).map((inst,i) => {
-                            const ORDINALS = ["1ª","2ª","3ª","4ª","5ª","6ª"];
-                            return <span key={i}>{i>0?" · ":""}{ORDINALS[i]||`${i+1}ª`} {fmtMoney(inst.value,c.currency)} {fmtDate(inst.date)}</span>;
-                          })}
-                        </div>
-                      )}
-                      {c.paymentType === "single" && (
-                        <div style={{ color:MID }}>{fmtDate(c.paymentDeadline)}</div>
-                      )}
+                    {c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts===0&&cp+cs+cl+cr===0&&<div style={{fontSize:11,color:MID,fontStyle:"italic",marginBottom:8}}>Escopo a definir</div>}
+                    <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${LN}`,fontSize:11}}>
+                      <div style={{fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",fontSize:9,color:MID,marginBottom:6}}>Pagamento</div>
+                      {c.paymentType==="monthly"&&<div style={{color:MID}}>{fmtMoney(c.monthlyValue)}/mês · {monthsBetween(c.contractStart,c.contractDeadline)||"?"}m · {fmtDate(c.contractStart)} → {fmtDate(c.contractDeadline)}</div>}
+                      {c.paymentType==="split"&&<div style={{color:MID}}>{getInstallments(c).map((inst,i)=>{const O=["1ª","2ª","3ª","4ª","5ª","6ª"];return <span key={i}>{i>0?" · ":""}{O[i]||`${i+1}ª`} {fmtMoney(inst.value,c.currency)} {fmtDate(inst.date)}</span>;})}</div>}
+                      {c.paymentType==="single"&&<div style={{color:MID}}>{fmtDate(c.paymentDeadline)}</div>}
                     </div>
-
-                    {/* Payment condition */}
-                    {Number(c.paymentDaysAfterNF) > 0 && (
-                      <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
-                        <span style={{ color:MID }}>Pgto:</span>
-                        <span style={{ fontWeight:700 }}>{c.paymentDaysAfterNF} dias</span>
-                        <span style={{ color:MID }}>após emissão da NF</span>
-                      </div>
-                    )}
-                    {/* Payment condition */}
-                    {Number(c.paymentDaysAfterNF) > 0 && (
-                      <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>
-                        <span style={{ color:MID }}>Pgto:</span>
-                        <span style={{ fontWeight:700 }}>{c.paymentDaysAfterNF} dias</span>
-                        <span style={{ color:MID }}>após emissão da NF</span>
-                      </div>
-                    )}
-                    {/* Comm toggle */}
-                    <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:8 }}>
-                      <CommToggle on={c.hasCommission} onToggle={() => toggleComm(c.id)} label />
-                    </div>
-
-                    {/* Notes */}
-                    <InlineNotes notes={c.notes} onSave={v => saveNote(c.id, v)} />
+                    {Number(c.paymentDaysAfterNF)>0&&<div style={{marginTop:8,display:"flex",alignItems:"center",gap:6,fontSize:11}}><span style={{color:MID}}>Pgto:</span><span style={{fontWeight:700}}>{c.paymentDaysAfterNF} dias</span><span style={{color:MID}}>após NF</span></div>}
+                    <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}><CommToggle on={c.hasCommission} onToggle={()=>toggleComm(c.id)} label/></div>
+                    <InlineNotes notes={c.notes} onSave={v=>saveNote(c.id,v)}/>
                   </div>
 
                   {/* Col 2: Comissões */}
-                  <div style={{ padding:"18px 20px", borderRight:`1px solid ${LN}` }}>
-                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:MID, marginBottom:12, display:"flex", justifyContent:"space-between" }}>
+                  <div style={{padding:"18px 20px",borderRight:`1px solid ${LN}`}}>
+                    <div style={{fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:MID,marginBottom:12,display:"flex",justifyContent:"space-between"}}>
                       <span>Comissões da Agência</span>
-                      {commEntries.length > 0 && <span style={{ color:RED }}>{fmtMoney(commEntries.reduce((s,e)=>s+e.amount,0), c.currency)}</span>}
+                      {commEntries.length>0&&<span style={{color:RED}}>{fmtMoney(commEntries.reduce((s,e)=>s+e.amount,0),c.currency)}</span>}
                     </div>
-
-                    {commEntries.length === 0 && (
-                      <div style={{ fontSize:11, color:MID, fontStyle:"italic" }}>Sem comissão neste contrato</div>
-                    )}
-
-                    {commEntries.map((e, i, arr) => (
-                      <div key={e.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0", borderBottom: i < arr.length-1 ? `1px solid ${LN}` : "none", gap:8 }}>
+                    {commEntries.length===0&&<div style={{fontSize:11,color:MID,fontStyle:"italic"}}>Sem comissão neste contrato</div>}
+                    {commEntries.map((e,i,arr)=>(
+                      <div key={e.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:i<arr.length-1?`1px solid ${LN}`:"none",gap:8}}>
                         <div>
-                          <div style={{ fontSize:12, fontWeight:600 }}>{e.label}</div>
-                          {e.date && <div style={{ fontSize:10, color:MID }}>{fmtDate(e.date)}</div>}
+                          <div style={{fontSize:12,fontWeight:600}}>{e.label}</div>
+                          {e.date&&<div style={{fontSize:10,color:MID}}>{fmtDate(e.date)}</div>}
                         </div>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-                          <span style={{ fontSize:12, fontWeight:700, color:RED, fontVariantNumeric:"tabular-nums" }}>{e.amount > 0 ? fmtMoney(e.amount, e.currency) : "—"}</span>
-                          <div className={`status-pill${e.isPaid ? " done" : " pend"}`} onClick={() => toggleCommPaid(c.id, e.key)}>
-                            {e.isPaid ? "✓ Pago" : "Pendente"}
-                          </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                          <span style={{fontSize:12,fontWeight:700,color:RED,fontVariantNumeric:"tabular-nums"}}>{e.amount>0?fmtMoney(e.amount,e.currency):"—"}</span>
+                          <div className={`status-pill${e.isPaid?" done":" pend"}`} onClick={()=>toggleCommPaid(c.id,e.key)}>{e.isPaid?"✓ Pago":"Pendente"}</div>
                         </div>
                       </div>
                     ))}
-
-                    {commEntries.length > 0 && (
-                      <div style={{ marginTop:10, paddingTop:8, borderTop:`1px solid ${LN}`, display:"flex", justifyContent:"space-between", fontSize:11 }}>
-                        <span style={{ color:MID }}>Recebido:</span>
-                        <span style={{ fontWeight:700, color: commEntries.filter(e=>e.isPaid).length > 0 ? GRN : MID, fontVariantNumeric:"tabular-nums" }}>
-                          {fmtMoney(commEntries.filter(e=>e.isPaid).reduce((s,e)=>s+e.amount,0), c.currency)}
-                        </span>
-                      </div>
-                    )}
+                    {commEntries.length>0&&<div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${LN}`,display:"flex",justifyContent:"space-between",fontSize:11}}>
+                      <span style={{color:MID}}>Recebido:</span>
+                      <span style={{fontWeight:700,color:commEntries.filter(e=>e.isPaid).length>0?GRN:MID,fontVariantNumeric:"tabular-nums"}}>{fmtMoney(commEntries.filter(e=>e.isPaid).reduce((s,e)=>s+e.amount,0),c.currency)}</span>
+                    </div>}
                   </div>
 
-                  {/* Col 3: Nota Fiscal */}
-                  <div style={{ padding:"18px 20px" }}>
-                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:MID, marginBottom:12 }}>Nota Fiscal</div>
-
-                    {nfEntries.length === 0 && (
-                      <div style={{ fontSize:11, color:MID, fontStyle:"italic" }}>Sem NF configurada</div>
-                    )}
-
-                    {nfEntries.map((e, i, arr) => {
-                      const det = nfDetails?.[c.id]?.[e.key] || {};
+                  {/* Col 3: NF */}
+                  <div style={{padding:"18px 20px"}}>
+                    <div style={{fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:MID,marginBottom:12}}>Nota Fiscal</div>
+                    {nfEntries.length===0&&<div style={{fontSize:11,color:MID,fontStyle:"italic"}}>Sem NF configurada</div>}
+                    {nfEntries.map((e,i,arr)=>{
+                      const det=nfDetails?.[c.id]?.[e.key]||{};
                       return (
-                        <div key={e.key} style={{ marginBottom: i < arr.length-1 ? 16 : 0, paddingBottom: i < arr.length-1 ? 16 : 0, borderBottom: i < arr.length-1 ? `1px solid ${LN}` : "none" }}>
-                          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                            <span style={{ fontSize:11, fontWeight:600 }}>{e.label}</span>
-                            {e.amount > 0 && <span style={{ fontSize:11, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>{fmtMoney(e.amount, e.currency)}</span>}
+                        <div key={e.key} style={{marginBottom:i<arr.length-1?16:0,paddingBottom:i<arr.length-1?16:0,borderBottom:i<arr.length-1?`1px solid ${LN}`:"none"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                            <span style={{fontSize:11,fontWeight:600}}>{e.label}</span>
+                            {e.amount>0&&<span style={{fontSize:11,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmtMoney(e.amount,e.currency)}</span>}
                           </div>
-
-                          {/* Status */}
-                          <div style={{ marginBottom:8 }}>
-                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, marginBottom:4 }}>Status</div>
-                            <div className={`status-pill${e.isEmitted ? " done" : " pend"}`} onClick={() => toggleNF(c.id, e.key)}
-                              style={{ width:"100%", justifyContent:"center" }}>
-                              {e.isEmitted ? "✓ Emitida" : "Não emitida"}
-                            </div>
+                          <div style={{marginBottom:8}}>
+                            <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:MID,marginBottom:4}}>Status</div>
+                            <div className={`status-pill${e.isEmitted?" done":" pend"}`} onClick={()=>toggleNF(c.id,e.key)} style={{width:"100%",justifyContent:"center"}}>{e.isEmitted?"✓ Emitida":"Não emitida"}</div>
                           </div>
-
-                          {/* NF Number */}
-                          <div style={{ marginBottom:8 }}>
-                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, marginBottom:4 }}>Número da NF</div>
-                            <input
-                              style={{ width:"100%", padding:"6px 8px", border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:12, outline:"none", background:"#fff" }}
-                              placeholder="Ex: 1234"
-                              value={det.number || ""}
-                              onChange={ev => saveNfDetail(c.id, e.key, "number", ev.target.value)}
-                              onClick={ev => ev.stopPropagation()}
-                            />
+                          <div style={{marginBottom:8}}>
+                            <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:MID,marginBottom:4}}>Número da NF</div>
+                            <input style={{width:"100%",padding:"6px 8px",border:`1px solid ${LN}`,fontFamily:"inherit",fontSize:12,outline:"none",background:"#fff"}} placeholder="Ex: 1234" value={det.number||""} onChange={ev=>saveNfDetail(c.id,e.key,"number",ev.target.value)} onClick={ev=>ev.stopPropagation()}/>
                           </div>
-
-                          {/* Emission date */}
-                          <div style={{ marginBottom:8 }}>
-                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, marginBottom:4 }}>Data de Emissão</div>
-                            <input type="date"
-                              style={{ width:"100%", padding:"6px 8px", border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:12, outline:"none", background:"#fff" }}
-                              value={det.date || ""}
-                              onChange={ev => saveNfDetail(c.id, e.key, "date", ev.target.value)}
-                              onClick={ev => ev.stopPropagation()}
-                            />
+                          <div style={{marginBottom:8}}>
+                            <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:MID,marginBottom:4}}>Data de Emissão</div>
+                            <input type="date" style={{width:"100%",padding:"6px 8px",border:`1px solid ${LN}`,fontFamily:"inherit",fontSize:12,outline:"none",background:"#fff"}} value={det.date||""} onChange={ev=>saveNfDetail(c.id,e.key,"date",ev.target.value)} onClick={ev=>ev.stopPropagation()}/>
                           </div>
-
-                          {/* Expected payment date */}
-                          {Number(c.paymentDaysAfterNF) > 0 && det.date && (
-                            <div style={{ marginBottom:8, padding:"6px 8px", background:`${GRN}10`, border:`1px solid ${GRN}33` }}>
-                              <div style={{ fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:GRN, marginBottom:2 }}>Pgto previsto</div>
-                              <div style={{ fontSize:12, fontWeight:700, color:GRN, fontVariantNumeric:"tabular-nums" }}>
-                                {(() => {
-                                  const d = new Date(det.date);
-                                  d.setDate(d.getDate() + Number(c.paymentDaysAfterNF));
-                                  return fmtDate(d.toISOString().substr(0,10));
-                                })()}
-                              </div>
-                              <div style={{ fontSize:10, color:GRN }}>+{c.paymentDaysAfterNF} dias após NF</div>
+                          {Number(c.paymentDaysAfterNF)>0&&det.date&&(
+                            <div style={{marginBottom:8,padding:"6px 8px",background:`${GRN}10`,border:`1px solid ${GRN}33`}}>
+                              <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:GRN,marginBottom:2}}>Pgto previsto</div>
+                              <div style={{fontSize:12,fontWeight:700,color:GRN,fontVariantNumeric:"tabular-nums"}}>{(()=>{const d=new Date(det.date);d.setDate(d.getDate()+Number(c.paymentDaysAfterNF));return fmtDate(d.toISOString().substr(0,10));})()}</div>
+                              <div style={{fontSize:10,color:GRN}}>+{c.paymentDaysAfterNF} dias após NF</div>
                             </div>
                           )}
-                          {/* NF Notes */}
                           <div>
-                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:MID, marginBottom:4 }}>Observações NF</div>
-                            <textarea
-                              style={{ width:"100%", padding:"6px 8px", border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:11, outline:"none", background:"#fff", resize:"vertical", minHeight:52 }}
-                              placeholder="Competência, empresa tomadora, ISS…"
-                              value={det.notes || ""}
-                              onChange={ev => saveNfDetail(c.id, e.key, "notes", ev.target.value)}
-                              onClick={ev => ev.stopPropagation()}
-                            />
+                            <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:MID,marginBottom:4}}>Observações NF</div>
+                            <textarea style={{width:"100%",padding:"6px 8px",border:`1px solid ${LN}`,fontFamily:"inherit",fontSize:11,outline:"none",background:"#fff",resize:"vertical",minHeight:52}} placeholder="Competência, empresa tomadora, ISS…" value={det.notes||""} onChange={ev=>saveNfDetail(c.id,e.key,"notes",ev.target.value)} onClick={ev=>ev.stopPropagation()}/>
                           </div>
                         </div>
                       );
@@ -998,96 +870,61 @@ function ContractList({ contracts, posts, rates, saveNote, toggleComm, toggleCom
                 </div>
 
                 {/* ── Cronograma section ── */}
-                {(() => {
-                  const milestones = cronos[c.id] || [];
-                  return (
-                    <div style={{ padding:"16px 20px", borderTop:`1px solid ${LN}` }}>
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                        <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:MID }}>
-                          Cronograma de Campanha
-                        </div>
-                        <button className="btn sm" onClick={ev => { ev.stopPropagation(); addMilestone(c.id); }}
-                          style={{ fontSize:9, padding:"3px 10px" }}>+ Fase</button>
+                <div style={{padding:"16px 20px",borderTop:`1px solid ${LN}`}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                    <div style={{fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:MID}}>Cronograma de Campanha</div>
+                    <button className="btn sm" onClick={ev=>{ev.stopPropagation();addMilestone(c.id);}} style={{fontSize:9,padding:"3px 10px"}}>+ Fase</button>
+                  </div>
+                  {milestones.length===0
+                    ? <div style={{fontSize:11,color:MID,fontStyle:"italic",padding:"8px 0"}}>Nenhuma fase cadastrada — clique em "+ Fase" para montar o cronograma desta campanha.</div>
+                    : <div style={{overflowX:"auto"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead>
+                            <tr style={{borderBottom:`1px solid ${LN}`}}>
+                              {["Fase","Data","Responsável","Status","Observação",""].map((h,i)=>(
+                                <th key={i} style={{padding:"5px 8px",textAlign:"left",fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:MID,whiteSpace:"nowrap"}}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {milestones.map(m=>{
+                              const [bg,fg]=ST_CLR[m.status]||ST_CLR["pendente"];
+                              const dl2=daysLeft(m.date);
+                              return (
+                                <tr key={m.id} style={{borderBottom:`1px solid ${LN}`}}>
+                                  <td style={{padding:"6px 8px",minWidth:160}}>
+                                    <select value={m.fase} onChange={e=>{e.stopPropagation();updateMilestone(c.id,m.id,"fase",e.target.value);}} onClick={e=>e.stopPropagation()} style={{border:`1px solid ${LN}`,background:"#fff",fontFamily:"inherit",fontSize:12,padding:"4px 6px",width:"100%",outline:"none",color:BLK}}>
+                                      <option value="">Selecionar fase…</option>
+                                      {FASES.map(f=><option key={f} value={f}>{f}</option>)}
+                                    </select>
+                                  </td>
+                                  <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
+                                    <input type="date" value={m.date} onChange={e=>{e.stopPropagation();updateMilestone(c.id,m.id,"date",e.target.value);}} onClick={e=>e.stopPropagation()} style={{border:`1px solid ${LN}`,fontFamily:"inherit",fontSize:11,padding:"4px 6px",outline:"none"}}/>
+                                    {m.date&&dl2!==null&&<div style={{fontSize:9,fontWeight:700,color:dlColor(dl2),marginTop:2}}>{dl2===0?"Hoje":dl2>0?`${dl2}d`:`${Math.abs(dl2)}d atrás`}</div>}
+                                  </td>
+                                  <td style={{padding:"6px 8px",minWidth:120}}>
+                                    <input value={m.resp} placeholder="ex: Matheus" onChange={e=>{e.stopPropagation();updateMilestone(c.id,m.id,"resp",e.target.value);}} onClick={e=>e.stopPropagation()} style={{border:`1px solid ${LN}`,fontFamily:"inherit",fontSize:12,padding:"4px 6px",outline:"none",width:"100%"}}/>
+                                  </td>
+                                  <td style={{padding:"6px 8px"}}>
+                                    <select value={m.status} onChange={e=>{e.stopPropagation();updateMilestone(c.id,m.id,"status",e.target.value);}} onClick={e=>e.stopPropagation()} style={{border:`1px solid ${LN}`,background:bg,color:fg,fontFamily:"inherit",fontSize:11,fontWeight:700,padding:"4px 6px",outline:"none",cursor:"pointer"}}>
+                                      {Object.keys(ST_CLR).map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                                    </select>
+                                  </td>
+                                  <td style={{padding:"6px 8px",minWidth:160}}>
+                                    <input value={m.note} placeholder="Observação…" onChange={e=>{e.stopPropagation();updateMilestone(c.id,m.id,"note",e.target.value);}} onClick={e=>e.stopPropagation()} style={{border:`1px solid ${LN}`,fontFamily:"inherit",fontSize:12,padding:"4px 6px",outline:"none",width:"100%"}}/>
+                                  </td>
+                                  <td style={{padding:"6px 4px",textAlign:"center"}}>
+                                    <button className="btn ghost sm" style={{color:RED,padding:"2px 8px",fontSize:11}} onClick={e=>{e.stopPropagation();removeMilestone(c.id,m.id);}}>×</button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
+                  }
+                </div>
 
-                      {milestones.length === 0 && (
-                        <div style={{ fontSize:11, color:MID, fontStyle:"italic", padding:"8px 0" }}>
-                          Nenhuma fase cadastrada — clique em "+ Fase" para montar o cronograma desta campanha.
-                        </div>
-                      )}
-
-                      {milestones.length > 0 && (
-                        <div style={{ overflowX:"auto" }}>
-                          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                            <thead>
-                              <tr style={{ borderBottom:`1px solid ${LN}` }}>
-                                {["Fase","Data","Responsável","Status","Observação",""].map((h,i) => (
-                                  <th key={i} style={{ padding:"5px 8px", textAlign:"left", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:MID, whiteSpace:"nowrap" }}>{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {milestones.map(m => {
-                                const [bg, fg] = STATUS_COLORS[m.status] || STATUS_COLORS["pendente"];
-                                const dl = daysLeft(m.date);
-                                return (
-                                  <tr key={m.id} style={{ borderBottom:`1px solid ${LN}` }}>
-                                    <td style={{ padding:"6px 8px", minWidth:160 }}>
-                                      <select value={m.fase}
-                                        onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "fase", e.target.value); }}
-                                        onClick={e => e.stopPropagation()}
-                                        style={{ border:`1px solid ${LN}`, background:"#fff", fontFamily:"inherit", fontSize:12, padding:"4px 6px", width:"100%", outline:"none", color:BLK }}>
-                                        <option value="">Selecionar fase…</option>
-                                        {FASE_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
-                                      </select>
-                                    </td>
-                                    <td style={{ padding:"6px 8px", whiteSpace:"nowrap" }}>
-                                      <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                                        <input type="date" value={m.date}
-                                          onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "date", e.target.value); }}
-                                          onClick={e => e.stopPropagation()}
-                                          style={{ border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:11, padding:"4px 6px", outline:"none" }} />
-                                        {m.date && dl !== null && (
-                                          <span style={{ fontSize:9, fontWeight:700, color: dlColor(dl), letterSpacing:".04em" }}>
-                                            {dl === 0 ? "Hoje" : dl > 0 ? `${dl}d` : `${Math.abs(dl)}d atrás`}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td style={{ padding:"6px 8px", minWidth:120 }}>
-                                      <input value={m.resp} placeholder="ex: Matheus"
-                                        onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "resp", e.target.value); }}
-                                        onClick={e => e.stopPropagation()}
-                                        style={{ border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:12, padding:"4px 6px", outline:"none", width:"100%" }} />
-                                    </td>
-                                    <td style={{ padding:"6px 8px" }}>
-                                      <select value={m.status}
-                                        onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "status", e.target.value); }}
-                                        onClick={e => e.stopPropagation()}
-                                        style={{ border:`1px solid ${LN}`, background:bg, color:fg, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"4px 6px", outline:"none", cursor:"pointer" }}>
-                                        {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
-                                      </select>
-                                    </td>
-                                    <td style={{ padding:"6px 8px", minWidth:160 }}>
-                                      <input value={m.note} placeholder="Observação…"
-                                        onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "note", e.target.value); }}
-                                        onClick={e => e.stopPropagation()}
-                                        style={{ border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:12, padding:"4px 6px", outline:"none", width:"100%" }} />
-                                    </td>
-                                    <td style={{ padding:"6px 4px", textAlign:"center" }}>
-                                      <button className="btn ghost sm" style={{ color:RED, padding:"2px 8px", fontSize:11 }}
-                                        onClick={e => { e.stopPropagation(); removeMilestone(c.id, m.id); }}>×</button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
               </div>
             )}
           </div>

@@ -349,6 +349,7 @@ body,#root{background:${WHT};min-height:100vh}
 .cal-today{outline:2px solid ${RED};outline-offset:-2px}
 .cal-dnum{font-size:11px;font-weight:600;margin-bottom:3px}
 .cal-ev{font-size:8px;font-weight:700;padding:2px 3px;margin-bottom:2px;border-left:3px solid;letter-spacing:.03em;text-transform:uppercase;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cal-phase{border-left-style:dashed!important;background:transparent!important;opacity:.8}
 .metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .metric-computed{padding:7px 9px;background:${SUF};border:1px solid ${LN};font-size:13px;font-weight:700;color:${GRN};font-variant-numeric:tabular-nums}
 /* tab switcher inside modal */
@@ -458,6 +459,19 @@ export default function App() {
       if (calFilter !== "all" && calFilter !== c.id) return;
       add(p.isPosted ? (p.publishDate||p.plannedDate) : p.plannedDate, { label: (p.isPosted?"":"📅 ")+p.title, color: c.color });
     });
+    // Cronograma milestones
+    try {
+      const cronos = JSON.parse(localStorage.getItem("copa6_cron") || "{}");
+      Object.entries(cronos).forEach(([contractId, milestones]) => {
+        const c = contracts.find(x => x.id === contractId);
+        if (!c) return;
+        if (calFilter !== "all" && calFilter !== c.id) return;
+        (milestones || []).forEach(m => {
+          if (!m.date || !m.fase) return;
+          add(m.date, { label: `${m.fase}${m.resp ? ` · ${m.resp}` : ""}`, color: c.color, dashed: true });
+        });
+      });
+    } catch {}
     return ev;
   }, [contracts, posts, calFilter]);
 
@@ -658,6 +672,32 @@ function ContractList({ contracts, posts, rates, saveNote, toggleComm, toggleCom
   };
 
   const toggle = id => setOpen(prev => prev === id ? null : id);
+
+  // Cronograma state: { [contractId]: [ { id, fase, date, resp, status, note } ] }
+  const [cronos, setCronos] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("copa6_cron") || "{}"); } catch { return {}; }
+  });
+  const saveCronos = (contractId, arr) => {
+    setCronos(prev => {
+      const next = { ...prev, [contractId]: arr };
+      localStorage.setItem("copa6_cron", JSON.stringify(next));
+      return next;
+    });
+  };
+  const addMilestone = (contractId) => {
+    const arr = [...(cronos[contractId]||[]), { id: Math.random().toString(36).substr(2,6), fase:"", date:"", resp:"", status:"pendente", note:"" }];
+    saveCronos(contractId, arr);
+  };
+  const updateMilestone = (contractId, milId, field, val) => {
+    const arr = (cronos[contractId]||[]).map(m => m.id===milId ? {...m, [field]:val} : m);
+    saveCronos(contractId, arr);
+  };
+  const removeMilestone = (contractId, milId) => {
+    const arr = (cronos[contractId]||[]).filter(m => m.id!==milId);
+    saveCronos(contractId, arr);
+  };
+  const FASE_OPTIONS = ["Envio briefing","Envio roteiro","Aprovação roteiro","Gravação","Edição","Envio para aprovação","Aprovação final","Publicação Reel","Publicação TikTok","Publicação Stories","Publicação YouTube","Pagamento","NF emissão","Outro"];
+  const STATUS_COLORS = { pendente:["#FAEEDA","#633806"], "em andamento":["#E6F1FB","#0C447C"], aprovado:["#EAF3DE","#27500A"], publicado:["#EEEDFE","#3C3489"], cancelado:["#FCEBEB","#791F1F"] };
 
   // total deliveries for NF status label
   const nfStatus = (c) => {
@@ -957,6 +997,99 @@ function ContractList({ contracts, posts, rates, saveNote, toggleComm, toggleCom
                   </div>
                 </div>
               </div>
+
+                {/* ── Cronograma section ── */}
+                {(() => {
+                  const milestones = cronos[c.id] || [];
+                  return (
+                    <div style={{ padding:"16px 20px", borderTop:`1px solid ${LN}` }}>
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                        <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:MID }}>
+                          Cronograma de Campanha
+                        </div>
+                        <button className="btn sm" onClick={ev => { ev.stopPropagation(); addMilestone(c.id); }}
+                          style={{ fontSize:9, padding:"3px 10px" }}>+ Fase</button>
+                      </div>
+
+                      {milestones.length === 0 && (
+                        <div style={{ fontSize:11, color:MID, fontStyle:"italic", padding:"8px 0" }}>
+                          Nenhuma fase cadastrada — clique em "+ Fase" para montar o cronograma desta campanha.
+                        </div>
+                      )}
+
+                      {milestones.length > 0 && (
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                            <thead>
+                              <tr style={{ borderBottom:`1px solid ${LN}` }}>
+                                {["Fase","Data","Responsável","Status","Observação",""].map((h,i) => (
+                                  <th key={i} style={{ padding:"5px 8px", textAlign:"left", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:MID, whiteSpace:"nowrap" }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {milestones.map(m => {
+                                const [bg, fg] = STATUS_COLORS[m.status] || STATUS_COLORS["pendente"];
+                                const dl = daysLeft(m.date);
+                                return (
+                                  <tr key={m.id} style={{ borderBottom:`1px solid ${LN}` }}>
+                                    <td style={{ padding:"6px 8px", minWidth:160 }}>
+                                      <select value={m.fase}
+                                        onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "fase", e.target.value); }}
+                                        onClick={e => e.stopPropagation()}
+                                        style={{ border:`1px solid ${LN}`, background:"#fff", fontFamily:"inherit", fontSize:12, padding:"4px 6px", width:"100%", outline:"none", color:BLK }}>
+                                        <option value="">Selecionar fase…</option>
+                                        {FASE_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                                      </select>
+                                    </td>
+                                    <td style={{ padding:"6px 8px", whiteSpace:"nowrap" }}>
+                                      <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                                        <input type="date" value={m.date}
+                                          onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "date", e.target.value); }}
+                                          onClick={e => e.stopPropagation()}
+                                          style={{ border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:11, padding:"4px 6px", outline:"none" }} />
+                                        {m.date && dl !== null && (
+                                          <span style={{ fontSize:9, fontWeight:700, color: dlColor(dl), letterSpacing:".04em" }}>
+                                            {dl === 0 ? "Hoje" : dl > 0 ? `${dl}d` : `${Math.abs(dl)}d atrás`}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td style={{ padding:"6px 8px", minWidth:120 }}>
+                                      <input value={m.resp} placeholder="ex: Matheus"
+                                        onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "resp", e.target.value); }}
+                                        onClick={e => e.stopPropagation()}
+                                        style={{ border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:12, padding:"4px 6px", outline:"none", width:"100%" }} />
+                                    </td>
+                                    <td style={{ padding:"6px 8px" }}>
+                                      <select value={m.status}
+                                        onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "status", e.target.value); }}
+                                        onClick={e => e.stopPropagation()}
+                                        style={{ border:`1px solid ${LN}`, background:bg, color:fg, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"4px 6px", outline:"none", cursor:"pointer" }}>
+                                        {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                                      </select>
+                                    </td>
+                                    <td style={{ padding:"6px 8px", minWidth:160 }}>
+                                      <input value={m.note} placeholder="Observação…"
+                                        onChange={e => { e.stopPropagation(); updateMilestone(c.id, m.id, "note", e.target.value); }}
+                                        onClick={e => e.stopPropagation()}
+                                        style={{ border:`1px solid ${LN}`, fontFamily:"inherit", fontSize:12, padding:"4px 6px", outline:"none", width:"100%" }} />
+                                    </td>
+                                    <td style={{ padding:"6px 4px", textAlign:"center" }}>
+                                      <button className="btn ghost sm" style={{ color:RED, padding:"2px 8px", fontSize:11 }}
+                                        onClick={e => { e.stopPropagation(); removeMilestone(c.id, m.id); }}>×</button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             )}
           </div>
         );
@@ -1181,7 +1314,7 @@ function Calendario({ contracts, calEvents, calMonth, setCal, calFilter, setCalF
               <div key={d} className={`cal-day${isT ? " cal-today" : ""}`}>
                 <div className="cal-dnum" style={{ color: isT ? RED : BLK }}>{d}</div>
                 {evs.slice(0, 3).map((ev, ei) => (
-                  <div key={ei} className="cal-ev" style={{ borderLeftColor: ev.color, background: ev.color + "1A", color: ev.color }}>{ev.label}</div>
+                  <div key={ei} className="cal-ev" style={{ borderLeftColor: ev.color, background: ev.dashed ? "transparent" : ev.color + "1A", color: ev.color, borderLeftStyle: ev.dashed ? "dashed" : "solid", opacity: ev.dashed ? 0.8 : 1 }}>{ev.label}</div>
                 ))}
                 {evs.length > 3 && <div style={{ fontSize: 8, color: MID }}>+{evs.length - 3}</div>}
               </div>

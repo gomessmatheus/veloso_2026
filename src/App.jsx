@@ -996,7 +996,6 @@ function ContractList({ contracts, posts, rates, saveNote, toggleComm, toggleCom
                     })}
                   </div>
                 </div>
-              </div>
 
                 {/* ── Cronograma section ── */}
                 {(() => {

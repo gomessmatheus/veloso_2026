@@ -10,21 +10,21 @@ import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSa
 import { ptBR } from "date-fns/locale";
 import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react";
 
-// ─── Design tokens ────────────────────────────────────────
-const B0  = "#07080C";
-const B1  = "rgba(255,255,255,0.035)";
-const B2  = "rgba(255,255,255,0.065)";
-const B3  = "rgba(255,255,255,0.09)";
-const LN  = "rgba(255,255,255,0.08)";
-const LN2 = "rgba(255,255,255,0.13)";
-const TX  = "#F1F5F9";
-const TX2 = "#64748B";
-const TX3 = "#1E293B";
-const RED = "#C8102E";
-const GRN = "#22C55E";
-const AMB = "#F59E0B";
-const BLU = "#3B82F6";
-const BLUR = "blur(14px)";
+// ─── Design tokens (light theme) ─────────────────────────
+const B0  = "#F7F6EF";           // warm off-white background
+const B1  = "#FFFFFF";           // card surface
+const B2  = "#F2F1EB";           // muted surface
+const B3  = "#E8E7E1";           // elevated surface
+const LN  = "#E3E2DC";           // border default
+const LN2 = "#C8C7C0";           // border strong
+const TX  = "#1E2140";           // text primary (dark navy)
+const TX2 = "#6B7A99";           // text secondary
+const TX3 = "#A8B0C8";           // text tertiary
+const RED = "#C8102E";           // brand red
+const GRN = "#16A34A";           // brand green
+const AMB = "#D97706";           // brand amber
+const BLU = "#2563EB";           // brand blue
+const BLUR = "blur(8px)";
 
 const CONTRACT_COLORS = ["#C8102E","#1D4ED8","#059669","#D97706","#7C3AED","#0891B2","#BE185D","#92400E","#374151","#0F766E","#B45309"];
 const NETWORKS   = ["Instagram","TikTok","YouTube","X / Twitter","Facebook"];
@@ -153,11 +153,11 @@ const SEED_TASKS = [];
 
 
 // ─── CSS ──────────────────────────────────────────────────
-const G = { // glass card style object
-  background: B1, backdropFilter: BLUR,
-  border: `1px solid ${LN}`, borderRadius: 10,
+const G = { // card style
+  background: B1, border: `1px solid ${LN}`,
+  borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
 };
-const G2 = { ...G, background: B2 };
+const G2 = { ...G, background: B2, boxShadow: "none" };
 
 // ─── Toast ────────────────────────────────────────────────
 const ToastCtx = createContext(null);
@@ -303,12 +303,12 @@ function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:B0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Inter,system-ui,sans-serif", position:"relative", overflow:"hidden" }}>
+    <div style={{ minHeight:"100vh", background:"#F7F6EF", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Inter,system-ui,sans-serif", position:"relative", overflow:"hidden" }}>
       {/* Background orbs */}
-      <div style={{ position:"absolute", top:-200, left:-200, width:600, height:600, borderRadius:"50%", background:"radial-gradient(circle, rgba(200,16,46,.12) 0%, transparent 70%)", pointerEvents:"none" }}/>
-      <div style={{ position:"absolute", bottom:-150, right:-100, width:500, height:500, borderRadius:"50%", background:"radial-gradient(circle, rgba(29,78,216,.1) 0%, transparent 70%)", pointerEvents:"none" }}/>
+      <div style={{ position:"absolute", top:-200, left:-200, width:600, height:600, borderRadius:"50%", background:"radial-gradient(circle, rgba(200,16,46,.08) 0%, transparent 70%)", pointerEvents:"none" }}/>
+      <div style={{ position:"absolute", bottom:-150, right:-100, width:500, height:500, borderRadius:"50%", background:"radial-gradient(circle, rgba(29,78,216,.06) 0%, transparent 70%)", pointerEvents:"none" }}/>
       {/* Grid lines */}
-      <div style={{ position:"absolute", inset:0, backgroundImage:`linear-gradient(${LN} 1px, transparent 1px), linear-gradient(90deg, ${LN} 1px, transparent 1px)`, backgroundSize:"60px 60px", opacity:.4, pointerEvents:"none" }}/>
+      <div style={{ position:"absolute", inset:0, backgroundImage:`linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)`, backgroundSize:"60px 60px", opacity:.5, pointerEvents:"none" }}/>
 
       {/* Logo */}
       <div style={{ marginBottom:40, textAlign:"center", position:"relative" }}>
@@ -1535,7 +1535,7 @@ export default function App() {
   // Loading
   if (user===undefined) {
     return (
-      <div style={{ minHeight:"100vh", background:B0, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Inter,system-ui,sans-serif" }}>
+      <div style={{ minHeight:"100vh", background:"#F7F6EF", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Inter,system-ui,sans-serif" }}>
         <div style={{ fontSize:11, fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:TX3 }}>COPA<span style={{color:RED}}>2026</span>·OPS</div>
       </div>
     );
@@ -1548,7 +1548,7 @@ export default function App() {
   return (
     <ToastProvider>
       <div style={{ display:"flex", minHeight:"100vh", background:B0, fontFamily:"Inter,system-ui,sans-serif", fontSize:13, color:TX }}>
-        <style>{`*{box-sizing:border-box;margin:0;padding:0} input[type=date]::-webkit-calendar-picker-indicator{filter:invert(.6)} select option{background:#1a1b22;color:#F1F5F9} ::-webkit-scrollbar{width:6px;height:6px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px} ::placeholder{color:#334155} a{color:${RED}} `}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0;font-family:'Inter',system-ui,sans-serif} input[type=date]::-webkit-calendar-picker-indicator{opacity:.5} select option{background:#F7F6EF;color:#1E2140} ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:3px} ::placeholder{color:#A8B0C8} a{color:${RED}} `}</style>
         <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onlineUsers={onlineUsers} contracts={contracts}/>
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <TopBar view={view} eurRate={eurRate} usdRate={usdRate} setEurRate={setEurRate} setUsdRate={setUsdRate}

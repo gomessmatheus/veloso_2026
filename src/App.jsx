@@ -10,21 +10,22 @@ import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSa
 import { ptBR } from "date-fns/locale";
 import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react";
 
-// ─── Design tokens (light theme) ─────────────────────────
-const B0  = "#F7F6EF";           // warm off-white background
-const B1  = "#FFFFFF";           // card surface
-const B2  = "#F2F1EB";           // muted surface
-const B3  = "#E8E7E1";           // elevated surface
-const LN  = "#E3E2DC";           // border default
-const LN2 = "#C8C7C0";           // border strong
-const TX  = "#1E2140";           // text primary (dark navy)
-const TX2 = "#6B7A99";           // text secondary
-const TX3 = "#A8B0C8";           // text tertiary
+// ─── Design tokens ────────────────────────────────────────
+const B0  = "#FEFEFE";           // background (oklch 0.9940 0 0)
+const B1  = "#FEFEFE";           // card
+const B2  = "#F7F7F7";           // muted (oklch 0.9702 0 0)
+const B3  = "#EFEFEF";           // input (oklch 0.9401 0 0)
+const LN  = "#F0F0F2";           // border default
+const LN2 = "#D8D8D8";           // border strong
+const TX  = "#000000";           // foreground
+const TX2 = "#6E6E6E";           // muted foreground (oklch 0.4386)
+const TX3 = "#ABABAB";           // tertiary
 const RED = "#C8102E";           // brand red
 const GRN = "#16A34A";           // brand green
 const AMB = "#D97706";           // brand amber
 const BLU = "#2563EB";           // brand blue
-const BLUR = "blur(8px)";
+const BLUR = "blur(4px)";
+const FONT = "'Plus Jakarta Sans', system-ui, sans-serif";
 
 const CONTRACT_COLORS = ["#C8102E","#1D4ED8","#059669","#D97706","#7C3AED","#0891B2","#BE185D","#92400E","#374151","#0F766E","#B45309"];
 const NETWORKS   = ["Instagram","TikTok","YouTube","X / Twitter","Facebook"];
@@ -153,11 +154,11 @@ const SEED_TASKS = [];
 
 
 // ─── CSS ──────────────────────────────────────────────────
-const G = { // card style
+const G = { // card style (shadow-sm from config)
   background: B1, border: `1px solid ${LN}`,
-  borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+  borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.10), 0 1px 2px -1px rgba(0,0,0,0.10)",
 };
-const G2 = { ...G, background: B2, boxShadow: "none" };
+const G2 = { ...G, background: B2, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" };
 
 // ─── Toast ────────────────────────────────────────────────
 const ToastCtx = createContext(null);
@@ -303,7 +304,7 @@ function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F7F6EF", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Inter,system-ui,sans-serif", position:"relative", overflow:"hidden" }}>
+    <div style={{ minHeight:"100vh", background:"#F7F6EF", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Plus Jakarta Sans,system-ui,sans-serif", position:"relative", overflow:"hidden" }}>
       {/* Background orbs */}
       <div style={{ position:"absolute", top:-200, left:-200, width:600, height:600, borderRadius:"50%", background:"radial-gradient(circle, rgba(200,16,46,.08) 0%, transparent 70%)", pointerEvents:"none" }}/>
       <div style={{ position:"absolute", bottom:-150, right:-100, width:500, height:500, borderRadius:"50%", background:"radial-gradient(circle, rgba(29,78,216,.06) 0%, transparent 70%)", pointerEvents:"none" }}/>
@@ -319,7 +320,7 @@ function LoginPage() {
       </div>
 
       {/* Card */}
-      <div style={{ ...G2, width:"100%", maxWidth:400, padding:32, position:"relative" }}>
+      <div style={{ background:"#FEFEFE", border:"1px solid #F0F0F2", borderRadius:16, width:"100%", maxWidth:380, padding:36, position:"relative", boxShadow:"0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.04)" }}>
         <h2 style={{ fontSize:18, fontWeight:700, color:TX, marginBottom:6, letterSpacing:"-.01em" }}>Entrar na plataforma</h2>
         <p style={{ fontSize:12, color:TX2, marginBottom:24 }}>Acesso restrito à equipe Stand Produções</p>
 
@@ -1535,7 +1536,7 @@ export default function App() {
   // Loading
   if (user===undefined) {
     return (
-      <div style={{ minHeight:"100vh", background:"#F7F6EF", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Inter,system-ui,sans-serif" }}>
+      <div style={{ minHeight:"100vh", background:"#F7F6EF", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Plus Jakarta Sans,system-ui,sans-serif" }}>
         <div style={{ fontSize:11, fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:TX3 }}>COPA<span style={{color:RED}}>2026</span>·OPS</div>
       </div>
     );
@@ -1547,8 +1548,8 @@ export default function App() {
   // App
   return (
     <ToastProvider>
-      <div style={{ display:"flex", minHeight:"100vh", background:B0, fontFamily:"Inter,system-ui,sans-serif", fontSize:13, color:TX }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0;font-family:'Inter',system-ui,sans-serif} input[type=date]::-webkit-calendar-picker-indicator{opacity:.5} select option{background:#F7F6EF;color:#1E2140} ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:3px} ::placeholder{color:#A8B0C8} a{color:${RED}} `}</style>
+      <div style={{ display:"flex", minHeight:"100vh", background:B0, fontFamily:"Plus Jakarta Sans,system-ui,sans-serif", fontSize:13, color:TX }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif} input[type=date]::-webkit-calendar-picker-indicator{opacity:.5} select option{background:#F7F6EF;color:#1E2140} ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:3px} ::placeholder{color:#A8B0C8} a{color:${RED}} `}</style>
         <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onlineUsers={onlineUsers} contracts={contracts}/>
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <TopBar view={view} eurRate={eurRate} usdRate={usdRate} setEurRate={setEurRate} setUsdRate={setUsdRate}

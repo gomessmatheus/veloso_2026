@@ -1,4 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import {
+  loadContracts, syncContracts,
+  loadPosts, syncPosts,
+  getSetting, setSetting,
+  subscribeToChanges,
+} from "./db.js";
 
 const RED = "#C8102E";
 const BLK = "#0F0F0F";
@@ -18,8 +24,6 @@ const COMM_RATE  = 0.20;
 const MONTHS_PT  = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
                     "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const MONTHS_SH  = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-
-// Post types that use Views/Reproduções instead of Impressões
 const VIEW_TYPES = new Set(["post","tiktok","repost"]);
 
 const uid      = () => Math.random().toString(36).substr(2, 8);
@@ -39,15 +43,14 @@ function monthsBetween(start, end) {
   return (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
 }
 
-// Normalize: migrate old parc1/parc2 to installments array
 function getInstallments(c) {
   if (c.installments && c.installments.length > 0) return c.installments;
-  // legacy migration
   const arr = [];
   if (c.parc1Deadline || c.parc1Value) arr.push({ value: Number(c.parc1Value)||0, date: c.parc1Deadline||"" });
   if (c.parc2Deadline || c.parc2Value) arr.push({ value: Number(c.parc2Value)||0, date: c.parc2Deadline||"" });
   return arr.length ? arr : [];
 }
+
 function contractTotal(c) {
   if (c.paymentType === "monthly") {
     const m = monthsBetween(c.contractStart, c.contractDeadline);
@@ -60,10 +63,8 @@ function contractTotal(c) {
   return c.contractValue || 0;
 }
 
-// Convert any contract value to BRL using supplied rates
 function toBRL(value, currency, rates) {
   if (currency === "BRL" || !currency) return value;
-  // When rate is set, convert. When not set, include native value so total is never 0 for foreign contracts.
   if (currency === "EUR") return rates.eur > 0 ? value * rates.eur : value;
   if (currency === "USD") return rates.usd > 0 ? value * rates.usd : value;
   return value;
@@ -75,16 +76,12 @@ function calcEngagement(p) {
   return i / p.reach * 100;
 }
 
-// How many reposts does a post contribute?
-// - explicit repost/tiktok type = 1
-// - any post with N networks checked = N-1 extra reposts (each extra network = repost)
 function postRepostCount(p) {
   if (p.type === "repost") return 1;
   const nets = (p.networks || []).length;
   return Math.max(0, nets - 1);
 }
 
-// Commission & NF entries
 function getCommEntries(c) {
   if (!c.hasCommission) return [];
   const paid = c.commPaid || {};
@@ -138,7 +135,10 @@ function getNFEntries(c) {
   return [{ key: "single", label: "NF Única", amount: total, currency: c.currency, date: c.paymentDeadline, isEmitted: !!nf["single"] }];
 }
 
-// ─── Seed data ────────────────────────────────────────────
+// localStorage only for auxiliary data (NF details, cronograma)
+function lsLoad(k, fb) { try { const v = localStorage.getItem(k); return v != null ? JSON.parse(v) : fb; } catch { return fb; } }
+function lsSave(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+
 const SEED = [
   { id:"c0", company:"Netshoes", cnpj:"07.187.493/0001-07", color:"#B45309",
     contractValue:0, monthlyValue:30000, contractStart:"2026-06-01", currency:"BRL",
@@ -214,15 +214,12 @@ const SEED = [
 
 const SEED_POSTS = [
   { id:"p1", contractId:"c3", title:"Reel Coca-Cola — Copa 2026 #1", link:"",
-    type:"post", publishDate:"2026-06-05",
+    type:"post", plannedDate:"2026-06-05", publishDate:"", isPosted:false,
     views:0, reach:0, likes:0, comments:0, shares:0, saves:0, networks:["Instagram"] },
   { id:"p2", contractId:"c7", title:"Reel Cacau Show #1", link:"",
-    type:"post", publishDate:"2026-06-10",
+    type:"post", plannedDate:"2026-06-10", publishDate:"", isPosted:false,
     views:0, reach:0, likes:0, comments:0, shares:0, saves:0, networks:["Instagram"] },
 ];
-
-function sLoad(k, fb) { try { const v = localStorage.getItem(k); return v != null ? JSON.parse(v) : fb; } catch { return fb; } }
-function sSave(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
 // ─── CSS ──────────────────────────────────────────────────
 const CSS = `
@@ -236,15 +233,11 @@ body,#root{background:${WHT};min-height:100vh}
 .nav-tab:hover{color:#F6F5F0}
 .nav-tab.act{color:${RED};border-bottom-color:${RED}}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-
-/* Rates widget */
 .rate-widget{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);padding:3px 8px;border:1px solid rgba(255,255,255,.12)}
 .rate-lbl{font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#888}
 .rate-input{width:58px;background:transparent;border:none;outline:none;font-family:inherit;font-size:11px;font-weight:700;color:#F6F5F0;text-align:right;font-variant-numeric:tabular-nums}
 .rate-input::placeholder{color:#444}
-.rate-sep{width:1px;height:14px;background:rgba(255,255,255,.15);margin:0 2px}
 .nav-date{font-size:10px;color:#555;letter-spacing:.04em;white-space:nowrap;margin-left:4px}
-
 .page{padding:28px;max-width:1440px}
 .phd{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:${MID};margin-bottom:20px;display:flex;align-items:center;gap:10px}
 .rule{height:1px;background:${LN};flex:1}
@@ -309,7 +302,6 @@ body,#root{background:${WHT};min-height:100vh}
 .net-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid ${LN};background:#fff;color:${MID};user-select:none}
 .net-chip.sel{background:${BLK};color:#fff;border-color:${BLK}}
 .net-badge{display:inline-block;padding:1px 5px;font-size:8px;font-weight:700;background:${SUF};color:${MID};margin-right:2px}
-.net-hint{font-size:9px;color:${MID};margin-top:6px;font-style:italic}
 .eng-pill{font-size:11px;font-variant-numeric:tabular-nums;font-weight:700}
 .eng-pill.high{color:${GRN}}
 .eng-pill.mid{color:${AMB}}
@@ -349,13 +341,9 @@ body,#root{background:${WHT};min-height:100vh}
 .cal-today{outline:2px solid ${RED};outline-offset:-2px}
 .cal-dnum{font-size:11px;font-weight:600;margin-bottom:3px}
 .cal-ev{font-size:8px;font-weight:700;padding:2px 3px;margin-bottom:2px;border-left:3px solid;letter-spacing:.03em;text-transform:uppercase;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.cal-phase{border-left-style:dashed!important;background:transparent!important;opacity:.8}
 .metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .metric-computed{padding:7px 9px;background:${SUF};border:1px solid ${LN};font-size:13px;font-weight:700;color:${GRN};font-variant-numeric:tabular-nums}
-/* tab switcher inside modal */
-.tab-bar{display:flex;border-bottom:1px solid ${LN};margin:0 -18px 16px;padding:0 18px}
-.tab-item{padding:8px 16px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;color:${MID};border-bottom:2px solid transparent;margin-bottom:-1px}
-.tab-item.act{color:${BLK};border-bottom-color:${BLK}}
+.sync-indicator{font-size:9px;padding:3px 8px;border-radius:3px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 @media(max-width:700px){.page{padding:14px}.fgrid,.fgrid.c3,.fgrid.c4{grid-template-columns:1fr 1fr}.rate-widget{display:none}}
 `;
 
@@ -367,21 +355,90 @@ export default function App() {
   const [modal, setModal]     = useState(null);
   const [eurRate, setEurRate] = useState(0);
   const [usdRate, setUsdRate] = useState(0);
+  const [syncStatus, setSyncStatus] = useState("loading"); // loading | ok | error
   const [calMonth, setCal]    = useState(() => { const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; });
   const [calFilter, setCalF]  = useState("all");
 
+  const prevCIds = useRef([]);
+  const prevPIds = useRef([]);
+
   useEffect(() => {
+    let unsub = null;
+    setSyncStatus("loading");
     (async () => {
-      setC(await sLoad("copa6_c", SEED));
-      setP(await sLoad("copa6_p", SEED_POSTS));
-      setEurRate(Number(await sLoad("copa6_eur", 0)) || 0);
-      setUsdRate(Number(await sLoad("copa6_usd", 0)) || 0);
+      try {
+        const [cs, ps, eur, usd] = await Promise.all([
+          loadContracts(),
+          loadPosts(),
+          getSetting("eurRate"),
+          getSetting("usdRate"),
+        ]);
+        const initialContracts = cs.length > 0 ? cs : SEED;
+        const initialPosts     = ps.length > 0 ? ps : SEED_POSTS;
+        setC(initialContracts);
+        setP(initialPosts);
+        prevCIds.current = initialContracts.map(c => c.id);
+        prevPIds.current = initialPosts.map(p => p.id);
+        if (eur) setEurRate(Number(eur) || 0);
+        if (usd) setUsdRate(Number(usd) || 0);
+
+        // If we used seed data, push it to Firestore
+        if (cs.length === 0) {
+          await syncContracts(initialContracts, []);
+        }
+        if (ps.length === 0 && SEED_POSTS.length > 0) {
+          await syncPosts(initialPosts, []);
+        }
+
+        setSyncStatus("ok");
+      } catch (err) {
+        console.error("Firebase load error:", err);
+        setSyncStatus("error");
+        // Fall back to seed so the app is usable
+        setC(SEED);
+        setP(SEED_POSTS);
+      }
+
+      // Real-time listener
+      try {
+        unsub = subscribeToChanges({
+          onContracts: cs => { setC(cs); prevCIds.current = cs.map(c => c.id); setSyncStatus("ok"); },
+          onPosts:     ps => { setP(ps); prevPIds.current = ps.map(p => p.id); },
+          onSetting:   (key, val) => {
+            if (key === "eurRate") setEurRate(Number(val) || 0);
+            if (key === "usdRate") setUsdRate(Number(val) || 0);
+          },
+        });
+      } catch (err) {
+        console.warn("Realtime subscription error:", err);
+      }
     })();
+    return () => unsub?.();
   }, []);
 
-  const saveC   = async d => { setC(d); await sSave("copa6_c", d); };
-  const saveP   = async d => { setP(d); await sSave("copa6_p", d); };
-  const rates   = useMemo(() => ({ eur: eurRate, usd: usdRate }), [eurRate, usdRate]);
+  const saveC = async d => {
+    setC(d);
+    try {
+      await syncContracts(d, prevCIds.current);
+      prevCIds.current = d.map(c => c.id);
+      setSyncStatus("ok");
+    } catch(e) {
+      console.error("syncContracts failed", e);
+      setSyncStatus("error");
+    }
+  };
+
+  const saveP = async d => {
+    setP(d);
+    try {
+      await syncPosts(d, prevPIds.current);
+      prevPIds.current = d.map(p => p.id);
+    } catch(e) {
+      console.error("syncPosts failed", e);
+    }
+  };
+
+  const rates = useMemo(() => ({ eur: eurRate, usd: usdRate }), [eurRate, usdRate]);
 
   const saveNote       = async (id, notes)       => saveC(contracts.map(c => c.id === id ? { ...c, notes } : c));
   const toggleComm     = async id                => saveC(contracts.map(c => c.id === id ? { ...c, hasCommission: !c.hasCommission } : c));
@@ -395,22 +452,11 @@ export default function App() {
   }));
 
   const stats = useMemo(() => {
-    // Total BRL-equivalent using conversion rates
-    const totalBRL = contracts.reduce((s, c) => {
-      const t = contractTotal(c);
-      return s + toBRL(t, c.currency, rates);
-    }, 0);
-    const commBRL = contracts.filter(c => c.hasCommission).reduce((s, c) => {
-      const t = contractTotal(c);
-      return s + toBRL(t * COMM_RATE, c.currency, rates);
-    }, 0);
-
-    // Foreign totals (for display breakdown)
+    const totalBRL = contracts.reduce((s, c) => s + toBRL(contractTotal(c), c.currency, rates), 0);
+    const commBRL  = contracts.filter(c => c.hasCommission).reduce((s, c) => s + toBRL(contractTotal(c) * COMM_RATE, c.currency, rates), 0);
     const totEur = contracts.filter(c => c.currency === "EUR").reduce((s, c) => s + contractTotal(c), 0);
     const totUsd = contracts.filter(c => c.currency === "USD").reduce((s, c) => s + contractTotal(c), 0);
     const totBrlNative = contracts.filter(c => c.currency === "BRL").reduce((s, c) => s + contractTotal(c), 0);
-
-    // Commission paid/pending in BRL-equivalent
     let commPaidBRL = 0, commPendBRL = 0;
     contracts.forEach(c => {
       if (!c.hasCommission) return;
@@ -419,18 +465,15 @@ export default function App() {
         e.isPaid ? commPaidBRL += v : commPendBRL += v;
       });
     });
-
     const tot = k => contracts.reduce((s, c) => s + c[k], 0);
     const del = t => posts.filter(p => p.type === t).length;
-    // repost count: explicit reposts + extra networks per post
     const drDone = posts.reduce((s, p) => s + postRepostCount(p), 0);
-    const engs   = posts.map(calcEngagement).filter(e => e !== null);
+    const engs = posts.map(calcEngagement).filter(e => e !== null);
     return {
       totalBRL, commBRL, commPaidBRL, commPendBRL,
       totEur, totUsd, totBrlNative,
       tp: tot("numPosts"), ts: tot("numStories"), tl: tot("numCommunityLinks"), tr: tot("numReposts"),
       dp: del("post"), ds: del("story"), dl: del("link"), dr: drDone,
-      views: posts.reduce((s, p) => s + (p.views || 0), 0),
       avgEng: engs.length ? engs.reduce((s, v) => s + v, 0) / engs.length : null,
       nfPending: contracts.reduce((s, c) => s + getNFEntries(c).filter(e => !e.isEmitted).length, 0),
     };
@@ -459,7 +502,6 @@ export default function App() {
       if (calFilter !== "all" && calFilter !== c.id) return;
       add(p.isPosted ? (p.publishDate||p.plannedDate) : p.plannedDate, { label: (p.isPosted?"":"📅 ")+p.title, color: c.color });
     });
-    // Cronograma milestones
     try {
       const cronos = JSON.parse(localStorage.getItem("copa6_cron") || "{}");
       Object.entries(cronos).forEach(([contractId, milestones]) => {
@@ -475,8 +517,14 @@ export default function App() {
     return ev;
   }, [contracts, posts, calFilter]);
 
-  const today  = new Date();
-  const VIEWS  = ["dashboard", "contratos", "posts", "calendário"];
+  const today = new Date();
+  const VIEWS = ["dashboard", "contratos", "posts", "calendário"];
+
+  const SyncDot = () => {
+    if (syncStatus === "loading") return <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 8px", border:"1px solid rgba(255,255,255,.15)", background:"rgba(255,255,255,.06)" }}><div style={{ width:6, height:6, borderRadius:"50%", background:AMB }} /><span style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:AMB }}>Sincronizando</span></div>;
+    if (syncStatus === "error") return <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 8px", border:"1px solid rgba(200,16,46,.35)", background:"rgba(200,16,46,.08)" }}><div style={{ width:6, height:6, borderRadius:"50%", background:RED }} /><span style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:RED }}>Offline</span></div>;
+    return <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 8px", border:"1px solid rgba(22,163,74,.35)", background:"rgba(22,163,74,.08)" }}><div style={{ width:6, height:6, borderRadius:"50%", background:GRN }} /><span style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:GRN }}>Ao Vivo</span></div>;
+  };
 
   return (
     <>
@@ -488,37 +536,30 @@ export default function App() {
             <div key={v} className={`nav-tab${view === v ? " act" : ""}`} onClick={() => setView(v)}>{v}</div>
           ))}
           <div className="nav-right">
-            {/* EUR rate */}
             <div className="rate-widget">
               <span className="rate-lbl">€1=</span>
               <input className="rate-input" type="number" step="0.05" value={eurRate || ""} placeholder="—"
                 onChange={e => setEurRate(Number(e.target.value) || 0)}
-                onBlur={e => sSave("copa6_eur", Number(e.target.value) || 0)} />
+                onBlur={e => setSetting("eurRate", Number(e.target.value) || 0).catch(console.warn)} />
               <span className="rate-lbl">R$</span>
             </div>
-            {/* USD rate */}
             <div className="rate-widget">
               <span className="rate-lbl">$1=</span>
               <input className="rate-input" type="number" step="0.05" value={usdRate || ""} placeholder="—"
                 onChange={e => setUsdRate(Number(e.target.value) || 0)}
-                onBlur={e => sSave("copa6_usd", Number(e.target.value) || 0)} />
+                onBlur={e => setSetting("usdRate", Number(e.target.value) || 0).catch(console.warn)} />
               <span className="rate-lbl">R$</span>
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 8px", border:"1px solid rgba(22,163,74,.35)", background:"rgba(22,163,74,.08)" }}>
-              <div style={{ width:6, height:6, borderRadius:"50%", background:GRN }} />
-              <span style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:GRN }}>Ao Vivo</span>
-            </div>
+            <SyncDot />
             <span className="nav-date">{today.toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" })}</span>
           </div>
         </nav>
-
         <div className="page">
           {view === "dashboard"  && <Dashboard  contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} />}
           {view === "contratos"  && <Contratos  contracts={contracts} posts={posts} saveC={saveC} setModal={setModal} toggleComm={toggleComm} saveNote={saveNote} rates={rates} />}
           {view === "posts"      && <Posts      contracts={contracts} posts={posts} saveP={saveP} setModal={setModal} />}
           {view === "calendário" && <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} />}
         </div>
-
         {modal && (
           <div className="overlay" onClick={e => { if (e.target.className === "overlay") setModal(null); }}>
             {modal.type === "contract" && <ContractModal modal={modal} setModal={setModal} contracts={contracts} saveC={saveC} />}
@@ -529,6 +570,7 @@ export default function App() {
     </>
   );
 }
+
 
 // ─── Shared ───────────────────────────────────────────────
 function CommToggle({ on, onToggle, label }) {

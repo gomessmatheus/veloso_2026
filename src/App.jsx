@@ -670,240 +670,288 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
 }
 
 
-// ─── Tarefas (Linear-inspired) ────────────────────────────
-function Tarefas({ contracts, setNewTaskOpen }) {
-  const [tasks, setTasks] = useState(() => lsLoad("copa6_tasks", SEED_TASKS));
-  const [filter, setFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [view, setView] = useState("board"); // board | list
-  const [editTask, setEditTask] = useState(null);
-  const [newOpen, setNewOpen] = useState(false);
-  const toast = useToast();
+// ─── Tarefas ──────────────────────────────────────────────
+function TaskCard({ task, contracts, onEdit, onStatusChange, isDragOver }) {
+  const [hov, setHov] = useState(false);
+  const prio     = TASK_PRIORITIES.find(p => p.id === (task.priority||"none"));
+  const contract = contracts.find(c => c.id === task.contractId);
+  const dl       = daysLeft(task.dueDate);
+  return (
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.setData("text/plain", task.id); e.currentTarget.style.opacity = "0.5"; }}
+      onDragEnd={e => { e.currentTarget.style.opacity = "1"; }}
+      onClick={() => onEdit(task)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: B1, borderRadius: 8, padding: "11px 13px", cursor: "grab",
+        border: `1px solid ${hov ? LN2 : LN}`,
+        boxShadow: hov ? "0 4px 14px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)" : "0 1px 3px rgba(0,0,0,0.05)",
+        transform: hov ? "translateY(-2px)" : "translateY(0)",
+        transition: "all 0.18s cubic-bezier(0.4,0,0.2,1)",
+        userSelect: "none",
+      }}>
+      <div style={{ fontSize: 12, fontWeight: 500, color: TX, marginBottom: 8, lineHeight: 1.45 }}>{task.title}</div>
+      {task.description && (
+        <div style={{ fontSize: 11, color: TX2, marginBottom: 8, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{task.description}</div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+        {prio && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 99, background: `${prio.color}15`, color: prio.color }}>
+            <prio.icon size={9} />{prio.label}
+          </span>
+        )}
+        {contract && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, color: TX2, padding: "2px 7px", borderRadius: 99, background: B3 }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: contract.color, display: "inline-block" }} />
+            {contract.company.split("/")[0].trim()}
+          </span>
+        )}
+        {task.dueDate && (
+          <span style={{ fontSize: 9, fontWeight: 600, marginLeft: "auto", color: dlColor(dl) }}>{fmtDate(task.dueDate)}</span>
+        )}
+      </div>
+    </div>
+  );
+}
 
-  // Expose new task opener to parent
-  useEffect(() => { if(setNewTaskOpen) setNewTaskOpen(()=>()=>setNewOpen(true)); }, []);
+function KanbanColumn({ status, tasks, contracts, onEdit, onAddNew, onDrop }) {
+  const [dragOver, setDragOver] = useState(false);
+  return (
+    <div
+      style={{
+        background: dragOver ? `${status.color}06` : B2,
+        border: `1.5px solid ${dragOver ? status.color : LN}`,
+        borderRadius: 12, overflow: "hidden",
+        transition: "all 0.18s ease",
+        minHeight: 200,
+      }}
+      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => { e.preventDefault(); setDragOver(false); onDrop(e.dataTransfer.getData("text/plain"), status.id); }}>
+      <div style={{ padding: "12px 14px", borderBottom: `1px solid ${LN}`, display: "flex", alignItems: "center", gap: 6, background: B1 }}>
+        <status.icon size={12} style={{ color: status.color }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: TX, flex: 1 }}>{status.label}</span>
+        <span style={{ fontSize: 9, fontWeight: 700, background: B3, color: TX2, padding: "2px 7px", borderRadius: 99 }}>{tasks.length}</span>
+      </div>
+      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+        {tasks.map(task => (
+          <TaskCard key={task.id} task={task} contracts={contracts} onEdit={onEdit} />
+        ))}
+        <div
+          onClick={onAddNew}
+          style={{ padding: "9px 12px", fontSize: 11, color: TX3, cursor: "pointer", borderRadius: 8, border: `1.5px dashed ${LN2}`, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, transition: "all 0.18s ease" }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = status.color; e.currentTarget.style.color = status.color; e.currentTarget.style.background = `${status.color}06`; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = LN2; e.currentTarget.style.color = TX3; e.currentTarget.style.background = "transparent"; }}>
+          <Plus size={11} /> Adicionar
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  const saveTasks = (t) => { setTasks(t); lsSave("copa6_tasks", t); };
+function Tarefas({ contracts, externalNewTask, onExternalNewTaskHandled, navigateTo }) {
+  const [tasks, setTasks]               = useState(() => lsLoad("copa6_tasks", []));
+  const [boardView, setBoardView]       = useState("board");
+  const [filter, setFilter]             = useState("all");
+  const [priorityFilter, setPriority]   = useState("all");
+  const [editTask, setEditTask]         = useState(null);
+  const [newOpen, setNewOpen]           = useState(false);
+  const toast                           = useToast();
+
+  useEffect(() => {
+    if (externalNewTask) { setNewOpen(true); onExternalNewTaskHandled?.(); }
+  }, [externalNewTask]);
+
+  const save = list => { setTasks(list); lsSave("copa6_tasks", list); };
+  const drop = (taskId, newStatus) => save(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
 
   const filtered = tasks.filter(t => {
-    if (filter!=="all" && t.contractId!==filter) return false;
-    if (priorityFilter!=="all" && t.priority!==priorityFilter) return false;
+    if (filter !== "all" && t.contractId !== filter) return false;
+    if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
     return true;
   });
 
-  const byStatus = (statusId) => filtered.filter(t => (t.status||"todo")===statusId);
-
-  const updateStatus = (taskId, newStatus) => {
-    saveTasks(tasks.map(t => t.id===taskId ? {...t, status:newStatus} : t));
-  };
-
-  const ACTIVE_STATUSES = TASK_STATUSES.filter(s => s.id!=="cancelled");
+  const ACTIVE = TASK_STATUSES.filter(s => s.id !== "cancelled");
+  const pending = tasks.filter(t => t.status !== "done" && t.status !== "cancelled").length;
+  const done    = tasks.filter(t => t.status === "done").length;
 
   return (
-    <div style={{ padding:24, maxWidth:1400 }}>
+    <div style={{ padding: 24, maxWidth: 1400 }}>
       {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
-        <div style={{ flex:1 }}>
-          <h2 style={{ fontSize:14, fontWeight:700, color:TX }}>Tarefas</h2>
-          <p style={{ fontSize:11, color:TX2, marginTop:2 }}>{tasks.filter(t=>t.status!=="done"&&t.status!=="cancelled").length} pendentes · {tasks.filter(t=>t.status==="done").length} concluídas</p>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ flex: 1 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: TX }}>Tarefas</h2>
+          <p style={{ fontSize: 11, color: TX2, marginTop: 2 }}>{pending} pendentes · {done} concluídas</p>
         </div>
         {/* View toggle */}
-        <div style={{ display:"flex", background:B2, border:`1px solid ${LN}`, borderRadius:6, overflow:"hidden" }}>
+        <div style={{ display: "flex", background: B2, border: `1px solid ${LN}`, borderRadius: 6, overflow: "hidden" }}>
           {[["board","Kanban"],["list","Lista"]].map(([v,l]) => (
-            <div key={v} onClick={()=>setView(v)}
-              style={{ padding:"5px 12px", fontSize:10, fontWeight:700, cursor:"pointer", color:view===v?TX:TX2, background:view===v?B3:"transparent", transition:"all .1s" }}>{l}</div>
+            <div key={v} onClick={() => setBoardView(v)}
+              style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, cursor: "pointer", transition: TRANS,
+                color: boardView === v ? TX : TX2, background: boardView === v ? B3 : "transparent" }}>{l}</div>
           ))}
         </div>
         {/* Filters */}
-        <select value={filter} onChange={e=>setFilter(e.target.value)}
-          style={{ padding:"5px 10px", background:B2, border:`1px solid ${LN}`, borderRadius:6, color:TX2, fontSize:11, fontFamily:"inherit", outline:"none" }}>
+        <select value={filter} onChange={e => setFilter(e.target.value)}
+          style={{ padding: "5px 10px", background: B1, border: `1px solid ${LN}`, borderRadius: 6, color: TX2, fontSize: 11, fontFamily: "inherit", outline: "none", cursor: "pointer" }}>
           <option value="all">Todos contratos</option>
-          {contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
+          {contracts.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
         </select>
-        <select value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value)}
-          style={{ padding:"5px 10px", background:B2, border:`1px solid ${LN}`, borderRadius:6, color:TX2, fontSize:11, fontFamily:"inherit", outline:"none" }}>
+        <select value={priorityFilter} onChange={e => setPriority(e.target.value)}
+          style={{ padding: "5px 10px", background: B1, border: `1px solid ${LN}`, borderRadius: 6, color: TX2, fontSize: 11, fontFamily: "inherit", outline: "none", cursor: "pointer" }}>
           <option value="all">Todas prioridades</option>
-          {TASK_PRIORITIES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+          {TASK_PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
-        <Btn onClick={()=>setNewOpen(true)} variant="primary" size="sm" icon={Plus}>Nova tarefa</Btn>
+        <Btn onClick={() => setNewOpen(true)} variant="primary" size="sm" icon={Plus}>Nova tarefa</Btn>
       </div>
 
-      {/* Board view - drag & drop */}
-      {view==="board" && (() => {
-        const [dragOverCol, setDragOverCol] = useState(null);
-        const [hovCard, setHovCard] = useState(null);
-        return (
-        <div style={{ display:"grid", gridTemplateColumns:`repeat(${ACTIVE_STATUSES.length},1fr)`, gap:10 }}>
-          {ACTIVE_STATUSES.map(status => {
-            const col = byStatus(status.id);
-            const dragOver = dragOverCol === status.id;
-            return (
-              <div key={status.id}
-                style={{ background:dragOver?`${status.color}08`:B2, border:`1.5px solid ${dragOver?status.color:LN}`, borderRadius:12, overflow:"hidden", transition:"all 0.18s ease" }}
-                onDragOver={e=>{ e.preventDefault(); setDragOverCol(status.id); }}
-                onDragLeave={()=>setDragOverCol(null)}
-                onDrop={e=>{ e.preventDefault(); setDragOverCol(null); const id=e.dataTransfer.getData("taskId"); if(id) updateStatus(id,status.id); }}>
-                <div style={{ padding:"12px 14px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6, background:B1 }}>
-                  <status.icon size={12} style={{color:status.color}}/>
-                  <span style={{ fontSize:11, fontWeight:700, color:TX, flex:1 }}>{status.label}</span>
-                  <span style={{ fontSize:9, fontWeight:700, background:B3, color:TX2, padding:"2px 7px", borderRadius:99 }}>{col.length}</span>
-                </div>
-                <div style={{ padding:8, display:"flex", flexDirection:"column", gap:6, minHeight:120 }}>
-                  {col.map(task => {
-                    const prio = TASK_PRIORITIES.find(p=>p.id===(task.priority||"none"));
-                    const contract = contracts.find(c=>c.id===task.contractId);
-                    return (
-                      <div key={task.id}
-                        draggable
-                        onDragStart={e=>{ e.dataTransfer.setData("taskId",task.id); e.currentTarget.style.opacity=".5"; }}
-                        onDragEnd={e=>e.currentTarget.style.opacity="1"}
-                        onClick={()=>setEditTask(task)}
-                        onMouseEnter={()=>setHovCard(task.id)}
-                        onMouseLeave={()=>setHovCard(null)}
-                        style={{ background:B1, border:`1px solid ${hovCard===task.id?LN2:LN}`, borderRadius:8, padding:"11px 13px", cursor:"grab", transition:TRANS, boxShadow:hovCard===task.id?"0 4px 12px rgba(0,0,0,0.08),0 1px 3px rgba(0,0,0,0.05)":"0 1px 2px rgba(0,0,0,0.04)", transform:hovCard===task.id?"translateY(-2px)":"translateY(0)" }}>
-                        <div style={{ fontSize:12, fontWeight:500, color:TX, marginBottom:8, lineHeight:1.45 }}>{task.title}</div>
-                        {task.description && <div style={{ fontSize:11, color:TX2, marginBottom:8, lineHeight:1.4, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{task.description}</div>}
-                        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                          {prio && <div style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:9, fontWeight:600, padding:"2px 7px", borderRadius:99, background:`${prio.color}15`, color:prio.color }}>
-                            <prio.icon size={9}/>{prio.label}
-                          </div>}
-                          {contract && <div style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:9, color:TX2, padding:"2px 7px", borderRadius:99, background:B3 }}>
-                            <div style={{ width:5, height:5, borderRadius:"50%", background:contract.color }}/>{contract.company.split("/")[0].trim()}
-                          </div>}
-                          {task.dueDate && <div style={{ fontSize:9, fontWeight:600, marginLeft:"auto", color:dlColor(daysLeft(task.dueDate)) }}>{fmtDate(task.dueDate)}</div>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div onClick={()=>setNewOpen(true)}
-                    style={{ padding:"9px 12px", fontSize:11, color:TX3, cursor:"pointer", borderRadius:8, border:`1.5px dashed ${LN2}`, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center", gap:4, transition:TRANS }}
-                    onMouseEnter={e=>{ e.currentTarget.style.borderColor=status.color; e.currentTarget.style.color=status.color; e.currentTarget.style.background=`${status.color}08`; }}
-                    onMouseLeave={e=>{ e.currentTarget.style.borderColor=LN2; e.currentTarget.style.color=TX3; e.currentTarget.style.background="transparent"; }}>
-                    <Plus size={11}/> Adicionar
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+      {/* Kanban board */}
+      {boardView === "board" && (
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${ACTIVE.length}, 1fr)`, gap: 10 }}>
+          {ACTIVE.map(status => (
+            <KanbanColumn
+              key={status.id}
+              status={status}
+              tasks={filtered.filter(t => (t.status || "todo") === status.id)}
+              contracts={contracts}
+              onEdit={setEditTask}
+              onAddNew={() => setNewOpen(true)}
+              onDrop={drop}
+            />
+          ))}
         </div>
-        );
-      })()}
+      )}
 
       {/* List view */}
-      {view==="list" && (
-        <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"20px 1fr 120px 120px 120px 100px", padding:"8px 16px", background:B2, borderBottom:`1px solid ${LN}`, fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>
+      {boardView === "list" && (
+        <div style={{ border: `1px solid ${LN}`, borderRadius: 10, overflow: "hidden", background: B1, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 120px 120px 120px 100px", padding: "8px 16px", background: B2, borderBottom: `1px solid ${LN}`, fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: TX3 }}>
             <div/><div>Título</div><div>Status</div><div>Prioridade</div><div>Contrato</div><div>Data</div>
           </div>
-          {ACTIVE_STATUSES.map(status => {
-            const col = byStatus(status.id);
-            if(!col.length) return null;
+          {ACTIVE.map(status => {
+            const col = filtered.filter(t => (t.status || "todo") === status.id);
+            if (!col.length) return null;
             return (
               <div key={status.id}>
-                <div style={{ padding:"6px 16px", background:B1, borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6 }}>
-                  <status.icon size={11} style={{color:status.color}}/>
-                  <span style={{ fontSize:10, fontWeight:700, color:TX2 }}>{status.label}</span>
-                  <span style={{ fontSize:9, color:TX3, marginLeft:4 }}>{col.length}</span>
+                <div style={{ padding: "6px 16px", background: B2, borderBottom: `1px solid ${LN}`, display: "flex", alignItems: "center", gap: 6 }}>
+                  <status.icon size={11} style={{ color: status.color }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: TX2 }}>{status.label}</span>
+                  <span style={{ fontSize: 9, color: TX3, marginLeft: 4 }}>{col.length}</span>
                 </div>
                 {col.map(task => {
-                  const prio = TASK_PRIORITIES.find(p=>p.id===(task.priority||"none"));
-                  const contract = contracts.find(c=>c.id===task.contractId);
+                  const prio     = TASK_PRIORITIES.find(p => p.id === (task.priority||"none"));
+                  const contract = contracts.find(c => c.id === task.contractId);
                   return (
-                    <div key={task.id} onClick={()=>setEditTask(task)}
-                      style={{ display:"grid", gridTemplateColumns:"20px 1fr 120px 120px 120px 100px", padding:"10px 16px", borderBottom:`1px solid ${LN}`, cursor:"pointer", fontSize:12 }}
-                      onMouseEnter={e=>e.currentTarget.style.background=B1}
-                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                      <div onClick={e=>{e.stopPropagation();updateStatus(task.id,"done");}}>
-                        {task.status==="done"
-                          ? <CheckCircle2 size={14} style={{color:GRN}}/>
-                          : <Circle size={14} style={{color:TX3}}/>}
+                    <div key={task.id} onClick={() => setEditTask(task)}
+                      style={{ display: "grid", gridTemplateColumns: "24px 1fr 120px 120px 120px 100px", padding: "10px 16px", borderBottom: `1px solid ${LN}`, cursor: "pointer", fontSize: 12, transition: TRANS }}
+                      onMouseEnter={e => e.currentTarget.style.background = B2}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <div onClick={e => { e.stopPropagation(); drop(task.id, task.status === "done" ? "todo" : "done"); }} style={{ display: "flex", alignItems: "center" }}>
+                        {task.status === "done"
+                          ? <CheckCircle2 size={14} style={{ color: GRN }} />
+                          : <Circle size={14} style={{ color: TX3 }} />}
                       </div>
-                      <div style={{ color:task.status==="done"?TX3:TX, textDecoration:task.status==="done"?"line-through":"none" }}>{task.title}</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:4, color:status.color, fontSize:10 }}><status.icon size={10}/>{status.label}</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:4, color:prio?.color||TX3, fontSize:10 }}>{prio&&<prio.icon size={10}/>}{prio?.label||"—"}</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, color:TX2 }}>
-                        {contract&&<><div style={{width:5,height:5,borderRadius:"50%",background:contract.color}}/>{contract.company.split("/")[0].trim()}</>}
+                      <div style={{ color: task.status === "done" ? TX3 : TX, textDecoration: task.status === "done" ? "line-through" : "none" }}>{task.title}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, color: status.color, fontSize: 10 }}><status.icon size={10} />{status.label}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, color: prio?.color||TX3, fontSize: 10 }}>{prio && <prio.icon size={10} />}{prio?.label || "—"}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: TX2 }}>
+                        {contract && <><span style={{ width: 5, height: 5, borderRadius: "50%", background: contract.color, display: "inline-block" }} />{contract.company.split("/")[0].trim()}</>}
                       </div>
-                      <div style={{ fontSize:10, color:task.dueDate?dlColor(daysLeft(task.dueDate)):TX3 }}>{fmtDate(task.dueDate)}</div>
+                      <div style={{ fontSize: 10, color: task.dueDate ? dlColor(daysLeft(task.dueDate)) : TX3 }}>{fmtDate(task.dueDate)}</div>
                     </div>
                   );
                 })}
               </div>
             );
           })}
+          {filtered.length === 0 && <div style={{ padding: 48, textAlign: "center", color: TX3 }}>Nenhuma tarefa.</div>}
         </div>
       )}
 
-      {/* Task modal */}
+      {/* Modals */}
       {(newOpen || editTask) && (
         <TaskModal
           task={editTask}
           contracts={contracts}
-          onNavigate={navigateTo}
-          onClose={()=>{setNewOpen(false);setEditTask(null);}}
-          onSave={t=>{
-            if(editTask) saveTasks(tasks.map(x=>x.id===t.id?t:x));
-            else saveTasks([...tasks, {...t,id:uid(),status:t.status||"todo",createdAt:new Date().toISOString()}]);
-            toast?.(editTask?"Tarefa atualizada":"✓ Tarefa criada","success");
-            setNewOpen(false); setEditTask(null);
-          }}
-          onDelete={editTask?(id=>{
-            if(confirm("Excluir esta tarefa?")) {
-              saveTasks(tasks.filter(t=>t.id!==id));
-              setEditTask(null);
+          navigateTo={navigateTo}
+          onClose={() => { setNewOpen(false); setEditTask(null); }}
+          onSave={t => {
+            if (editTask) {
+              save(tasks.map(x => x.id === t.id ? t : x));
+              toast?.("Tarefa atualizada", "success");
+            } else {
+              save([...tasks, { ...t, id: uid(), status: t.status || "todo", createdAt: new Date().toISOString() }]);
+              toast?.("✓ Tarefa criada", "success");
             }
-          }):null}
+            setNewOpen(false);
+            setEditTask(null);
+          }}
+          onDelete={editTask ? id => {
+            if (confirm("Excluir esta tarefa?")) { save(tasks.filter(t => t.id !== id)); setEditTask(null); }
+          } : null}
         />
       )}
     </div>
   );
 }
 
-function TaskModal({ task, contracts, onClose, onSave, onDelete, onNavigate }) {
-  const [f, setF] = useState(task || { title:"", description:"", status:"todo", priority:"medium", contractId:"", dueDate:"" });
-  const set = (k,v) => setF(x=>({...x,[k]:v}));
+function TaskModal({ task, contracts, onClose, onSave, onDelete, navigateTo }) {
+  const isEdit = !!task;
+  const [f, setF] = useState(task || { title: "", description: "", status: "todo", priority: "medium", contractId: "", dueDate: "" });
+  const set = (k, v) => setF(x => ({ ...x, [k]: v }));
+
+  const handleSave = () => {
+    if (!f.title?.trim()) { alert("Preencha o título."); return; }
+    onSave(f);
+  };
+
   return (
-    <Modal title={task?"Editar Tarefa":"Nova Tarefa"} onClose={onClose}
+    <Modal
+      title={isEdit ? "Editar Tarefa" : "Nova Tarefa"}
+      onClose={onClose}
       footer={<>
-        {onDelete && <Btn onClick={()=>onDelete(task.id)} variant="danger" size="sm">Excluir</Btn>}
-        <div style={{flex:1}}/>
-        {task?.contractId && onNavigate && <Btn onClick={()=>{onNavigate("contratos");onClose();}} variant="ghost" size="sm">Ver contrato ↗</Btn>}
+        {onDelete && <Btn onClick={() => onDelete(task.id)} variant="danger" size="sm">Excluir</Btn>}
+        <div style={{ flex: 1 }} />
+        {isEdit && f.contractId && navigateTo && (
+          <Btn onClick={() => { navigateTo("contratos"); onClose(); }} variant="ghost" size="sm">Ver contrato ↗</Btn>
+        )}
         <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
-        <Btn onClick={()=>onSave(f)} variant="primary" size="sm">{task?"Salvar":"Criar"}</Btn>
+        <Btn onClick={handleSave} variant="primary" size="sm">{isEdit ? "Salvar" : "Criar tarefa"}</Btn>
       </>}>
-      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Field label="Título">
-          <Input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="ex: Enviar roteiro Amazon até 04/mai"/>
+          <Input value={f.title} onChange={e => set("title", e.target.value)} placeholder="ex: Enviar roteiro Amazon até 04/mai" />
         </Field>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Status">
-            <Select value={f.status} onChange={e=>set("status",e.target.value)}>
-              {TASK_STATUSES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+            <Select value={f.status || "todo"} onChange={e => set("status", e.target.value)}>
+              {TASK_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
             </Select>
           </Field>
           <Field label="Prioridade">
-            <Select value={f.priority||"medium"} onChange={e=>set("priority",e.target.value)}>
-              {TASK_PRIORITIES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+            <Select value={f.priority || "medium"} onChange={e => set("priority", e.target.value)}>
+              {TASK_PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
             </Select>
           </Field>
           <Field label="Contrato / Marca">
-            <Select value={f.contractId||""} onChange={e=>set("contractId",e.target.value)}>
+            <Select value={f.contractId || ""} onChange={e => set("contractId", e.target.value)}>
               <option value="">— Nenhum —</option>
-              {contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
+              {contracts.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
             </Select>
           </Field>
           <Field label="Data / Prazo">
-            <Input type="date" value={f.dueDate||""} onChange={e=>set("dueDate",e.target.value)}/>
+            <Input type="date" value={f.dueDate || ""} onChange={e => set("dueDate", e.target.value)} />
           </Field>
         </div>
         <Field label="Descrição / Detalhes">
-          <Textarea value={f.description||""} onChange={e=>set("description",e.target.value)} placeholder="Contexto, links, referências…" rows={4}/>
+          <Textarea value={f.description || ""} onChange={e => set("description", e.target.value)} placeholder="Contexto, links, referências…" rows={4} />
         </Field>
       </div>
     </Modal>
   );
 }
-
 
 // ─── Acompanhamento (Kanban de entregas) ──────────────────
 function Acompanhamento({ contracts, posts, calEvents, calMonth, setCal, calFilter, setCalF }) {

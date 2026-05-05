@@ -570,6 +570,19 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
   const in7Str   = new Date(today.getTime() + 7 * 864e5).toISOString().substr(0, 10);
   const in30Str  = new Date(today.getTime() + 30 * 864e5).toISOString().substr(0, 10);
 
+  // Read deliverables from localStorage for urgency check
+  const deliverables = useMemo(() => lsLoad("copa6_deliverables", []), []);
+  const lateDeliverables = useMemo(() => deliverables.filter(d => {
+    if (!d || d.stage === "done") return false;
+    const stageIdx = STAGE_IDS.indexOf(d.stage || "briefing");
+    if (stageIdx < 0 || !d.plannedPostDate) return false;
+    const currentStage = STAGES[stageIdx];
+    if (!currentStage) return false;
+    const dl2 = addDays(d.plannedPostDate, currentStage.days);
+    const dl = daysLeft(dl2);
+    return dl !== null && dl < 0;
+  }), [deliverables]);
+
   // ── Urgency signals ──
   const urgency = [];
 

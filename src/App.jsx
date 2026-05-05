@@ -469,206 +469,239 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
 
 
 // ─── Dashboard ────────────────────────────────────────────
-function KpiCard({ label, value, sub, accent }) {
+function AlertCard({ type, title, sub, value, action, onAction, color }) {
+  const [hov, setHov] = useState(false);
+  const colors = {
+    danger:  { bg: "#FFF1F2", border: "#FCA5A5", accent: RED,  icon: "🔴" },
+    warning: { bg: "#FFFBEB", border: "#FCD34D", accent: AMB,  icon: "🟡" },
+    info:    { bg: "#EFF6FF", border: "#BFDBFE", accent: BLU,  icon: "🔵" },
+    success: { bg: "#F0FDF4", border: "#86EFAC", accent: GRN,  icon: "🟢" },
+  };
+  const c = colors[type] || colors.info;
+  return (
+    <div
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: c.bg, border: `1px solid ${hov ? c.accent : c.border}`,
+        borderRadius: 10, padding: "14px 16px", transition: "all 0.18s ease",
+        boxShadow: hov ? `0 4px 14px ${c.accent}20` : "0 1px 3px rgba(0,0,0,0.05)",
+        transform: hov ? "translateY(-1px)" : "none",
+      }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: c.accent, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
+            <span>{c.icon}</span>{title}
+          </div>
+          <div style={{ fontSize: 12, color: TX, lineHeight: 1.45 }}>{sub}</div>
+        </div>
+        {value && <div style={{ fontSize: 18, fontWeight: 700, color: c.accent, flexShrink: 0, lineHeight: 1 }}>{value}</div>}
+      </div>
+      {action && (
+        <button onClick={onAction}
+          style={{ marginTop: 10, fontSize: 10, fontWeight: 700, letterSpacing: ".04em", color: c.accent, background: "none", border: `1px solid ${c.accent}40`, borderRadius: 5, padding: "4px 10px", cursor: "pointer", transition: "all 0.15s ease" }}
+          onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>
+          {action} →
+        </button>
+      )}
+    </div>
+  );
+}
+
+function StatTile({ label, value, sub, trend }) {
   const [hov, setHov] = useState(false);
   return (
-    <div style={{ ...(hov?GHV:G), padding:"18px 20px", transition:TRANS }}
-      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
-      <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>{label}</div>
-      <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-.02em", color:accent||TX, lineHeight:1 }}>{value}</div>
-      {sub && <div style={{ fontSize:11, color:TX3, marginTop:5 }}>{sub}</div>}
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ ...(hov ? GHV : G), padding: "18px 20px", transition: TRANS }}>
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX2, marginBottom: 10 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-.02em", color: TX, lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: TX2, marginTop: 5 }}>{sub}</div>}
+      {trend && <div style={{ fontSize: 10, fontWeight: 600, marginTop: 4, color: trend > 0 ? GRN : RED }}>{trend > 0 ? "↑" : "↓"} {Math.abs(trend)}%</div>}
     </div>
   );
 }
 
-function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal }) {
-  const [open, setOpen] = useState(null);
-  const [nfDetails, setNfd] = useState(() => lsLoad("copa6_nfd",{}));
-  const saveNfd = (cid,key,field,val) => setNfd(prev=>{const n={...prev,[cid]:{...(prev[cid]||{}),[key]:{...(prev[cid]?.[key]||{}),[field]:val}}};lsSave("copa6_nfd",n);return n;});
+function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo }) {
+  const today    = new Date();
+  const todayStr = today.toISOString().substr(0, 10);
+  const in7Str   = new Date(today.getTime() + 7 * 864e5).toISOString().substr(0, 10);
+  const in30Str  = new Date(today.getTime() + 30 * 864e5).toISOString().substr(0, 10);
+
+  // ── Urgency signals ──
+  const urgency = [];
+
+  // Contracts expiring in 7 days
+  const expiringContracts = contracts.filter(c => c.contractDeadline && c.contractDeadline <= in7Str && c.contractDeadline >= todayStr);
+  if (expiringContracts.length) urgency.push({
+    type: "danger", key: "exp",
+    title: `${expiringContracts.length} contrato${expiringContracts.length > 1 ? "s" : ""} vence${expiringContracts.length > 1 ? "m" : ""} em 7 dias`,
+    sub: expiringContracts.map(c => c.company).join(", "),
+    action: "Ver contratos", onAction: () => navigateTo("contratos"),
+  });
+
+  // Overdue NFs
+  const nfPendingList = contracts.filter(c => getNFEntries(c).some(e => !e.isEmitted));
+  if (nfPendingList.length) urgency.push({
+    type: nfPendingList.length >= 5 ? "danger" : "warning", key: "nf",
+    title: `${stats.nfPending} NF${stats.nfPending > 1 ? "s" : ""} pendente${stats.nfPending > 1 ? "s" : ""} de emissão`,
+    sub: nfPendingList.slice(0, 4).map(c => c.company).join(", ") + (nfPendingList.length > 4 ? ` +${nfPendingList.length - 4}` : ""),
+    value: fmtMoney(stats.nfPendingValue),
+    action: "Ver NFs", onAction: () => navigateTo("contratos"),
+  });
+
+  // Posts due this week
+  const postsDue = posts.filter(p => !p.isPosted && p.plannedDate && p.plannedDate <= in7Str && p.plannedDate >= todayStr);
+  if (postsDue.length) urgency.push({
+    type: "warning", key: "posts",
+    title: `${postsDue.length} post${postsDue.length > 1 ? "s" : ""} planejado${postsDue.length > 1 ? "s" : ""} esta semana`,
+    sub: postsDue.map(p => p.title).slice(0, 3).join(", "),
+    action: "Ver posts", onAction: () => navigateTo("posts"),
+  });
+
+  // Commission pending
+  if (stats.commPendBRL > 0) urgency.push({
+    type: "info", key: "comm",
+    title: "Comissão a receber · Stand",
+    sub: `${getCommEntries.length} pagamentos pendentes`,
+    value: fmtMoney(stats.commPendBRL),
+    action: "Ver comissões", onAction: () => navigateTo("contratos"),
+  });
+
+  // All good
+  if (urgency.length === 0) urgency.push({
+    type: "success", key: "ok",
+    title: "Tudo em dia",
+    sub: "Nenhuma ação urgente no momento. Bom trabalho!",
+  });
+
+  // ── Delivery progress per contract ──
+  const contractProgress = contracts.map(c => {
+    const cp = posts.filter(p => p.contractId === c.id && p.type === "post").length;
+    const cs = posts.filter(p => p.contractId === c.id && p.type === "story").length;
+    const cl = posts.filter(p => p.contractId === c.id && p.type === "link").length;
+    const tot = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
+    const don = cp + cs + cl;
+    const dl  = daysLeft(c.contractDeadline);
+    return { ...c, tot, don, pct: tot ? Math.min(100, don / tot * 100) : 0, dl };
+  }).filter(c => c.tot > 0 || c.contractDeadline).sort((a, b) => (a.dl ?? 999) - (b.dl ?? 999));
+
+  // ── Upcoming payments ──
+  const upcomingPayments = [];
+  contracts.forEach(c => {
+    if (c.paymentType === "single" && c.paymentDeadline && c.paymentDeadline <= in30Str) {
+      upcomingPayments.push({ company: c.company, color: c.color, date: c.paymentDeadline, value: contractTotal(c), currency: c.currency });
+    }
+    if (c.paymentType === "split") {
+      getInstallments(c).forEach((inst, i) => {
+        if (inst.date && inst.date <= in30Str && inst.date >= todayStr) {
+          const O = ["1ª","2ª","3ª","4ª","5ª","6ª"];
+          upcomingPayments.push({ company: `${c.company} · ${O[i]||`${i+1}ª`} parc.`, color: c.color, date: inst.date, value: inst.value, currency: c.currency });
+        }
+      });
+    }
+  });
+  upcomingPayments.sort((a, b) => new Date(a.date) - new Date(b.date));
 
   return (
-    <div style={{ padding:24, maxWidth:1400 }}>
-      {/* Welcome */}
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:20, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>Visão Geral</h1>
-        <p style={{ fontSize:12, color:TX2, marginTop:4 }}>Copa do Mundo 2026 · Lucas Veloso @veloso.lucas_</p>
+    <div style={{ padding: 24, maxWidth: 1400 }}>
+      {/* Greeting */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: TX, letterSpacing: "-.02em" }}>
+          {today.getHours() < 12 ? "Bom dia" : today.getHours() < 18 ? "Boa tarde" : "Boa noite"}, Matheus 👋
+        </h1>
+        <p style={{ fontSize: 12, color: TX2, marginTop: 4 }}>
+          {today.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })} · Copa do Mundo 2026
+        </p>
       </div>
 
-      {/* KPIs */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:24 }}>
-        <KpiCard label="Volume Total" value={<span style={{fontSize:16}}>{fmtMoney(stats.totalBRL)}</span>}
-          sub={`${contracts.length} contratos · ${contracts.filter(c=>c.paymentType==="monthly").length} mensais`}/>
-        <KpiCard label="Comissão Pendente" value={fmtMoney(stats.commPendBRL)} sub="a receber · Stand" accent={AMB}/>
-        <KpiCard label="Valor a Receber" value={<span style={{fontSize:16}}>{fmtMoney(stats.commPendBRL + stats.nfPendingValue)}</span>}
-          sub={`${stats.nfPending} NFs pendentes`} accent={stats.nfPending>0?RED:GRN}/>
-        <KpiCard label="Engajamento" value={stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—"} sub="média calculada auto" accent={stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2}/>
+      {/* KPI row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+        <StatTile label="Volume Total" value={<span style={{ fontSize: 16 }}>{fmtMoney(stats.totalBRL)}</span>} sub={`${contracts.length} contratos ativos`} />
+        <StatTile label="A Receber" value={<span style={{ fontSize: 16, color: stats.commPendBRL > 0 ? AMB : GRN }}>{fmtMoney(stats.commPendBRL)}</span>} sub="comissão Stand pendente" />
+        <StatTile label="Entregas" value={<span>{stats.dp + stats.ds}<span style={{ fontSize: 14, color: TX2, fontWeight: 400 }}>/{stats.tp + stats.ts}</span></span>} sub={`posts + stories entregues`} />
+        <StatTile label="Engajamento" value={<span style={{ color: stats.avgEng != null ? (stats.avgEng >= 3 ? GRN : stats.avgEng >= 1 ? AMB : TX2) : TX2 }}>{stats.avgEng != null ? stats.avgEng.toFixed(2) + "%" : "—"}</span>} sub="média das publicações" />
       </div>
 
-      {/* Second row */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:28 }}>
-        <KpiCard label="Posts/Reels" value={<span>{stats.dp}<span style={{fontSize:14,color:TX3,fontWeight:400}}>/{stats.tp}</span></span>} sub="entregues"/>
-        <KpiCard label="Stories" value={<span>{stats.ds}<span style={{fontSize:14,color:TX3,fontWeight:400}}>/{stats.ts}</span></span>} sub="entregues"/>
-        <KpiCard label="Links Comun." value={<span>{stats.dl}<span style={{fontSize:14,color:TX3,fontWeight:400}}>/{stats.tl}</span></span>} sub="entregues"/>
-        <KpiCard label="NFs Pendentes" value={stats.nfPending} sub="não emitidas" accent={stats.nfPending>0?RED:GRN}/>
-      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
 
-      {/* Contracts accordion */}
-      <div style={{ fontSize:9, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", color:TX3, marginBottom:12 }}>Contratos</div>
-      <div style={{ display:"flex", flexDirection:"column", gap:0, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-        {/* Table header */}
-        <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 130px 110px 180px 140px 32px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
-          {["","EMPRESA","VALOR","PRAZO","ENTREGAS","NOTA FISCAL",""].map((h,i) => (
-            <div key={i} style={{ padding:"0 12px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3, textAlign:i===2||i===3?"right":"left" }}>{h}</div>
-          ))}
+        {/* Left: Urgency alerts */}
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX2, marginBottom: 12 }}>
+            Ações & Urgências
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {urgency.map(u => (
+              <AlertCard key={u.key} type={u.type} title={u.title} sub={u.sub} value={u.value} action={u.action} onAction={u.onAction} />
+            ))}
+          </div>
         </div>
-        {contracts.map(c => {
-          const isOpen = open===c.id;
-          const cp=posts.filter(p=>p.contractId===c.id&&p.type==="post").length;
-          const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
-          const cl=posts.filter(p=>p.contractId===c.id&&p.type==="link").length;
-          const cr=posts.filter(p=>p.contractId===c.id).reduce((s,p)=>s+postRepostCount(p),0);
-          const total=contractTotal(c), dl=daysLeft(c.contractDeadline);
-          const totDel=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
-          const doneDel=cp+cs+cl+cr;
-          const pct=totDel?Math.min(100,doneDel/totDel*100):0;
-          const nfE=getNFEntries(c);
-          const nfSt=nfE.length===0?null:nfE.every(e=>e.isEmitted)?"ok":nfE.every(e=>!e.isEmitted)?"nao":"parcial";
-          const NfPill = () => {
-            if(!nfE.length) return <span style={{color:TX3,fontSize:11}}>—</span>;
-            if(nfSt==="ok") return <Badge color={GRN}>✓ Emitida</Badge>;
-            if(nfSt==="parcial") return <Badge color={AMB}>Parcial</Badge>;
-            return <Badge color={RED}>Não Emitida</Badge>;
-          };
-          return (
-            <div key={c.id} style={{ borderBottom:`1px solid ${LN}` }}>
-              <div onClick={()=>setOpen(isOpen?null:c.id)}
-                style={{ display:"grid", gridTemplateColumns:"3px 1fr 130px 110px 180px 140px 32px", alignItems:"center", cursor:"pointer", background:isOpen?B2:B0, transition:"background .1s" }}
-                onMouseEnter={e=>{ if(!isOpen){e.currentTarget.style.background=B2;e.currentTarget.style.boxShadow="inset 3px 0 0 "+RED;}}}
-                onMouseLeave={e=>{ if(!isOpen){e.currentTarget.style.background=B0;e.currentTarget.style.boxShadow="none";}}}>
-                <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }}/>
-                <div style={{ padding:"12px", display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                  <span style={{ fontWeight:600, fontSize:13, color:TX }}>{c.company}</span>
-                  {currBadge(c.currency)}
-                  {c.paymentType==="monthly"&&<Badge color={TX2}>Mensal</Badge>}
-                  {total===0&&<Badge color={TX3}>TBD</Badge>}
-                </div>
-                <div style={{ padding:"12px", textAlign:"right" }}>
-                  <div style={{ fontWeight:700, fontSize:13, color:TX }}>{total>0?fmtMoney(total,c.currency):"—"}</div>
-                  {total>0&&c.currency!=="BRL"&&rates.eur>0&&c.currency==="EUR"&&<div style={{fontSize:10,color:TX3}}>≈{fmtMoney(total*rates.eur)}</div>}
-                </div>
-                <div style={{ padding:"12px", textAlign:"right" }}>
-                  {c.contractDeadline?<>
-                    <div style={{ fontSize:12,fontWeight:600,color:dlColor(dl) }}>{fmtDate(c.contractDeadline)}</div>
-                    <div style={{ fontSize:10,color:dlColor(dl) }}>{dl!=null?`${dl}d`:""}</div>
-                  </>:<span style={{color:TX3}}>—</span>}
-                </div>
-                <div style={{ padding:"12px" }}>
-                  {totDel>0?<>
-                    <div style={{ height:2, background:"rgba(255,255,255,.1)", borderRadius:2, marginBottom:4 }}>
-                      <div style={{ height:2, background:pct===100?GRN:c.color, width:`${pct}%`, borderRadius:2, transition:"width .4s" }}/>
-                    </div>
-                    <div style={{ fontSize:11,color:TX2 }}>{doneDel}/{totDel} entregas</div>
-                  </>:<span style={{fontSize:11,color:TX3,fontStyle:"italic"}}>A definir</span>}
-                </div>
-                <div style={{ padding:"12px" }}><NfPill/></div>
-                <div style={{ textAlign:"center",fontSize:11,color:TX3 }}>{isOpen?"▲":"›"}</div>
-              </div>
 
-              {/* Expanded */}
-              {isOpen && (
-                <div style={{ background:B1, borderTop:`1px solid ${LN}` }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", borderBottom:`1px solid ${LN}` }}>
-                    {/* Col 1: Entregas */}
-                    <div style={{ padding:"18px 20px", borderRight:`1px solid ${LN}` }}>
-                      <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Entregas</div>
-                      {[{lbl:"Posts/Reels",done:cp,total:c.numPosts,col:c.color},{lbl:"Stories",done:cs,total:c.numStories,col:BLU},{lbl:"Links",done:cl,total:c.numCommunityLinks,col:GRN},{lbl:"Reposts",done:cr,total:c.numReposts,col:AMB}]
-                        .filter(b=>b.total>0||b.done>0).map(b=>(
-                          <div key={b.lbl} style={{ marginBottom:8 }}>
-                            <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3 }}>
-                              <span style={{color:TX2}}>{b.lbl}</span>
-                              <span style={{color:b.done>=b.total&&b.total>0?GRN:TX,fontWeight:b.done>=b.total&&b.total>0?700:400}}>{b.done}/{b.total}</span>
-                            </div>
-                            <div style={{ height:2,background:"rgba(255,255,255,.08)",borderRadius:2 }}>
-                              <div style={{ height:2,background:b.col,width:`${b.total?Math.min(100,b.done/b.total*100):b.done>0?100:0}%`,borderRadius:2 }}/>
-                            </div>
-                          </div>
-                        ))}
-                      {c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts===0&&cp+cs+cl+cr===0&&<div style={{fontSize:11,color:TX3,fontStyle:"italic"}}>Escopo a definir</div>}
-                      <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${LN}`,fontSize:11,color:TX2}}>
-                        <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:TX3,marginBottom:6}}>Pagamento</div>
-                        {c.paymentType==="monthly"&&<div>{fmtMoney(c.monthlyValue)}/mês · {monthsBetween(c.contractStart,c.contractDeadline)||"?"}m</div>}
-                        {c.paymentType==="split"&&<div>{getInstallments(c).map((inst,i)=>{const O=["1ª","2ª","3ª","4ª","5ª","6ª"];return <span key={i}>{i>0?" · ":""}{O[i]||`${i+1}ª`} {fmtMoney(inst.value,c.currency)} {fmtDate(inst.date)}</span>;})}</div>}
-                        {c.paymentType==="single"&&<div>{fmtDate(c.paymentDeadline)}</div>}
-                      </div>
-                      {Number(c.paymentDaysAfterNF)>0&&<div style={{marginTop:6,fontSize:11,color:TX2}}>Pgto {c.paymentDaysAfterNF}d após NF</div>}
-                      <div style={{marginTop:10}}><CommToggle on={c.hasCommission} onToggle={()=>toggleComm(c.id)} label/></div>
-                      <InlineNotes notes={c.notes} onSave={v=>saveNote(c.id,v)}/>
+        {/* Right: two sub-panels */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* Delivery progress */}
+          <div style={{ ...G, padding: "18px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX2 }}>Progresso de Entregas</div>
+              <button onClick={() => navigateTo("contratos")} style={{ fontSize: 10, color: TX2, background: "none", border: "none", cursor: "pointer", transition: TRANS }}
+                onMouseEnter={e => e.currentTarget.style.color = TX} onMouseLeave={e => e.currentTarget.style.color = TX2}>Ver todos →</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {contractProgress.slice(0, 6).map(c => (
+                <div key={c.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: c.color }} />
+                      <span style={{ fontSize: 12, fontWeight: 500, color: TX }}>{c.company}</span>
+                      {c.tot === 0 && <span style={{ fontSize: 9, color: TX3, fontStyle: "italic" }}>TBD</span>}
                     </div>
-                    {/* Col 2: Comissões */}
-                    <div style={{ padding:"18px 20px", borderRight:`1px solid ${LN}` }}>
-                      <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12,display:"flex",justifyContent:"space-between" }}>
-                        <span>Comissões</span>
-                        {getCommEntries(c).length>0&&<span style={{color:RED}}>{fmtMoney(getCommEntries(c).reduce((s,e)=>s+e.amount,0),c.currency)}</span>}
-                      </div>
-                      {getCommEntries(c).length===0&&<div style={{fontSize:11,color:TX3,fontStyle:"italic"}}>Sem comissão</div>}
-                      {getCommEntries(c).map((e,i,arr)=>(
-                        <div key={e.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:i<arr.length-1?`1px solid ${LN}`:"none",gap:8}}>
-                          <div><div style={{fontSize:12,fontWeight:600,color:TX}}>{e.label}</div>{e.date&&<div style={{fontSize:10,color:TX2}}>{fmtDate(e.date)}</div>}</div>
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <span style={{fontSize:12,fontWeight:700,color:RED}}>{e.amount>0?fmtMoney(e.amount,e.currency):"—"}</span>
-                            <div onClick={()=>toggleCommPaid(c.id,e.key)}
-                              style={{padding:"3px 8px",fontSize:9,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",cursor:"pointer",borderRadius:4,background:e.isPaid?`${GRN}18`:"rgba(255,255,255,.05)",border:`1px solid ${e.isPaid?GRN+"44":LN}`,color:e.isPaid?GRN:TX2}}>
-                              {e.isPaid?"✓ Pago":"Pendente"}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* Col 3: NF */}
-                    <div style={{ padding:"18px 20px" }}>
-                      <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Nota Fiscal</div>
-                      {getNFEntries(c).length===0&&<div style={{fontSize:11,color:TX3,fontStyle:"italic"}}>Sem NF</div>}
-                      {getNFEntries(c).map((e,i,arr)=>{
-                        const det=nfDetails?.[c.id]?.[e.key]||{};
-                        return (
-                          <div key={e.key} style={{marginBottom:i<arr.length-1?14:0,paddingBottom:i<arr.length-1?14:0,borderBottom:i<arr.length-1?`1px solid ${LN}`:"none"}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                              <span style={{fontSize:11,fontWeight:600,color:TX}}>{e.label}</span>
-                              {e.amount>0&&<span style={{fontSize:11,fontWeight:700,color:TX}}>{fmtMoney(e.amount,e.currency)}</span>}
-                            </div>
-                            <div onClick={()=>toggleNF(c.id,e.key)}
-                              style={{width:"100%",textAlign:"center",padding:"5px 0",fontSize:9,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",cursor:"pointer",borderRadius:4,background:e.isEmitted?`${GRN}18`:"rgba(255,255,255,.04)",border:`1px solid ${e.isEmitted?GRN+"44":LN}`,color:e.isEmitted?GRN:TX2,marginBottom:8}}>
-                              {e.isEmitted?"✓ Emitida":"Não emitida"}
-                            </div>
-                            <div style={{marginBottom:6}}>
-                              <div style={{fontSize:9,color:TX3,marginBottom:3}}>Número NF</div>
-                              <input style={{width:"100%",padding:"5px 8px",background:B2,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontSize:11,fontFamily:"inherit",outline:"none"}} placeholder="Ex: 1234" value={det.number||""} onChange={ev=>saveNfd(c.id,e.key,"number",ev.target.value)} onClick={ev=>ev.stopPropagation()}/>
-                            </div>
-                            <div>
-                              <div style={{fontSize:9,color:TX3,marginBottom:3}}>Data de Emissão</div>
-                              <input type="date" style={{width:"100%",padding:"5px 8px",background:B2,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontSize:11,fontFamily:"inherit",outline:"none"}} value={det.date||""} onChange={ev=>saveNfd(c.id,e.key,"date",ev.target.value)} onClick={ev=>ev.stopPropagation()}/>
-                            </div>
-                            {Number(c.paymentDaysAfterNF)>0&&det.date&&(
-                              <div style={{marginTop:6,padding:"6px 8px",background:`${GRN}10`,border:`1px solid ${GRN}30`,borderRadius:4}}>
-                                <div style={{fontSize:9,color:GRN,fontWeight:700,marginBottom:2}}>Pgto previsto</div>
-                                <div style={{fontSize:11,color:GRN,fontWeight:700}}>{(()=>{const d=new Date(det.date);d.setDate(d.getDate()+Number(c.paymentDaysAfterNF));return fmtDate(d.toISOString().substr(0,10));})()}</div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {c.tot > 0 && <span style={{ fontSize: 11, color: TX2 }}>{c.don}/{c.tot}</span>}
+                      {c.dl != null && <span style={{ fontSize: 10, fontWeight: 700, color: dlColor(c.dl) }}>{c.dl}d</span>}
                     </div>
                   </div>
+                  {c.tot > 0 && (
+                    <div style={{ height: 4, background: LN, borderRadius: 2 }}>
+                      <div style={{ height: 4, borderRadius: 2, background: c.pct === 100 ? GRN : c.color, width: `${c.pct}%`, transition: "width 0.6s ease" }} />
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          );
-        })}
+          </div>
+
+          {/* Upcoming payments */}
+          <div style={{ ...G, padding: "18px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX2 }}>Pagamentos · Próx. 30 dias</div>
+            </div>
+            {upcomingPayments.length === 0 ? (
+              <div style={{ fontSize: 12, color: TX3, fontStyle: "italic", textAlign: "center", padding: "12px 0" }}>Nenhum pagamento nos próximos 30 dias</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {upcomingPayments.slice(0, 5).map((p, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, background: B2, transition: TRANS }}
+                    onMouseEnter={e => e.currentTarget.style.background = B3}
+                    onMouseLeave={e => e.currentTarget.style.background = B2}>
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: TX }}>{p.company}</div>
+                      <div style={{ fontSize: 10, color: TX2 }}>{fmtDate(p.date)}</div>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmtMoney(p.value, p.currency)}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: dlColor(daysLeft(p.date)) }}>{daysLeft(p.date)}d</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
     </div>
   );
 }
-
 
 // ─── Tarefas ──────────────────────────────────────────────
 function TaskCard({ task, contracts, onEdit, onStatusChange, isDragOver }) {
@@ -1636,7 +1669,7 @@ a{color:${RED}}
             onNewTask={()=>setTriggerNewTask(true)}
             syncStatus={syncStatus}/>
           <div style={{ flex:1, overflowY:"auto" }}>
-            {view==="dashboard"      && <Dashboard contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal}/>}
+            {view==="dashboard"      && <Dashboard contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>}
             {view==="acompanhamento" && <Acompanhamento contracts={contracts} posts={posts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>}
             {view==="contratos"      && <Contratos contracts={contracts} posts={posts} saveC={saveC} setModal={setModal} toggleComm={toggleComm} saveNote={saveNote} rates={rates}/>}
             {view==="tarefas"        && <Tarefas contracts={contracts} externalNewTask={triggerNewTask} onExternalNewTaskHandled={()=>setTriggerNewTask(false)} navigateTo={setView}/>}

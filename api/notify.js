@@ -160,7 +160,7 @@ async function sendWhatsApp(message) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Client-Token": process.env.ZAPI_CLIENT_TOKEN || "",
+      ...(process.env.ZAPI_CLIENT_TOKEN ? { "Client-Token": process.env.ZAPI_CLIENT_TOKEN } : {}),
     },
     body: JSON.stringify({ phone: PHONE, message })
   })
@@ -178,14 +178,21 @@ export default async function handler(req, res) {
       firestoreList("deliverables"),
     ])
 
-    const message = await generateMessage(type, contracts, deliverables, posts)
+    let message, claudeError = null
+    try {
+      message = await generateMessage(type, contracts, deliverables, posts)
+    } catch(claudeErr) {
+      claudeError = String(claudeErr)
+      message = `Erro Claude: ${claudeError}`
+    }
     const zapiRes = await sendWhatsApp(message)
 
     res.status(200).json({
       ok: true,
       type,
       stats: { contracts: contracts.length, posts: posts.length, deliverables: deliverables.length },
-      preview: message.substr(0, 200),
+      preview: message.substr(0, 300),
+      claudeError,
       zapi: zapiRes,
     })
   } catch (err) {

@@ -139,6 +139,17 @@ function currBadge(cur) {
 function lsLoad(k, fb) { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):fb; } catch { return fb; } }
 function lsSave(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
+// ─── Mobile detection ─────────────────────────────────────
+function useIsMobile() {
+  const [mob, setMob] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const fn = () => setMob(window.innerWidth < 768);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return mob;
+}
+
 // ─── Seed data ────────────────────────────────────────────
 const SEED = [
   { id:"c0",company:"Netshoes",cnpj:"07.187.493/0001-07",color:"#B45309",contractValue:0,monthlyValue:30000,contractStart:"2026-06-01",currency:"BRL",contractDeadline:"2026-08-31",paymentType:"monthly",paymentDeadline:"",parc1Value:0,parc1Deadline:"",parc2Value:0,parc2Deadline:"",hasCommission:true,commPaid:{},nfEmitted:{},paymentDaysAfterNF:0,numPosts:4,numStories:8,numCommunityLinks:2,numReposts:1,notes:"Embaixador chuteiras · R$30k/mês · jun–ago",installments:[] },
@@ -319,9 +330,9 @@ function InlineNotes({ notes, onSave }) {
 // ─── Modal shell ──────────────────────────────────────────
 function Modal({ title, onClose, children, footer, width=640 }) {
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.7)", zIndex:200, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"48px 16px", overflowY:"auto", backdropFilter:"blur(4px)" }}
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.7)", zIndex:200, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:window.innerWidth<768?"8px":"48px 16px", overflowY:"auto", backdropFilter:"blur(4px)" }}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{ ...G2, width:"100%", maxWidth:width, flexShrink:0 }}>
+      <div style={{ ...G2, width:"100%", maxWidth:window.innerWidth<768?"100%":width, flexShrink:0 }}>
         <div style={{ padding:"16px 20px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <span style={{ fontSize:11, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", color:TX }}>{title}</span>
           <button onClick={onClose} style={{ background:"none", border:"none", color:TX2, cursor:"pointer", padding:4 }}><X size={16}/></button>
@@ -369,7 +380,7 @@ function LoginPage() {
       </div>
 
       {/* Card */}
-      <div style={{ background:"#FEFEFE", border:"1px solid #F0F0F2", borderRadius:16, width:"100%", maxWidth:380, padding:36, position:"relative", boxShadow:"0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.04)" }}>
+      <div style={{ background:"#FEFEFE", border:"1px solid #F0F0F2", borderRadius:16, width:"100%", maxWidth:380, padding:window.innerWidth<768?20:36, margin:window.innerWidth<768?"0 12px":"0", position:"relative", boxShadow:"0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.04)" }}>
         <h2 style={{ fontSize:18, fontWeight:700, color:TX, marginBottom:6, letterSpacing:"-.01em" }}>Entrar na plataforma</h2>
         <p style={{ fontSize:12, color:TX2, marginBottom:24 }}>Acesso restrito à equipe Ranked</p>
 
@@ -468,7 +479,7 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
   );
 }
 
-function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract, onNewPost, onNewTask, syncStatus }) {
+function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract, onNewPost, onNewTask, syncStatus, isMobile }) {
   const title = NAV_ITEMS.find(i=>i.id===view)?.label || view;
   const statusColor = { loading:AMB, ok:GRN, error:RED }[syncStatus]||GRN;
   const statusLabel = { loading:"Sincronizando", ok:"Ao Vivo", error:"Offline" }[syncStatus]||"Ao Vivo";
@@ -477,7 +488,7 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
       <div style={{ fontSize:13, fontWeight:700, color:TX, letterSpacing:"-.01em" }}>{title}</div>
       <div style={{ flex:1 }}/>
       {/* EUR */}
-      <div style={{ display:"flex", alignItems:"center", gap:4, background:B2, border:`1px solid ${LN}`, borderRadius:6, padding:"3px 8px" }}>
+      <div style={{ display:isMobile?"none":"flex", alignItems:"center", gap:4, background:B2, border:`1px solid ${LN}`, borderRadius:6, padding:"3px 8px" }}>
         <span style={{ fontSize:9, fontWeight:700, color:TX3 }}>€1=</span>
         <input type="number" step="0.05" value={eurRate||""} placeholder="—"
           onChange={e=>setEurRate(Number(e.target.value)||0)}
@@ -486,7 +497,7 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
         <span style={{ fontSize:9, fontWeight:700, color:TX3 }}>R$</span>
       </div>
       {/* USD */}
-      <div style={{ display:"flex", alignItems:"center", gap:4, background:B2, border:`1px solid ${LN}`, borderRadius:6, padding:"3px 8px" }}>
+      <div style={{ display:isMobile?"none":"flex", alignItems:"center", gap:4, background:B2, border:`1px solid ${LN}`, borderRadius:6, padding:"3px 8px" }}>
         <span style={{ fontSize:9, fontWeight:700, color:TX3 }}>$1=</span>
         <input type="number" step="0.05" value={usdRate||""} placeholder="—"
           onChange={e=>setUsdRate(Number(e.target.value)||0)}
@@ -772,7 +783,7 @@ Responda APENAS com o JSON, sem markdown.`
       )}
 
       {/* KPIs - delivery focused */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:12, marginBottom:20 }}>
+      <div className="mob-col2" style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:12, marginBottom:20 }}>
         {[
           { label:"Volume Total Ano", value:fmtMoney(stats.totalBRL), sub:`${contracts.length} contratos` },
           { label:"Entregáveis ativos", value:allDeliverables.filter(d=>d.stage!=="done").length, sub:`${allDeliverables.filter(d=>d.stage==="done").length} concluídos` },
@@ -1321,8 +1332,8 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
       {/* Pipeline view */}
       {view === "pipeline" && (
-        <div style={{ overflowX: "auto", paddingBottom: 8 }}>
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${STAGES.length}, minmax(170px, 1fr))`, gap: 8, minWidth: 1300 }}>
+        <div style={{ overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling:"touch" }}>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${STAGES.length}, minmax(160px, 1fr))`, gap: 8, minWidth: 1200 }}>
             {STAGES.map(stage => (
               <PipelineColumn
                 key={stage.id}
@@ -1746,7 +1757,7 @@ Responda APENAS com o JSON.` }]
 
   return (
     <>
-    <div style={{ padding: 24, maxWidth: 1100 }}>
+    <div style={{ padding: window.innerWidth<768?12:24, maxWidth: 1100 }}>
       {/* Back + header */}
       <div style={{ display:"flex", alignItems:"flex-start", gap:16, marginBottom:24 }}>
         <button onClick={onBack} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"6px 12px", cursor:"pointer", fontSize:11, color:TX2, display:"flex", alignItems:"center", gap:6, transition:TRANS, flexShrink:0 }}
@@ -2069,8 +2080,8 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
   );
 
   return (
-    <div style={{ padding:24, maxWidth:1400 }}>
-      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+    <div style={{ padding:window.innerWidth<768?12:24, maxWidth:1400 }}>
+      <div className="mob-scroll" style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
         <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
           {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links"].map((h,i)=>(
             <div key={i} style={{ padding:"0 12px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
@@ -2604,9 +2615,11 @@ function ClientReport({ contract: c, posts, deliverables, rates, onClose }) {
   const CPE  = totalEngagements > 0 ? (contractBRL / totalEngagements) : null;
   const CPR  = totalReach > 0   ? (contractBRL / totalReach * 1000) : null; // Cost per thousand reach
 
-  const doneDels   = cDels.filter(d => d.stage === "done").length;
+  const doneDelsFromPipeline = cDels.filter(d => d.stage === "done" || d.stage === "postagem").length;
+  const doneDelsFromPosts    = cPosts.filter(p => p.isPosted).length;
+  const doneDels   = doneDelsFromPipeline + doneDelsFromPosts;
   const totalDels  = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
-  const completionRate = totalDels > 0 ? Math.round(doneDels / totalDels * 100) : 0;
+  const completionRate = totalDels > 0 ? Math.round(Math.min(100, doneDels / totalDels * 100)) : (doneDels > 0 ? 100 : 0);
 
   const today = new Date().toLocaleDateString("pt-BR", {day:"numeric",month:"long",year:"numeric"});
 
@@ -2689,17 +2702,20 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         {/* ROI KPIs */}
         <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Custo por Resultado (ROI)</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
-          <MetricCard label="CPM" value={CPM!=null?fmtMoney(CPM):"—"} sub="custo por mil views" color={CPM!=null&&CPM<50?GRN:AMB}/>
+          <MetricCard label="CPM" value={CPM!=null?`R$ ${CPM.toFixed(2)}`:"—"} sub="custo por mil views" color={CPM!=null&&CPM<50?GRN:AMB}/>
           <MetricCard label="CPV" value={CPV!=null?`R$ ${CPV.toFixed(4)}`:"—"} sub="custo por visualização"/>
-          <MetricCard label="CPE" value={CPE!=null?fmtMoney(CPE):"—"} sub="custo por engajamento" color={CPE!=null&&CPE<20?GRN:AMB}/>
-          <MetricCard label="CPM Alcance" value={CPR!=null?fmtMoney(CPR):"—"} sub="custo por mil alcançados"/>
+          <MetricCard label="CPE" value={CPE!=null?`R$ ${CPE.toFixed(2)}`:"—"} sub="custo por engajamento" color={CPE!=null&&CPE<20?GRN:AMB}/>
+          <MetricCard label="CPM Alcance" value={CPR!=null?`R$ ${CPR.toFixed(2)}`:"—"} sub="custo por mil alcançados"/>
         </div>
 
         {/* Delivery */}
         <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Entregas do Contrato</div>
         <div style={{...G,padding:"14px 16px",marginBottom:20}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <span style={{fontSize:12,color:TX2}}>{doneDels} de {totalDels} entregas concluídas</span>
+            <span style={{fontSize:12,color:TX2}}>
+            {doneDels} de {totalDels} entregas concluídas
+            {doneDelsFromPosts>0&&<span style={{fontSize:10,color:TX3,marginLeft:6}}>({doneDelsFromPosts} via Posts{doneDelsFromPipeline>0?`, ${doneDelsFromPipeline} via Pipeline`:""})</span>}
+          </span>
             <span style={{fontSize:13,fontWeight:700,color:completionRate===100?GRN:completionRate>=50?AMB:RED}}>{completionRate}%</span>
           </div>
           <div style={{height:6,background:LN,borderRadius:3}}>
@@ -2809,8 +2825,36 @@ function UserInviteModal({ onClose }) {
 }
 
 
+// ─── Mobile Bottom Nav ────────────────────────────────────
+function MobileNav({ view, setView, onNew }) {
+  const NAV_MOB = [
+    { id:"dashboard",      label:"Home",      emoji:"🏠" },
+    { id:"acompanhamento", label:"Produção",  emoji:"📋" },
+    { id:"contratos",      label:"Contratos", emoji:"📄" },
+    { id:"posts",          label:"Posts",     emoji:"📱" },
+    { id:"calendario",     label:"Agenda",    emoji:"📅" },
+  ];
+  return (
+    <div style={{ position:"fixed", bottom:0, left:0, right:0, height:60, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"center", zIndex:100, boxShadow:"0 -2px 12px rgba(0,0,0,0.08)" }}>
+      {NAV_MOB.map(item => {
+        const active = view === item.id;
+        return (
+          <div key={item.id} onClick={()=>setView(item.id)}
+            style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2, cursor:"pointer", padding:"8px 0" }}>
+            <span style={{ fontSize:20, lineHeight:1 }}>{item.emoji}</span>
+            <span style={{ fontSize:9, fontWeight:active?700:400, color:active?RED:TX3, letterSpacing:".02em" }}>{item.label}</span>
+            {active && <div style={{ position:"absolute", bottom:0, width:24, height:2, background:RED, borderRadius:1 }}/>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
 // ─── App Root ─────────────────────────────────────────────
 export default function App() {
+  const isMobile = useIsMobile();
   const [user, setUser]     = useState(undefined); // undefined=loading
   const [view, setView]     = useState("dashboard");
   const [contracts, setC]   = useState([]);
@@ -2993,14 +3037,14 @@ a{color:${RED}}
 .hover-lift:hover{transform:translateY(-1px)!important;box-shadow:0 4px 12px rgba(0,0,0,0.08),0 1px 3px rgba(0,0,0,0.06)!important}
 .hover-row:hover{background:#F7F7F7!important}
 `}</style>
-        <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts}/>
+        {!isMobile && <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <TopBar view={view} eurRate={eurRate} usdRate={usdRate} setEurRate={setEurRate} setUsdRate={setUsdRate}
             onNewContract={()=>setModal({type:"contract",data:null})}
             onNewPost={()=>setModal({type:"post",data:null})}
             onNewTask={()=>setTriggerNewTask(true)}
-            syncStatus={syncStatus}/>
-          <div style={{ flex:1, overflowY:"auto" }}>
+            syncStatus={syncStatus} isMobile={isMobile}/>
+          <div style={{ flex:1, overflowY:"auto", paddingBottom:window.innerWidth<768?60:0 }}>
             <ViewRenderer view={view} contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates}
               saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid}
               toggleNF={toggleNF} setModal={setModal} setView={setView}
@@ -3017,6 +3061,11 @@ a{color:${RED}}
           </div>
         )}
         {showInvite && <UserInviteModal onClose={()=>setShowInvite(false)}/>}
+        {isMobile && <MobileNav view={view} setView={setView} onNew={()=>{
+          if(view==="contratos") setModal({type:"contract",data:null});
+          else if(view==="posts") setModal({type:"post",data:null});
+          else if(view==="acompanhamento") setView("acompanhamento");
+        }}/>}
       </div>
     </ToastProvider>
   );

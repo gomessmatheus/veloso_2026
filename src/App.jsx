@@ -1780,6 +1780,43 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
           <Field key={k} label={l}><Input type="number" min="0" value={f[k]} onChange={e=>set(k,e.target.value)}/></Field>
         ))}
       </div>
+
+      <SRule>Viagem</SRule>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <Toggle on={!!f.hasTravel} onToggle={()=>set("hasTravel",!f.hasTravel)}/>
+        <span style={{fontSize:12,fontWeight:600,color:f.hasTravel?TX:TX2}}>Contrato exige viagem</span>
+      </div>
+      {f.hasTravel && (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:8}}>
+            <Field label="Destino"><Input value={f.travelDestination||""} onChange={e=>set("travelDestination",e.target.value)} placeholder="ex: Miami, EUA"/></Field>
+            <Field label="Valor diária (R$)"><Input type="number" min="0" value={f.travelDailyRate||""} onChange={e=>set("travelDailyRate",e.target.value)} placeholder="0"/></Field>
+            <Field label="Nº de diárias"><Input type="number" min="0" value={f.travelDays||""} onChange={e=>set("travelDays",e.target.value)} placeholder="0"/></Field>
+          </div>
+          {/* Travel dates */}
+          <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:6}}>Datas de viagem</div>
+          {(f.travelDates||[]).map((td,i)=>(
+            <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 32px",gap:8,alignItems:"end"}}>
+              <Field label={`Dia ${i+1}`}><Input type="date" value={td.date||""} onChange={e=>{const d=[...(f.travelDates||[])];d[i]={...d[i],date:e.target.value};set("travelDates",d);}}/></Field>
+              <Field label="Tipo"><select value={td.type||"travel"} onChange={e=>{const d=[...(f.travelDates||[])];d[i]={...d[i],type:e.target.value};set("travelDates",d);}} style={{width:"100%",padding:"8px 12px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontSize:12,fontFamily:"inherit",outline:"none"}}>
+                <option value="travel">✈️ Viagem</option>
+                <option value="recording">🎥 Gravação</option>
+                <option value="event">🎯 Evento</option>
+                <option value="return">🏠 Retorno</option>
+              </select></Field>
+              <Field label="Obs."><Input value={td.note||""} onChange={e=>{const d=[...(f.travelDates||[])];d[i]={...d[i],note:e.target.value};set("travelDates",d);}} placeholder="opcional"/></Field>
+              <button onClick={()=>set("travelDates",(f.travelDates||[]).filter((_,j)=>j!==i))} style={{padding:"8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:RED,cursor:"pointer",alignSelf:"flex-end"}}>×</button>
+            </div>
+          ))}
+          <Btn onClick={()=>set("travelDates",[...(f.travelDates||[]),{date:"",type:"travel",note:""}])} variant="ghost" size="sm" icon={Plus}>Adicionar data</Btn>
+          {Number(f.travelDays)>0&&Number(f.travelDailyRate)>0&&(
+            <div style={{marginTop:8,padding:"10px 14px",background:`${BLU}10`,border:`1px solid ${BLU}30`,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:12,color:TX2}}>Total diárias</span>
+              <span style={{fontSize:14,fontWeight:700,color:BLU}}>{fmtMoney(Number(f.travelDays)*Number(f.travelDailyRate))}</span>
+            </div>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }
@@ -1847,8 +1884,8 @@ function PostModal({ modal, setModal, contracts, posts, saveP, toast }) {
 
 
 // ─── View Renderer (catches per-view errors) ──────────────
-function ViewRenderer({ view, contracts, posts, stats, rates, saveNote, toggleComm,
-  toggleCommPaid, toggleNF, setModal, setView, saveC, saveP,
+function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, saveNote, toggleComm,
+  toggleCommPaid, toggleNF, setModal, setView, saveC, saveP, saveD,
   calEvents, calMonth, setCal, calFilter, setCalF,
   triggerNewTask, setTriggerNewTask }) {
   const [err, setErr] = useState(null);
@@ -1975,6 +2012,16 @@ export default function App() {
     });
     posts.forEach(p=>{const c=contracts.find(x=>x.id===p.contractId);if(!c)return;if(calFilter!=="all"&&calFilter!==c.id)return;add(p.isPosted?(p.publishDate||p.plannedDate):p.plannedDate,{label:(p.isPosted?"":"📅 ")+p.title,color:c.color});});
     try{const cronos=JSON.parse(localStorage.getItem("copa6_cron")||"{}");Object.entries(cronos).forEach(([cid,ms])=>{const c=contracts.find(x=>x.id===cid);if(!c)return;if(calFilter!=="all"&&calFilter!==c.id)return;(ms||[]).forEach(m=>{if(m.date&&m.fase)add(m.date,{label:`${m.fase}${m.resp?` · ${m.resp}`:""}`,color:c.color,dashed:true});});});}catch{}
+    // Travel dates
+    contracts.forEach(c => {
+      if (!c.hasTravel||!c.travelDates) return;
+      if (calFilter!=="all"&&calFilter!==c.id) return;
+      const TYPE_EMOJI = {travel:"✈️",recording:"🎥",event:"🎯",return:"🏠"};
+      (c.travelDates||[]).forEach(td => {
+        if (!td.date) return;
+        add(td.date, { label:`${TYPE_EMOJI[td.type]||"✈️"} ${c.company}${td.note?` · ${td.note}`:""}`, color:BLU, dashed:false });
+      });
+    });
     return ev;
   },[contracts,posts,calFilter]);
 
@@ -2019,10 +2066,10 @@ a{color:${RED}}
             onNewTask={()=>setTriggerNewTask(true)}
             syncStatus={syncStatus}/>
           <div style={{ flex:1, overflowY:"auto" }}>
-            <ViewRenderer view={view} contracts={contracts} posts={posts} stats={stats} rates={rates}
+            <ViewRenderer view={view} contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates}
               saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid}
               toggleNF={toggleNF} setModal={setModal} setView={setView}
-              saveC={saveC} saveP={saveP}
+              saveC={saveC} saveP={saveP} saveD={saveD}
               calEvents={calEvents} calMonth={calMonth} setCal={setCal}
               calFilter={calFilter} setCalF={setCalF}
               triggerNewTask={triggerNewTask} setTriggerNewTask={setTriggerNewTask}/>

@@ -3,6 +3,7 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebas
 import { auth } from "./firebase.js";
 import {
   loadContracts, syncContracts, loadPosts, syncPosts,
+  loadDeliverables, syncDeliverables,
   getSetting, setSetting, subscribeToChanges,
   updatePresence, removePresence, subscribeToPresence, getMyPresence,
 } from "./db.js";
@@ -359,13 +360,13 @@ function LoginPage() {
         <div style={{ fontSize:13, fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:TX }}>
           COPA<span style={{color:RED}}>2026</span>·OPS
         </div>
-        <div style={{ fontSize:12, color:TX2, marginTop:6, letterSpacing:".04em" }}>Gestão de contratos e entregas · Stand Produções</div>
+        <div style={{ fontSize:12, color:TX2, marginTop:6, letterSpacing:".04em" }}>Gestão de contratos e entregas · Ranked</div>
       </div>
 
       {/* Card */}
       <div style={{ background:"#FEFEFE", border:"1px solid #F0F0F2", borderRadius:16, width:"100%", maxWidth:380, padding:36, position:"relative", boxShadow:"0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.04)" }}>
         <h2 style={{ fontSize:18, fontWeight:700, color:TX, marginBottom:6, letterSpacing:"-.01em" }}>Entrar na plataforma</h2>
-        <p style={{ fontSize:12, color:TX2, marginBottom:24 }}>Acesso restrito à equipe Stand Produções</p>
+        <p style={{ fontSize:12, color:TX2, marginBottom:24 }}>Acesso restrito à equipe Ranked</p>
 
         <form onSubmit={handleLogin} style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <Field label="Email">
@@ -408,7 +409,7 @@ function Sidebar({ view, setView, user, onSignOut, onlineUsers, contracts }) {
         <div style={{ fontSize:11, fontWeight:700, letterSpacing:".18em", textTransform:"uppercase", color:TX }}>
           COPA<span style={{color:RED}}>2026</span>·OPS
         </div>
-        <div style={{ fontSize:10, color:TX3, marginTop:3, letterSpacing:".03em" }}>Stand Produções</div>
+        <div style={{ fontSize:10, color:TX3, marginTop:3, letterSpacing:".03em" }}>Ranked</div>
       </div>
 
       {/* Nav */}
@@ -564,202 +565,316 @@ function StatTile({ label, value, sub, trend }) {
   );
 }
 
-function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo }) {
+function DashKpi({ label, value, sub, accent }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ ...(hov?GHV:G), padding:"16px 18px", transition:TRANS }}>
+      <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>{label}</div>
+      <div style={{ fontSize:20,fontWeight:700,color:accent||TX,lineHeight:1 }}>{value}</div>
+      {sub && <div style={{ fontSize:11,color:TX2,marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo }) {
   const today    = new Date();
   const todayStr = today.toISOString().substr(0, 10);
   const in7Str   = new Date(today.getTime() + 7 * 864e5).toISOString().substr(0, 10);
   const in30Str  = new Date(today.getTime() + 30 * 864e5).toISOString().substr(0, 10);
+  const [aiInsight, setAiInsight] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
-  // Read deliverables from localStorage for urgency check
-  const deliverables = useMemo(() => lsLoad("copa6_deliverables", []), []);
-  const lateDeliverables = useMemo(() => deliverables.filter(d => {
-    if (!d || d.stage === "done") return false;
-    const stageIdx = STAGE_IDS.indexOf(d.stage || "briefing");
-    if (stageIdx < 0 || !d.plannedPostDate) return false;
-    const currentStage = STAGES[stageIdx];
-    if (!currentStage) return false;
-    const dl2 = addDays(d.plannedPostDate, currentStage.days);
-    const dl = daysLeft(dl2);
-    return dl !== null && dl < 0;
-  }), [deliverables]);
+  const allDeliverables = useMemo(() => dashDeliverables || [], [dashDeliverables]);
+  const lateDeliverables = useMemo(() => {
+    try { return allDeliverables.filter(d => {
+      if (!d || d.stage === "done") return false;
+      const stageIdx = STAGE_IDS.indexOf(d.stage || "briefing");
+      if (stageIdx < 0 || !d.plannedPostDate) return false;
+      const currentStage = STAGES[stageIdx];
+      if (!currentStage) return false;
+      const dl = daysLeft(addDays(d.plannedPostDate, currentStage.days));
+      return dl !== null && dl < 0;
+    }); } catch { return []; }
+  }, [allDeliverables]);
 
-  // ── Urgency signals ──
+  const upcomingDeliverables = useMemo(() => {
+    try { return allDeliverables
+      .filter(d => d && d.stage !== "done" && d.plannedPostDate)
+      .sort((a,b) => new Date(a.plannedPostDate) - new Date(b.plannedPostDate))
+      .slice(0, 6);
+    } catch { return []; }
+  }, [allDeliverables]);
+
+  // Conflict detection
+  const postDateCounts = {};
+  allDeliverables.forEach(d => { if (d?.plannedPostDate) postDateCounts[d.plannedPostDate] = (postDateCounts[d.plannedPostDate]||0)+1; });
+  const conflicts = Object.entries(postDateCounts).filter(([,c]) => c > 1);
+
+  // Urgency signals
   const urgency = [];
-
-  // Contracts expiring in 7 days
-  const expiringContracts = contracts.filter(c => c.contractDeadline && c.contractDeadline <= in7Str && c.contractDeadline >= todayStr);
-  if (expiringContracts.length) urgency.push({
-    type: "danger", key: "exp",
-    title: `${expiringContracts.length} contrato${expiringContracts.length > 1 ? "s" : ""} vence${expiringContracts.length > 1 ? "m" : ""} em 7 dias`,
-    sub: expiringContracts.map(c => c.company).join(", "),
-    action: "Ver contratos", onAction: () => navigateTo("contratos"),
+  if (lateDeliverables.length > 0) urgency.push({
+    type:"danger", key:"pipe",
+    title:`${lateDeliverables.length} entregável${lateDeliverables.length>1?"s":""} atrasado${lateDeliverables.length>1?"s":""}`,
+    sub: lateDeliverables.slice(0,3).map(d=>d.title).join(", "),
+    action:"Ver produção", onAction:()=>navigateTo("acompanhamento"),
   });
-
-  // Overdue NFs
-  const nfPendingList = contracts.filter(c => getNFEntries(c).some(e => !e.isEmitted));
-  if (nfPendingList.length) urgency.push({
-    type: nfPendingList.length >= 5 ? "danger" : "warning", key: "nf",
-    title: `${stats.nfPending} NF${stats.nfPending > 1 ? "s" : ""} pendente${stats.nfPending > 1 ? "s" : ""} de emissão`,
-    sub: nfPendingList.slice(0, 4).map(c => c.company).join(", ") + (nfPendingList.length > 4 ? ` +${nfPendingList.length - 4}` : ""),
-    value: fmtMoney(stats.nfPendingValue),
-    action: "Ver NFs", onAction: () => navigateTo("contratos"),
+  if (conflicts.length > 0) urgency.push({
+    type:"warning", key:"conflict",
+    title:`${conflicts.length} conflito${conflicts.length>1?"s":""} de postagem`,
+    sub: conflicts.map(([d])=>fmtDate(d)).join(", ") + " — 2+ publis no mesmo dia",
+    action:"Ajustar", onAction:()=>navigateTo("acompanhamento"),
   });
-
-  // Posts due this week
   const postsDue = posts.filter(p => !p.isPosted && p.plannedDate && p.plannedDate <= in7Str && p.plannedDate >= todayStr);
   if (postsDue.length) urgency.push({
-    type: "warning", key: "posts",
-    title: `${postsDue.length} post${postsDue.length > 1 ? "s" : ""} planejado${postsDue.length > 1 ? "s" : ""} esta semana`,
-    sub: postsDue.map(p => p.title).slice(0, 3).join(", "),
-    action: "Ver posts", onAction: () => navigateTo("posts"),
+    type:"warning", key:"posts",
+    title:`${postsDue.length} post${postsDue.length>1?"s":""} planejado${postsDue.length>1?"s":""} esta semana`,
+    sub: postsDue.map(p=>p.title).slice(0,3).join(", "),
+    action:"Ver posts", onAction:()=>navigateTo("posts"),
   });
-
-  // Commission pending
+  const nfPendingList = contracts.filter(c => getNFEntries(c).some(e => !e.isEmitted));
+  if (nfPendingList.length >= 3) urgency.push({
+    type:"info", key:"nf",
+    title:`${stats.nfPending} NFs pendentes · ${fmtMoney(stats.nfPendingValue)}`,
+    sub: nfPendingList.slice(0,3).map(c=>c.company).join(", "),
+    action:"Ver NFs", onAction:()=>navigateTo("contratos"),
+  });
   if (stats.commPendBRL > 0) urgency.push({
-    type: "info", key: "comm",
-    title: "Comissão a receber · Stand",
-    sub: "Pendente de recebimento",
-    value: fmtMoney(stats.commPendBRL),
-    action: "Ver comissões", onAction: () => navigateTo("contratos"),
+    type:"info", key:"comm",
+    title:"Comissão a receber · Ranked",
+    sub:"Pendente de recebimento",
+    value:fmtMoney(stats.commPendBRL),
+    action:"Ver comissões", onAction:()=>navigateTo("contratos"),
   });
+  if (urgency.length === 0) urgency.push({ type:"success", key:"ok", title:"Tudo em dia", sub:"Nenhuma ação urgente. Bom trabalho!" });
 
-  // Late deliverables
-  if (lateDeliverables.length > 0) urgency.push({
-    type: "danger", key: "pipe",
-    title: `${lateDeliverables.length} entregável${lateDeliverables.length > 1 ? "s" : ""} atrasado${lateDeliverables.length > 1 ? "s" : ""} no pipeline`,
-    sub: lateDeliverables.slice(0, 3).map(d => d.title).join(", "),
-    action: "Ver produção", onAction: () => navigateTo("acompanhamento"),
-  });
-
-  // All good
-  if (urgency.length === 0) urgency.push({
-    type: "success", key: "ok",
-    title: "Tudo em dia",
-    sub: "Nenhuma ação urgente no momento. Bom trabalho!",
-  });
-
-  // ── Delivery progress per contract ──
-  const contractProgress = contracts.map(c => {
-    const cp = posts.filter(p => p.contractId === c.id && p.type === "post").length;
-    const cs = posts.filter(p => p.contractId === c.id && p.type === "story").length;
-    const cl = posts.filter(p => p.contractId === c.id && p.type === "link").length;
-    const tot = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
-    const don = cp + cs + cl;
-    const dl  = daysLeft(c.contractDeadline);
-    return { ...c, tot, don, pct: tot ? Math.min(100, don / tot * 100) : 0, dl };
-  }).filter(c => c.tot > 0 || c.contractDeadline).sort((a, b) => (a.dl ?? 999) - (b.dl ?? 999));
-
-  // ── Upcoming payments ──
+  // Upcoming payments
   const upcomingPayments = [];
   contracts.forEach(c => {
-    if (c.paymentType === "single" && c.paymentDeadline && c.paymentDeadline <= in30Str) {
-      upcomingPayments.push({ company: c.company, color: c.color, date: c.paymentDeadline, value: contractTotal(c), currency: c.currency });
-    }
-    if (c.paymentType === "split") {
-      getInstallments(c).forEach((inst, i) => {
-        if (inst.date && inst.date <= in30Str && inst.date >= todayStr) {
-          const O = ["1ª","2ª","3ª","4ª","5ª","6ª"];
-          upcomingPayments.push({ company: `${c.company} · ${O[i]||`${i+1}ª`} parc.`, color: c.color, date: inst.date, value: inst.value, currency: c.currency });
-        }
-      });
-    }
+    if (c.paymentType==="single" && c.paymentDeadline && c.paymentDeadline<=in30Str && c.paymentDeadline>=todayStr)
+      upcomingPayments.push({company:c.company,color:c.color,date:c.paymentDeadline,value:contractTotal(c),currency:c.currency});
+    if (c.paymentType==="split") getInstallments(c).forEach((inst,i) => {
+      if (inst.date && inst.date<=in30Str && inst.date>=todayStr) {
+        const O=["1ª","2ª","3ª","4ª","5ª","6ª"];
+        upcomingPayments.push({company:`${c.company} · ${O[i]||`${i+1}ª`}`,color:c.color,date:inst.date,value:inst.value,currency:c.currency});
+      }
+    });
   });
-  upcomingPayments.sort((a, b) => new Date(a.date) - new Date(b.date));
+  upcomingPayments.sort((a,b) => new Date(a.date)-new Date(b.date));
+
+  // AI Analysis
+  const runAI = async () => {
+    setAiLoading(true); setAiInsight(null);
+    try {
+      const context = {
+        contracts: contracts.map(c => ({
+          company: c.company, value: contractTotal(c), currency: c.currency,
+          deadline: c.contractDeadline, numPosts: c.numPosts, numStories: c.numStories,
+        })),
+        deliverables: allDeliverables.map(d => ({
+          title: d.title, stage: d.stage, plannedPostDate: d.plannedPostDate,
+          isLate: lateDeliverables.some(l => l.id === d.id),
+        })),
+        posts: posts.map(p => ({ title: p.title, isPosted: p.isPosted, plannedDate: p.plannedDate })),
+        stats: { totalBRL: stats.totalBRL, commPendBRL: stats.commPendBRL, nfPending: stats.nfPending, avgEng: stats.avgEng },
+        lateCount: lateDeliverables.length,
+        conflictCount: conflicts.length,
+        today: todayStr,
+      };
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:1000,
+          messages:[{
+            role:"user",
+            content:`Você é o assistente operacional do influenciador Lucas Veloso (@veloso.lucas_) para a Copa do Mundo 2026. A Ranked é a agência gestora.
+
+Analise esses dados e retorne um JSON com: 
+{ "risks": ["risco 1", "risco 2", "risco 3"], "priorities": ["prioridade 1", "prioridade 2", "prioridade 3"], "insight": "uma frase direta sobre o momento atual", "score": número de 0-100 indicando saúde geral do projeto }
+
+Dados: ${JSON.stringify(context)}
+
+Responda APENAS com o JSON, sem markdown.`
+          }]
+        })
+      });
+      const data = await res.json();
+      const raw = data.content?.[0]?.text || "{}";
+      const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
+      setAiInsight(parsed);
+    } catch(e) { setAiInsight({ error: String(e) }); }
+    setAiLoading(false);
+  };
+
+  const scoreColor = aiInsight?.score >= 70 ? GRN : aiInsight?.score >= 40 ? AMB : RED;
+
+  const hour = today.getHours();
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 
   return (
-    <div style={{ padding: 24, maxWidth: 1400 }}>
-      {/* Greeting */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: TX, letterSpacing: "-.02em" }}>
-          {today.getHours() < 12 ? "Bom dia" : today.getHours() < 18 ? "Boa tarde" : "Boa noite"}, Matheus 👋
-        </h1>
-        <p style={{ fontSize: 12, color: TX2, marginTop: 4 }}>
-          {today.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })} · Copa do Mundo 2026
-        </p>
-      </div>
-
-      {/* KPI row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
-        <StatTile label="Volume Total" value={<span style={{ fontSize: 16 }}>{fmtMoney(stats.totalBRL)}</span>} sub={`${contracts.length} contratos ativos`} />
-        <StatTile label="A Receber" value={<span style={{ fontSize: 16, color: stats.commPendBRL > 0 ? AMB : GRN }}>{fmtMoney(stats.commPendBRL)}</span>} sub="comissão Stand pendente" />
-        <StatTile label="Entregas" value={<span>{stats.dp + stats.ds}<span style={{ fontSize: 14, color: TX2, fontWeight: 400 }}>/{stats.tp + stats.ts}</span></span>} sub={`posts + stories entregues`} />
-        <StatTile label="Engajamento" value={<span style={{ color: stats.avgEng != null ? (stats.avgEng >= 3 ? GRN : stats.avgEng >= 1 ? AMB : TX2) : TX2 }}>{stats.avgEng != null ? stats.avgEng.toFixed(2) + "%" : "—"}</span>} sub="média das publicações" />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-
-        {/* Left: Urgency alerts */}
+    <div style={{ padding:24, maxWidth:1400 }}>
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX2, marginBottom: 12 }}>
-            Ações & Urgências
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {urgency.map(u => (
-              <AlertCard key={u.key} type={u.type} title={u.title} sub={u.sub} value={u.value} action={u.action} onAction={u.onAction} />
-            ))}
-          </div>
+          <h1 style={{ fontSize:20, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{greeting}, Matheus 👋</h1>
+          <p style={{ fontSize:12, color:TX2, marginTop:4 }}>{today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · Copa do Mundo 2026</p>
         </div>
+        <Btn onClick={runAI} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
+          {aiLoading ? "Analisando…" : "Análise IA"}
+        </Btn>
+      </div>
 
-        {/* Right: two sub-panels */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-          {/* Delivery progress */}
-          <div style={{ ...G, padding: "18px 20px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX2 }}>Progresso de Entregas</div>
-              <button onClick={() => navigateTo("contratos")} style={{ fontSize: 10, color: TX2, background: "none", border: "none", cursor: "pointer", transition: TRANS }}
-                onMouseEnter={e => e.currentTarget.style.color = TX} onMouseLeave={e => e.currentTarget.style.color = TX2}>Ver todos →</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {contractProgress.slice(0, 6).map(c => (
-                <div key={c.id}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: c.color }} />
-                      <span style={{ fontSize: 12, fontWeight: 500, color: TX }}>{c.company}</span>
-                      {c.tot === 0 && <span style={{ fontSize: 9, color: TX3, fontStyle: "italic" }}>TBD</span>}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {c.tot > 0 && <span style={{ fontSize: 11, color: TX2 }}>{c.don}/{c.tot}</span>}
-                      {c.dl != null && <span style={{ fontSize: 10, fontWeight: 700, color: dlColor(c.dl) }}>{c.dl}d</span>}
-                    </div>
-                  </div>
-                  {c.tot > 0 && (
-                    <div style={{ height: 4, background: LN, borderRadius: 2 }}>
-                      <div style={{ height: 4, borderRadius: 2, background: c.pct === 100 ? GRN : c.color, width: `${c.pct}%`, transition: "width 0.6s ease" }} />
-                    </div>
-                  )}
+      {/* AI Insight Panel */}
+      {aiInsight && !aiInsight.error && (
+        <div style={{ ...G, padding:"18px 20px", marginBottom:20, borderLeft:`3px solid ${scoreColor}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:TX2, flex:1 }}>⚡ Análise IA · Copilot</div>
+            {aiInsight.score != null && (
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ fontSize:11, color:TX2 }}>Saúde do projeto</span>
+                <div style={{ background:B2, borderRadius:99, padding:"2px 12px", fontSize:13, fontWeight:700, color:scoreColor }}>
+                  {aiInsight.score}/100
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
-
-          {/* Upcoming payments */}
-          <div style={{ ...G, padding: "18px 20px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX2 }}>Pagamentos · Próx. 30 dias</div>
-            </div>
-            {upcomingPayments.length === 0 ? (
-              <div style={{ fontSize: 12, color: TX3, fontStyle: "italic", textAlign: "center", padding: "12px 0" }}>Nenhum pagamento nos próximos 30 dias</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {upcomingPayments.slice(0, 5).map((p, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, background: B2, transition: TRANS }}
-                    onMouseEnter={e => e.currentTarget.style.background = B3}
-                    onMouseLeave={e => e.currentTarget.style.background = B2}>
-                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: TX }}>{p.company}</div>
-                      <div style={{ fontSize: 10, color: TX2 }}>{fmtDate(p.date)}</div>
-                    </div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: TX }}>{fmtMoney(p.value, p.currency)}</div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: dlColor(daysLeft(p.date)) }}>{daysLeft(p.date)}d</div>
+          {aiInsight.insight && <p style={{ fontSize:13, color:TX, fontWeight:500, marginBottom:14, lineHeight:1.5 }}>"{aiInsight.insight}"</p>}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+            {aiInsight.risks?.length > 0 && (
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:RED, marginBottom:8 }}>🔴 Riscos</div>
+                {aiInsight.risks.map((r,i) => (
+                  <div key={i} style={{ fontSize:12, color:TX, padding:"5px 0", borderBottom:`1px solid ${LN}`, display:"flex", gap:8 }}>
+                    <span style={{ color:RED, flexShrink:0 }}>{i+1}.</span>{r}
+                  </div>
+                ))}
+              </div>
+            )}
+            {aiInsight.priorities?.length > 0 && (
+              <div>
+                <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:AMB, marginBottom:8 }}>🟡 Prioridades</div>
+                {aiInsight.priorities.map((p,i) => (
+                  <div key={i} style={{ fontSize:12, color:TX, padding:"5px 0", borderBottom:`1px solid ${LN}`, display:"flex", gap:8 }}>
+                    <span style={{ color:AMB, flexShrink:0 }}>{i+1}.</span>{p}
                   </div>
                 ))}
               </div>
             )}
           </div>
+        </div>
+      )}
+      {aiInsight?.error && (
+        <div style={{ ...G, padding:14, marginBottom:20, borderLeft:`3px solid ${RED}` }}>
+          <span style={{ fontSize:12, color:RED }}>Erro na análise: {aiInsight.error}</span>
+        </div>
+      )}
 
+      {/* KPIs - delivery focused */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12, marginBottom:20 }}>
+        {[
+          { label:"Entregáveis ativos", value:allDeliverables.filter(d=>d.stage!=="done").length, sub:`${allDeliverables.filter(d=>d.stage==="done").length} concluídos` },
+          { label:"Posts publicados", value:`${stats.dp}/${stats.tp}`, sub:`${stats.ds}/${stats.ts} stories` },
+          { label:"Atrasados", value:lateDeliverables.length, sub:"no pipeline", accent:lateDeliverables.length>0?RED:GRN },
+          { label:"Engajamento", value:stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—", sub:"média das publis", accent:stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2 },
+          { label:"Comissão Ranked", value:fmtMoney(stats.commPendBRL), sub:"pendente", accent:stats.commPendBRL>0?AMB:GRN },
+        ].map((k,i) => <DashKpi key={i} label={k.label} value={k.value} sub={k.sub} accent={k.accent}/>)}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+        {/* Left: Urgency + Pipeline */}
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          {/* Alerts */}
+          <div>
+            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Ações & Urgências</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {urgency.map(u => <AlertCard key={u.key} type={u.type} title={u.title} sub={u.sub} value={u.value} action={u.action} onAction={u.onAction}/>)}
+            </div>
+          </div>
+
+          {/* Upcoming deliverables */}
+          {upcomingDeliverables.length > 0 && (
+            <div style={{ ...G, padding:"16px 18px" }}>
+              <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
+                <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Próximas Postagens</div>
+                <button onClick={()=>navigateTo("acompanhamento")} style={{ fontSize:10,color:TX2,background:"none",border:"none",cursor:"pointer",transition:TRANS }} onMouseEnter={e=>e.currentTarget.style.color=TX} onMouseLeave={e=>e.currentTarget.style.color=TX2}>Gerenciar →</button>
+              </div>
+              {upcomingDeliverables.map((d,i) => {
+                const c = contracts.find(x=>x.id===d.contractId);
+                const dl = daysLeft(d.plannedPostDate);
+                const isLate = lateDeliverables.some(l=>l.id===d.id);
+                const currentStage = STAGES.find(s=>s.id===(d.stage||"briefing"));
+                return (
+                  <div key={d.id} onClick={()=>navigateTo("acompanhamento")}
+                    style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<upcomingDeliverables.length-1?`1px solid ${LN}`:"none",cursor:"pointer" }}>
+                    {c && <div style={{ width:7,height:7,borderRadius:"50%",background:c.color,flexShrink:0 }}/>}
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12,fontWeight:500,color:isLate?RED:TX }}>{d.title}</div>
+                      <div style={{ fontSize:10,color:TX2,marginTop:2 }}>{currentStage?.label} → postagem {fmtDate(d.plannedPostDate)}</div>
+                    </div>
+                    <div style={{ fontSize:11,fontWeight:700,color:dlColor(dl) }}>{dl!=null?(dl===0?"Hoje":`${dl}d`):""}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Payments + Delivery progress */}
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          {/* Delivery progress per contract */}
+          <div style={{ ...G, padding:"16px 18px" }}>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
+              <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Entregas por Contrato</div>
+              <button onClick={()=>navigateTo("contratos")} style={{ fontSize:10,color:TX2,background:"none",border:"none",cursor:"pointer",transition:TRANS }} onMouseEnter={e=>e.currentTarget.style.color=TX} onMouseLeave={e=>e.currentTarget.style.color=TX2}>Ver todos →</button>
+            </div>
+            {contracts.filter(c=>c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts>0).slice(0,7).map(c => {
+              const cp=posts.filter(p=>p.contractId===c.id&&p.type==="post").length;
+              const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
+              const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
+              const don=cp+cs;
+              const dl=daysLeft(c.contractDeadline);
+              const pct=tot?Math.min(100,don/tot*100):0;
+              return (
+                <div key={c.id} style={{ marginBottom:12 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+                      <div style={{ width:6,height:6,borderRadius:"50%",background:c.color }}/>
+                      <span style={{ fontSize:12,fontWeight:500,color:TX }}>{c.company}</span>
+                    </div>
+                    <div style={{ display:"flex",gap:10,alignItems:"center" }}>
+                      <span style={{ fontSize:11,color:TX2 }}>{don}/{tot}</span>
+                      {dl!=null&&<span style={{ fontSize:10,fontWeight:700,color:dlColor(dl) }}>{dl}d</span>}
+                    </div>
+                  </div>
+                  <div style={{ height:5,background:LN,borderRadius:3 }}>
+                    <div style={{ height:5,borderRadius:3,background:pct===100?GRN:c.color,width:`${pct}%`,transition:"width 0.6s ease" }}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Upcoming payments */}
+          <div style={{ ...G, padding:"16px 18px" }}>
+            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Pagamentos · 30 dias</div>
+            {upcomingPayments.length===0
+              ? <div style={{ fontSize:12,color:TX3,fontStyle:"italic",textAlign:"center",padding:"12px 0" }}>Nenhum nos próximos 30 dias</div>
+              : upcomingPayments.slice(0,4).map((p,i) => (
+                <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background:B2,marginBottom:6,transition:TRANS }}
+                  onMouseEnter={e=>e.currentTarget.style.background=B3} onMouseLeave={e=>e.currentTarget.style.background=B2}>
+                  <div style={{ width:6,height:6,borderRadius:"50%",background:p.color,flexShrink:0 }}/>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:12,fontWeight:500,color:TX }}>{p.company}</div>
+                    <div style={{ fontSize:10,color:TX2 }}>{fmtDate(p.date)}</div>
+                  </div>
+                  <div style={{ fontSize:12,fontWeight:700,color:TX }}>{fmtMoney(p.value,p.currency)}</div>
+                  <div style={{ fontSize:10,fontWeight:700,color:dlColor(daysLeft(p.date)) }}>{daysLeft(p.date)}d</div>
+                </div>
+              ))
+            }
+          </div>
         </div>
       </div>
     </div>
@@ -1137,15 +1252,15 @@ function PipelineColumn({ stage, items, contracts, onEdit, onDrop }) {
   );
 }
 
-function Acompanhamento({ contracts, posts, calEvents, calMonth, setCal, calFilter, setCalF }) {
-  const [deliverables, setDeliverables] = useState(() => lsLoad("copa6_deliverables", []));
+function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF }) {
+  const setDeliverables = saveDeliverables || (() => {});
   const [view, setView]   = useState("pipeline");
   const [editItem, setEditItem] = useState(null);
   const [newOpen, setNewOpen]   = useState(false);
   const [filter, setFilter]     = useState("all");
   const toast = useToast();
 
-  const save = list => { setDeliverables(list); lsSave("copa6_deliverables", list); };
+  const save = list => { setDeliverables(list); };
 
   const moveStage = (itemId, newStage) => {
     save(deliverables.map(d => d.id === itemId ? { ...d, stage: newStage } : d));
@@ -1748,8 +1863,8 @@ function ViewRenderer({ view, contracts, posts, stats, rates, saveNote, toggleCo
     </div>
   );
   try {
-    if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>;
-    if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
+    if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>;
+    if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} saveC={saveC} setModal={setModal} toggleComm={toggleComm} saveNote={saveNote} rates={rates}/>;
     if (view==="tarefas")        return <Tarefas contracts={contracts} externalNewTask={triggerNewTask} onExternalNewTaskHandled={()=>setTriggerNewTask(false)} navigateTo={setView}/>;
     if (view==="posts")          return <Posts contracts={contracts} posts={posts} saveP={saveP} setModal={setModal}/>;
@@ -1767,6 +1882,7 @@ export default function App() {
   const [view, setView]     = useState("dashboard");
   const [contracts, setC]   = useState([]);
   const [posts, setP]       = useState([]);
+  const [deliverables, setD] = useState([]);
   const [modal, setModal]   = useState(null);
   const [eurRate, setEurRate] = useState(0);
   const [usdRate, setUsdRate] = useState(0);
@@ -1775,7 +1891,7 @@ export default function App() {
   const [calMonth, setCal]  = useState(() => { const n=new Date(); return {y:n.getFullYear(),m:n.getMonth()}; });
   const [calFilter, setCalF] = useState("all");
   const [triggerNewTask, setTriggerNewTask] = useState(false);
-  const prevCIds = useRef([]); const prevPIds = useRef([]);
+  const prevCIds = useRef([]); const prevPIds = useRef([]); const prevDIds = useRef([]);
 
   // Auth listener
   useEffect(() => {
@@ -1790,10 +1906,10 @@ export default function App() {
     setSyncStatus("loading");
     (async()=>{
       try {
-        const [cs,ps,eur,usd]=await Promise.all([loadContracts(),loadPosts(),getSetting("eurRate"),getSetting("usdRate")]);
-        const ic=cs.length>0?cs:SEED; const ip=ps.length>0?ps:SEED_POSTS;
-        setC(ic); setP(ip);
-        prevCIds.current=ic.map(c=>c.id); prevPIds.current=ip.map(p=>p.id);
+        const [cs,ps,ds,eur,usd]=await Promise.all([loadContracts(),loadPosts(),loadDeliverables(),getSetting("eurRate"),getSetting("usdRate")]);
+        const ic=cs.length>0?cs:SEED; const ip=ps.length>0?ps:SEED_POSTS; const id=ds||[];
+        setC(ic); setP(ip); setD(id);
+        prevCIds.current=ic.map(c=>c.id); prevPIds.current=ip.map(p=>p.id); prevDIds.current=id.map(d=>d.id);
         if(eur) setEurRate(Number(eur)||0);
         if(usd) setUsdRate(Number(usd)||0);
         if(cs.length===0) await syncContracts(ic,[]);
@@ -1804,6 +1920,7 @@ export default function App() {
         unsub=subscribeToChanges({
           onContracts:cs=>{setC(cs);prevCIds.current=cs.map(c=>c.id);setSyncStatus("ok");},
           onPosts:ps=>{setP(ps);prevPIds.current=ps.map(p=>p.id);},
+          onDeliverables:ds=>{setD(ds);prevDIds.current=ds.map(d=>d.id);},
           onSetting:(key,val)=>{if(key==="eurRate")setEurRate(Number(val)||0);if(key==="usdRate")setUsdRate(Number(val)||0);},
         });
       } catch {}
@@ -1824,6 +1941,7 @@ export default function App() {
 
   const saveC=async d=>{setC(d);try{await syncContracts(d,prevCIds.current);prevCIds.current=d.map(c=>c.id);setSyncStatus("ok");}catch(e){console.error(e);setSyncStatus("error");}};
   const saveP=async d=>{setP(d);try{await syncPosts(d,prevPIds.current);prevPIds.current=d.map(p=>p.id);}catch(e){console.error(e);}};
+  const saveD=async d=>{setD(d);try{await syncDeliverables(d,prevDIds.current);prevDIds.current=d.map(x=>x.id);}catch(e){console.error(e);}};
   const rates=useMemo(()=>({eur:eurRate,usd:usdRate}),[eurRate,usdRate]);
   const saveNote=(id,notes)=>saveC(contracts.map(c=>c.id===id?{...c,notes}:c));
   const toggleComm=id=>saveC(contracts.map(c=>c.id===id?{...c,hasCommission:!c.hasCommission}:c));

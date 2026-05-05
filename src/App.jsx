@@ -350,7 +350,7 @@ function LoginPage() {
 // ─── App shell ────────────────────────────────────────────
 const NAV_ITEMS = [
   { id:"dashboard",      label:"Dashboard",       icon:LayoutDashboard },
-  { id:"acompanhamento", label:"Acompanhamento",  icon:KanbanSquare },
+  { id:"acompanhamento", label:"Produção",         icon:KanbanSquare },
   { id:"contratos",      label:"Contratos",        icon:FileText },
   { id:"tarefas",        label:"Tarefas",          icon:CheckSquare },
   { id:"posts",          label:"Posts",            icon:Video },
@@ -459,10 +459,10 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
         <span style={{ fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:statusColor }}>{statusLabel}</span>
       </div>
       {/* CTA */}
-      {view==="contratos"  && <Btn onClick={onNewContract} variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
-      {view==="posts"      && <Btn onClick={onNewPost}     variant="primary" size="sm" icon={Plus}>Post</Btn>}
-      {view==="tarefas"    && <Btn onClick={onNewTask}      variant="primary" size="sm" icon={Plus}>Tarefa</Btn>}
-      {view==="dashboard"  && <Btn onClick={onNewContract} variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
+      {view==="contratos"      && <Btn onClick={onNewContract}    variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
+      {view==="posts"          && <Btn onClick={onNewPost}        variant="primary" size="sm" icon={Plus}>Post</Btn>}
+      {view==="tarefas"        && <Btn onClick={onNewTask}         variant="primary" size="sm" icon={Plus}>Tarefa</Btn>}
+      {view==="dashboard"      && <Btn onClick={onNewContract}    variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
     </div>
   );
 }
@@ -566,6 +566,14 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
     sub: `${getCommEntries.length} pagamentos pendentes`,
     value: fmtMoney(stats.commPendBRL),
     action: "Ver comissões", onAction: () => navigateTo("contratos"),
+  });
+
+  // Late deliverables
+  if (lateDeliverables.length > 0) urgency.push({
+    type: "danger", key: "pipe",
+    title: `${lateDeliverables.length} entregável${lateDeliverables.length > 1 ? "s" : ""} atrasado${lateDeliverables.length > 1 ? "s" : ""} no pipeline`,
+    sub: lateDeliverables.slice(0, 3).map(d => d.title).join(", "),
+    action: "Ver produção", onAction: () => navigateTo("acompanhamento"),
   });
 
   // All good
@@ -986,167 +994,339 @@ function TaskModal({ task, contracts, onClose, onSave, onDelete, navigateTo }) {
   );
 }
 
-// ─── Acompanhamento (Kanban de entregas) ──────────────────
-function Acompanhamento({ contracts, posts, calEvents, calMonth, setCal, calFilter, setCalF }) {
-  const [view, setView] = useState("kanban"); // kanban | calendar | priorities
-  const today = new Date(); const todayStr = today.toISOString().substr(0,10);
-  const in7 = new Date(today.getTime()+7*864e5).toISOString().substr(0,10);
+// ─── Pipeline constants ───────────────────────────────────
+const STAGES = [
+  { id:"briefing",    label:"Briefing",       days:-9, resp:"Marca → Matheus" },
+  { id:"roteiro",     label:"Roteiro",         days:-7, resp:"Lucas"           },
+  { id:"ap_roteiro",  label:"Ap. Roteiro",     days:-5, resp:"Marca"           },
+  { id:"gravacao",    label:"Gravação",         days:-4, resp:"Lucas"           },
+  { id:"edicao",      label:"Edição",           days:-3, resp:"Leandro"         },
+  { id:"ap_final",    label:"Ap. Final",        days:-1, resp:"Marca"           },
+  { id:"postagem",    label:"Postagem",         days:0,  resp:"Lucas"           },
+  { id:"done",        label:"✓ Entregue",       days:0,  resp:""               },
+];
+const STAGE_IDS = STAGES.map(s => s.id);
 
-  // Posts kanban: planned → in_review → published
-  const planned   = posts.filter(p=>!p.isPosted);
-  const published = posts.filter(p=>p.isPosted);
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().substr(0, 10);
+}
 
-  // Contract delivery priorities
-  const priorities = contracts.map(c => {
-    const cp=posts.filter(p=>p.contractId===c.id&&p.type==="post").length;
-    const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
-    const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
-    const don=cp+cs;
-    const dl=daysLeft(c.contractDeadline);
-    return { ...c, dl, tot, don, pct:tot?Math.min(100,don/tot*100):0 };
-  }).filter(c=>c.contractDeadline).sort((a,b)=>(a.dl||999)-(b.dl||999));
+function calcStageDates(postDate) {
+  if (!postDate) return {};
+  const dates = {};
+  STAGES.forEach(s => {
+    dates[s.id] = addDays(postDate, s.days);
+  });
+  return dates;
+}
 
-  const todayEvents = Object.entries(calEvents).filter(([ds])=>ds===todayStr).flatMap(([,evs])=>evs);
-  const weekEvents  = Object.entries(calEvents).filter(([ds])=>ds>=todayStr&&ds<=in7).flatMap(([,evs])=>evs);
+function stageDeadline(deliverable, stageId) {
+  if (deliverable.stageDateOverrides?.[stageId]) return deliverable.stageDateOverrides[stageId];
+  if (deliverable.plannedPostDate) return addDays(deliverable.plannedPostDate, STAGES.find(s=>s.id===stageId)?.days || 0);
+  return null;
+}
+
+// ─── Acompanhamento (Pipeline de Produção) ────────────────
+function DeliverableCard({ item, contracts, onEdit, stageId }) {
+  const [hov, setHov] = useState(false);
+  const contract = contracts.find(c => c.id === item.contractId);
+  const dl = stageDeadline(item, stageId);
+  const daysUntil = dl ? daysLeft(dl) : null;
+  const TYPE_LABEL = { reel:"Reel", story:"Story", link:"Link", tiktok:"TikTok", post:"Reel" };
+  const isLate = daysUntil !== null && daysUntil < 0;
+  const isUrgent = daysUntil !== null && daysUntil >= 0 && daysUntil <= 1;
 
   return (
-    <div style={{ padding:24, maxWidth:1400 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
-        <h2 style={{ fontSize:14, fontWeight:700, color:TX, flex:1 }}>Acompanhamento</h2>
-        <div style={{ display:"flex", background:B2, border:`1px solid ${LN}`, borderRadius:6, overflow:"hidden" }}>
-          {[["kanban","Kanban"],["priorities","Prioridades"],["calendar","Calendário"]].map(([v,l]) => (
-            <div key={v} onClick={()=>setView(v)}
-              style={{ padding:"5px 12px", fontSize:10, fontWeight:700, cursor:"pointer", color:view===v?TX:TX2, background:view===v?B3:"transparent", transition:"all .1s" }}>{l}</div>
-          ))}
-        </div>
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.setData("text/plain", item.id); e.currentTarget.style.opacity = "0.5"; }}
+      onDragEnd={e => { e.currentTarget.style.opacity = "1"; }}
+      onClick={() => onEdit(item)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: isLate ? "#FFF1F2" : B1,
+        border: `1px solid ${isLate ? "#FCA5A5" : isUrgent ? "#FCD34D" : hov ? LN2 : LN}`,
+        borderRadius: 8, padding: "10px 12px", cursor: "grab",
+        boxShadow: hov ? "0 4px 12px rgba(0,0,0,0.09)" : "0 1px 3px rgba(0,0,0,0.05)",
+        transform: hov ? "translateY(-1px)" : "none",
+        transition: TRANS, userSelect: "none",
+      }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: isLate ? RED : TX, marginBottom: 6, lineHeight: 1.3 }}>{item.title}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+        {contract && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: contract.color, display: "inline-block" }} />
+            {contract.company.split("/")[0].trim()}
+          </span>
+        )}
+        <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>{TYPE_LABEL[item.type] || item.type}</span>
+        {item.plannedPostDate && (
+          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2, marginLeft: "auto" }}>
+            📅 {fmtDate(item.plannedPostDate)}
+          </span>
+        )}
       </div>
-
-      {/* Kanban */}
-      {view==="kanban" && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          {/* Planned */}
-          <div style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-            <div style={{ padding:"12px 16px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6 }}>
-              <div style={{ width:8, height:8, borderRadius:"50%", background:AMB }}/>
-              <span style={{ fontSize:11, fontWeight:700, color:TX }}>Planejado</span>
-              <span style={{ marginLeft:"auto", fontSize:9, background:"rgba(255,255,255,.06)", color:TX2, padding:"1px 6px", borderRadius:99 }}>{planned.length}</span>
-            </div>
-            <div style={{ padding:10, display:"flex", flexDirection:"column", gap:6 }}>
-              {planned.map(p=>{
-                const c=contracts.find(x=>x.id===p.contractId);
-                const TYPE_LABEL={post:"Reel",story:"Story",link:"Link",repost:"Repost",tiktok:"TikTok"};
-                return (
-                  <div key={p.id} style={{ background:B2, border:`1px solid ${LN}`, borderRadius:7, padding:"10px 12px" }}>
-                    <div style={{ fontSize:12, fontWeight:500, color:TX, marginBottom:5 }}>{p.title}</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      {c&&<><div style={{width:5,height:5,borderRadius:"50%",background:c.color}}/><span style={{fontSize:10,color:TX2}}>{c.company.split("/")[0].trim()}</span></>}
-                      <Badge color={AMB}>{TYPE_LABEL[p.type]||p.type}</Badge>
-                      {p.plannedDate&&<span style={{fontSize:10,color:TX2,marginLeft:"auto"}}>{fmtDate(p.plannedDate)}</span>}
-                    </div>
-                  </div>
-                );
-              })}
-              {planned.length===0&&<div style={{fontSize:11,color:TX3,fontStyle:"italic",padding:8,textAlign:"center"}}>Nenhum post planejado</div>}
-            </div>
-          </div>
-          {/* Published */}
-          <div style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-            <div style={{ padding:"12px 16px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6 }}>
-              <div style={{ width:8, height:8, borderRadius:"50%", background:GRN }}/>
-              <span style={{ fontSize:11, fontWeight:700, color:TX }}>Publicado</span>
-              <span style={{ marginLeft:"auto", fontSize:9, background:"rgba(255,255,255,.06)", color:TX2, padding:"1px 6px", borderRadius:99 }}>{published.length}</span>
-            </div>
-            <div style={{ padding:10, display:"flex", flexDirection:"column", gap:6 }}>
-              {published.map(p=>{
-                const c=contracts.find(x=>x.id===p.contractId);
-                const TYPE_LABEL={post:"Reel",story:"Story",link:"Link",repost:"Repost",tiktok:"TikTok"};
-                const eng=calcEngagement(p);
-                return (
-                  <div key={p.id} style={{ background:B2, border:`1px solid ${LN}`, borderRadius:7, padding:"10px 12px" }}>
-                    <div style={{ fontSize:12, fontWeight:500, color:TX, marginBottom:5 }}>{p.title}</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                      {c&&<><div style={{width:5,height:5,borderRadius:"50%",background:c.color}}/><span style={{fontSize:10,color:TX2}}>{c.company.split("/")[0].trim()}</span></>}
-                      <Badge color={GRN}>{TYPE_LABEL[p.type]||p.type}</Badge>
-                      {eng!=null&&<span style={{fontSize:10,color:GRN,marginLeft:"auto",fontWeight:700}}>{eng.toFixed(1)}%</span>}
-                    </div>
-                  </div>
-                );
-              })}
-              {published.length===0&&<div style={{fontSize:11,color:TX3,fontStyle:"italic",padding:8,textAlign:"center"}}>Nenhum post publicado</div>}
-            </div>
-          </div>
+      {dl && stageId !== "done" && (
+        <div style={{ marginTop: 6, fontSize: 10, fontWeight: 600, color: isLate ? RED : isUrgent ? AMB : TX3 }}>
+          {isLate ? `${Math.abs(daysUntil)}d atrasado` : daysUntil === 0 ? "Hoje" : `${daysUntil}d`}
+          {item.stageDateOverrides?.[stageId] ? " (manual)" : ""}
         </div>
       )}
-
-      {/* Priorities */}
-      {view==="priorities" && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          {/* Today */}
-          <div style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-            <div style={{ padding:"12px 16px", borderBottom:`1px solid ${LN}` }}>
-              <div style={{ fontSize:11, fontWeight:700, color:TX }}>Hoje</div>
-              <div style={{ fontSize:10, color:TX2, marginTop:2 }}>{today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
-            </div>
-            <div style={{ padding:12, display:"flex", flexDirection:"column", gap:6 }}>
-              {todayEvents.length===0&&<div style={{fontSize:11,color:TX3,fontStyle:"italic",textAlign:"center",padding:8}}>Nenhum evento hoje</div>}
-              {todayEvents.map((ev,i)=>(
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:7, background:B2, borderLeft:`3px solid ${ev.color}` }}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12, fontWeight:500, color:TX }}>{ev.label}</div>
-                  </div>
-                  {ev.dashed&&<Badge color={TX2}>Fase</Badge>}
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Week */}
-          <div style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-            <div style={{ padding:"12px 16px", borderBottom:`1px solid ${LN}` }}>
-              <div style={{ fontSize:11, fontWeight:700, color:TX }}>Próximos 7 dias</div>
-              <div style={{ fontSize:10, color:TX2, marginTop:2 }}>{weekEvents.length} eventos agendados</div>
-            </div>
-            <div style={{ padding:12, display:"flex", flexDirection:"column", gap:4 }}>
-              {weekEvents.length===0&&<div style={{fontSize:11,color:TX3,fontStyle:"italic",textAlign:"center",padding:8}}>Nenhum evento esta semana</div>}
-              {weekEvents.slice(0,8).map((ev,i)=>(
-                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:6, background:B2, borderLeft:`3px solid ${ev.color}` }}>
-                  <div style={{ fontSize:11, color:TX }}>{ev.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Contract priorities */}
-          <div style={{ gridColumn:"1/-1", background:B1, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-            <div style={{ padding:"12px 16px", borderBottom:`1px solid ${LN}` }}>
-              <div style={{ fontSize:11, fontWeight:700, color:TX }}>Contratos por prazo</div>
-            </div>
-            <div style={{ padding:12, display:"flex", flexDirection:"column", gap:6 }}>
-              {priorities.map(c=>(
-                <div key={c.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", borderRadius:8, background:B2 }}>
-                  <div style={{ width:8, height:8, borderRadius:"50%", background:c.color, flexShrink:0 }}/>
-                  <div style={{ fontSize:12, fontWeight:600, color:TX, width:160 }}>{c.company}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ height:3, background:"rgba(255,255,255,.08)", borderRadius:2 }}>
-                      <div style={{ height:3, background:c.pct===100?GRN:c.color, width:`${c.pct}%`, borderRadius:2 }}/>
-                    </div>
-                    <div style={{ fontSize:10, color:TX2, marginTop:3 }}>{c.don}/{c.tot} entregas</div>
-                  </div>
-                  <div style={{ fontSize:12, fontWeight:700, color:dlColor(c.dl), width:60, textAlign:"right" }}>{c.dl!=null?`${c.dl}d`:"—"}</div>
-                  <div style={{ fontSize:11, color:TX2, width:90 }}>{fmtDate(c.contractDeadline)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Calendar */}
-      {view==="calendar" && (
-        <CalendarView contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
+      {item.responsible?.[stageId] && (
+        <div style={{ marginTop: 4, fontSize: 10, color: TX3 }}>👤 {item.responsible[stageId]}</div>
       )}
     </div>
   );
 }
 
+function PipelineColumn({ stage, items, contracts, onEdit, onDrop }) {
+  const [dragOver, setDragOver] = useState(false);
+  const lateCount = items.filter(item => {
+    const dl = stageDeadline(item, stage.id);
+    return dl && daysLeft(dl) < 0;
+  }).length;
+
+  return (
+    <div
+      style={{
+        background: dragOver ? `rgba(200,16,46,0.04)` : B2,
+        border: `1.5px solid ${dragOver ? RED : LN}`,
+        borderRadius: 10, overflow: "hidden", minWidth: 160,
+        transition: "all 0.18s ease",
+      }}
+      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => { e.preventDefault(); setDragOver(false); onDrop(e.dataTransfer.getData("text/plain"), stage.id); }}>
+      <div style={{ padding: "10px 12px", borderBottom: `1px solid ${LN}`, background: B1, display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: TX, flex: 1 }}>{stage.label}</span>
+        {lateCount > 0 && (
+          <span style={{ fontSize: 9, fontWeight: 700, background: "#FFF1F2", color: RED, padding: "2px 6px", borderRadius: 99, border: "1px solid #FCA5A5" }}>{lateCount} atrasado{lateCount>1?"s":""}</span>
+        )}
+        <span style={{ fontSize: 9, fontWeight: 700, background: B3, color: TX2, padding: "2px 7px", borderRadius: 99 }}>{items.length}</span>
+      </div>
+      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 6, minHeight: 80 }}>
+        {items.map(item => (
+          <DeliverableCard key={item.id} item={item} contracts={contracts} onEdit={onEdit} stageId={stage.id} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Acompanhamento({ contracts, posts, calEvents, calMonth, setCal, calFilter, setCalF }) {
+  const [deliverables, setDeliverables] = useState(() => lsLoad("copa6_deliverables", []));
+  const [view, setView]   = useState("pipeline");
+  const [editItem, setEditItem] = useState(null);
+  const [newOpen, setNewOpen]   = useState(false);
+  const [filter, setFilter]     = useState("all");
+  const toast = useToast();
+
+  const save = list => { setDeliverables(list); lsSave("copa6_deliverables", list); };
+
+  const moveStage = (itemId, newStage) => {
+    save(deliverables.map(d => d.id === itemId ? { ...d, stage: newStage } : d));
+    toast?.(`Movido para ${STAGES.find(s=>s.id===newStage)?.label}`, "info");
+  };
+
+  const filtered = filter === "all" ? deliverables : deliverables.filter(d => d.contractId === filter);
+
+  // Conflict detection: same plannedPostDate
+  const postDateCounts = {};
+  deliverables.forEach(d => {
+    if (d.plannedPostDate) postDateCounts[d.plannedPostDate] = (postDateCounts[d.plannedPostDate] || 0) + 1;
+  });
+  const conflicts = Object.entries(postDateCounts).filter(([, count]) => count > 1);
+
+  return (
+    <div style={{ padding: 24, maxWidth: 1600 }}>
+      {/* Conflict alerts */}
+      {conflicts.length > 0 && (
+        <div style={{ background: "#FFF1F2", border: "1px solid #FCA5A5", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: RED, marginBottom: 3 }}>Conflito de postagem detectado</div>
+            {conflicts.map(([date, count]) => {
+              const items = deliverables.filter(d => d.plannedPostDate === date);
+              return (
+                <div key={date} style={{ fontSize: 11, color: TX2 }}>
+                  <strong style={{ color: TX }}>{fmtDate(date)}</strong> — {count} publicações: {items.map(i => i.title).join(", ")}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ flex: 1 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: TX }}>Produção</h2>
+          <p style={{ fontSize: 11, color: TX2, marginTop: 2 }}>
+            {deliverables.filter(d => d.stage !== "done").length} em andamento · {deliverables.filter(d => d.stage === "done").length} entregues
+          </p>
+        </div>
+        <div style={{ display: "flex", background: B2, border: `1px solid ${LN}`, borderRadius: 6, overflow: "hidden" }}>
+          {[["pipeline","Pipeline"],["calendar","Calendário"]].map(([v,l]) => (
+            <div key={v} onClick={() => setView(v)}
+              style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, cursor: "pointer", transition: TRANS, color: view===v?TX:TX2, background: view===v?B3:"transparent" }}>{l}</div>
+          ))}
+        </div>
+        <select value={filter} onChange={e => setFilter(e.target.value)}
+          style={{ padding: "5px 10px", background: B1, border: `1px solid ${LN}`, borderRadius: 6, color: TX2, fontSize: 11, fontFamily: "inherit", outline: "none" }}>
+          <option value="all">Todos contratos</option>
+          {contracts.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
+        </select>
+        <Btn onClick={() => setNewOpen(true)} variant="primary" size="sm" icon={Plus}>Novo entregável</Btn>
+      </div>
+
+      {/* Pipeline view */}
+      {view === "pipeline" && (
+        <div style={{ overflowX: "auto", paddingBottom: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${STAGES.length}, minmax(170px, 1fr))`, gap: 8, minWidth: 1300 }}>
+            {STAGES.map(stage => (
+              <PipelineColumn
+                key={stage.id}
+                stage={stage}
+                items={filtered.filter(d => (d.stage || "briefing") === stage.id)}
+                contracts={contracts}
+                onEdit={setEditItem}
+                onDrop={moveStage}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Calendar view */}
+      {view === "calendar" && (
+        <CalendarView contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
+      )}
+
+      {/* Modals */}
+      {(newOpen || editItem) && (
+        <DeliverableModal
+          item={editItem}
+          contracts={contracts}
+          onClose={() => { setNewOpen(false); setEditItem(null); }}
+          onSave={item => {
+            if (editItem) {
+              save(deliverables.map(d => d.id === item.id ? item : d));
+              toast?.("Entregável atualizado", "success");
+            } else {
+              save([...deliverables, { ...item, id: uid(), stage: "briefing", createdAt: new Date().toISOString() }]);
+              toast?.("✓ Entregável criado", "success");
+            }
+            setNewOpen(false); setEditItem(null);
+          }}
+          onDelete={editItem ? id => {
+            if (confirm("Excluir este entregável?")) { save(deliverables.filter(d => d.id !== id)); setEditItem(null); }
+          } : null}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
+  const isEdit = !!item;
+  const [f, setF] = useState(item || {
+    contractId: contracts[0]?.id || "", title: "", type: "reel",
+    plannedPostDate: "", stage: "briefing",
+    responsible: {}, stageDateOverrides: {}, notes: "",
+  });
+  const set = (k, v) => setF(x => ({ ...x, [k]: v }));
+  const setResp = (stageId, v) => setF(x => ({ ...x, responsible: { ...(x.responsible||{}), [stageId]: v } }));
+  const setDateOverride = (stageId, v) => setF(x => ({ ...x, stageDateOverrides: { ...(x.stageDateOverrides||{}), [stageId]: v } }));
+
+  const stageDates = f.plannedPostDate ? calcStageDates(f.plannedPostDate) : {};
+
+  const handleSave = () => {
+    if (!f.title?.trim()) { alert("Preencha o título."); return; }
+    if (!f.contractId) { alert("Selecione o contrato."); return; }
+    onSave(f);
+  };
+
+  return (
+    <Modal title={isEdit ? "Editar Entregável" : "Novo Entregável"} onClose={onClose} width={700}
+      footer={<>
+        {onDelete && <Btn onClick={() => onDelete(item.id)} variant="danger" size="sm">Excluir</Btn>}
+        <div style={{ flex: 1 }} />
+        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
+        <Btn onClick={handleSave} variant="primary" size="sm">{isEdit ? "Salvar" : "Criar"}</Btn>
+      </>}>
+
+      <SRule>Identificação</SRule>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Contrato / Marca">
+          <Select value={f.contractId} onChange={e => set("contractId", e.target.value)}>
+            {contracts.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
+          </Select>
+        </Field>
+        <Field label="Tipo">
+          <Select value={f.type} onChange={e => set("type", e.target.value)}>
+            <option value="reel">Reel / Post Feed</option>
+            <option value="story">Story (combo)</option>
+            <option value="tiktok">TikTok</option>
+            <option value="link">Link Comunidade</option>
+          </Select>
+        </Field>
+        <Field label="Título" full>
+          <Input value={f.title} onChange={e => set("title", e.target.value)} placeholder="ex: Reel Amazon Copa #1" />
+        </Field>
+        <Field label="Etapa atual">
+          <Select value={f.stage || "briefing"} onChange={e => set("stage", e.target.value)}>
+            {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </Select>
+        </Field>
+        <Field label="Data de Postagem (D)">
+          <Input type="date" value={f.plannedPostDate} onChange={e => set("plannedPostDate", e.target.value)} />
+        </Field>
+      </div>
+
+      {f.plannedPostDate && (
+        <>
+          <SRule>Cronograma calculado automaticamente</SRule>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 4 }}>
+            {STAGES.filter(s => s.id !== "done").map(s => {
+              const auto = stageDates[s.id];
+              const override = f.stageDateOverrides?.[s.id];
+              const dl = daysLeft(override || auto);
+              return (
+                <div key={s.id} style={{ background: B2, border: `1px solid ${LN}`, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: TX2, marginBottom: 6 }}>{s.label}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: dl !== null && dl < 0 ? RED : TX, marginBottom: 4 }}>
+                    {fmtDate(override || auto)}
+                  </div>
+                  {dl !== null && (
+                    <div style={{ fontSize: 10, color: dl < 0 ? RED : dl <= 1 ? AMB : TX3, marginBottom: 6 }}>
+                      {dl < 0 ? `${Math.abs(dl)}d atrás` : dl === 0 ? "Hoje" : `${dl}d`}
+                    </div>
+                  )}
+                  <input type="date" value={override || ""} placeholder="sobrescrever"
+                    onChange={e => setDateOverride(s.id, e.target.value)}
+                    title="Sobrescrever data"
+                    style={{ width: "100%", padding: "3px 6px", fontSize: 10, background: B1, border: `1px solid ${LN}`, borderRadius: 4, color: TX3, fontFamily: "inherit", outline: "none" }} />
+                  <input value={f.responsible?.[s.id] || ""} placeholder="Responsável"
+                    onChange={e => setResp(s.id, e.target.value)}
+                    style={{ width: "100%", padding: "3px 6px", fontSize: 10, background: B1, border: `1px solid ${LN}`, borderRadius: 4, color: TX, fontFamily: "inherit", outline: "none", marginTop: 4 }} />
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: TX3, fontStyle: "italic" }}>Datas calculadas a partir de D (postagem). Clique em qualquer data para sobrescrever manualmente.</div>
+        </>
+      )}
+
+      <SRule>Briefing & Notas</SRule>
+      <Field label="Observações / Briefing resumido">
+        <Textarea value={f.notes || ""} onChange={e => set("notes", e.target.value)} rows={4} placeholder="Resumo do briefing, links de referência, pontos obrigatórios da marca…" />
+      </Field>
+    </Modal>
+  );
+}
 
 // ─── Contratos full view ──────────────────────────────────
 function Contratos({ contracts, posts, saveC, setModal, toggleComm, saveNote, rates }) {

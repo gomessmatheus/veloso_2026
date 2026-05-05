@@ -51,8 +51,8 @@ const TASK_PRIORITIES = [
 
 // ─── Helpers ──────────────────────────────────────────────
 const uid      = () => Math.random().toString(36).substr(2, 8);
-const fmtDate  = s => { if (!s) return "—"; const [y,m,d] = s.split("-"); return `${d}/${m}/${y}`; };
-const daysLeft = s => { if (!s) return null; return Math.ceil((new Date(s) - new Date()) / 864e5); };
+const fmtDate  = s => { try { if (!s) return "—"; const parts = String(s).split("-"); if (parts.length < 3) return "—"; const [y,m,d] = parts; return `${d}/${m}/${y}`; } catch { return "—"; } };
+const daysLeft = s => { try { if (!s) return null; const ms = new Date(s) - new Date(); if (isNaN(ms)) return null; return Math.ceil(ms / 864e5); } catch { return null; } };
 const cn       = (...cls) => cls.filter(Boolean).join(" ");
 
 function fmtMoney(v, currency = "BRL") {
@@ -166,9 +166,13 @@ const STAGES = [
 const STAGE_IDS = STAGES.map(s => s.id);
 
 function addDays(dateStr, n) {
-  const d = new Date(dateStr + "T12:00:00");
-  d.setDate(d.getDate() + n);
-  return d.toISOString().substr(0, 10);
+  if (!dateStr || n == null) return null;
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    if (isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() + n);
+    return d.toISOString().substr(0, 10);
+  } catch { return null; }
 }
 
 function calcStageDates(postDate) {
@@ -181,9 +185,12 @@ function calcStageDates(postDate) {
 }
 
 function stageDeadline(deliverable, stageId) {
+  if (!deliverable) return null;
   if (deliverable.stageDateOverrides?.[stageId]) return deliverable.stageDateOverrides[stageId];
-  if (deliverable.plannedPostDate) return addDays(deliverable.plannedPostDate, STAGES.find(s=>s.id===stageId)?.days || 0);
-  return null;
+  if (!deliverable.plannedPostDate) return null;
+  const stage = STAGES.find(s => s.id === stageId);
+  if (!stage) return null;
+  return addDays(deliverable.plannedPostDate, stage.days);
 }
 
 
@@ -212,7 +219,7 @@ function ToastProvider({ children }) {
           <div key={t.id} style={{
             ...G2, padding:"12px 18px", display:"flex", alignItems:"center", gap:10,
             fontSize:12, fontWeight:600, color:TX, minWidth:220,
-            borderLeft:`3px solid ${t.type==="success"?GRN:t.type==="error"?RED:AMB}`,
+            borderLeft:`3px solid ${t.type==="success"?GRN:t.type==="error"?RED:t.type==="info"?BLU:AMB}`,
             animation:"toastIn .2s ease",
           }}>
             <span style={{fontSize:16}}>{t.type==="success"?"✓":t.type==="error"?"✕":"!"}</span>
@@ -598,7 +605,7 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
   if (stats.commPendBRL > 0) urgency.push({
     type: "info", key: "comm",
     title: "Comissão a receber · Stand",
-    sub: `${getCommEntries.length} pagamentos pendentes`,
+    sub: "Pendente de recebimento",
     value: fmtMoney(stats.commPendBRL),
     action: "Ver comissões", onAction: () => navigateTo("contratos"),
   });

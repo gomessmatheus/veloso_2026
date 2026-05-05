@@ -1926,6 +1926,15 @@ Responda APENAS com o JSON.` }]
           onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="none"}>
           ← Contratos
         </button>
+        <button onClick={async()=>{
+          if(!confirm("Excluir contrato "+c.company+" e todos os seus entregáveis?")) return;
+          await saveC(contracts.filter(x=>x.id!==c.id));
+          if(saveDeliverables) await saveDeliverables(deliverables.filter(d=>d.contractId!==c.id));
+          onBack();
+        }} style={{ background:"none", border:`1px solid rgba(200,16,46,.3)`, borderRadius:6, padding:"6px 10px", cursor:"pointer", fontSize:11, color:RED, transition:TRANS, flexShrink:0 }}
+          onMouseEnter={e=>e.currentTarget.style.background="rgba(200,16,46,.06)"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+          🗑 Excluir contrato
+        </button>
         <div style={{ flex:1 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
             <div style={{ width:10, height:10, borderRadius:"50%", background:c.color }}/>
@@ -2232,6 +2241,13 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
   const [selectedId, setSelectedId] = useState(null);
   const selected = contracts.find(c => c.id === selectedId);
 
+  const del = async (id) => {
+    if (!confirm("Excluir contrato e todos os entregáveis vinculados?")) return;
+    await saveC(contracts.filter(c => c.id !== id));
+    if (saveDeliverables) await saveDeliverables(deliverables.filter(d => d.contractId !== id));
+  };
+
+
   if (selected) return (
     <ContractDetail
       contract={selected} contracts={contracts} posts={posts} deliverables={deliverables}
@@ -2244,7 +2260,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
   return (
     <div style={{ padding:window.innerWidth<768?12:24, maxWidth:1400 }}>
       <div className="mob-scroll" style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 70px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
           {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links"].map((h,i)=>(
             <div key={i} style={{ padding:"0 12px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
           ))}
@@ -2260,7 +2276,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
           return (
             <div key={c.id}
               onClick={()=>setSelectedId(c.id)}
-              style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:12, cursor:"pointer", transition:TRANS }}
+              style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 70px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:12, cursor:"pointer", transition:TRANS }}
               onMouseEnter={e=>e.currentTarget.style.background=B2}
               onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
               <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }}/>
@@ -2286,6 +2302,10 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
               <div style={{ padding:"0 12px", color:TX2 }}>{cp}/{c.numPosts}</div>
               <div style={{ padding:"0 12px", color:TX2 }}>{cs}/{c.numStories}</div>
               <div style={{ padding:"0 12px", color:TX2 }}>{cl}/{c.numCommunityLinks}</div>
+              <div style={{ padding:"0 8px", display:"flex", gap:4 }} onClick={e=>e.stopPropagation()}>
+                <Btn onClick={()=>setModal({type:"contract",data:c})} variant="ghost" size="sm">✎</Btn>
+                <Btn onClick={()=>del(c.id)} variant="ghost" size="sm" style={{color:RED}}>×</Btn>
+              </div>
             </div>
           );
         })}

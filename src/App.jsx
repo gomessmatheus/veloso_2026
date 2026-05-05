@@ -1557,7 +1557,103 @@ function CommStatusInline({ contract: c, toggleCommPaid, rates }) {
 
 
 // ─── Contract Detail Page ────────────────────────────────
-function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, saveP, saveDeliverables, toggleComm, toggleCommPaid, toggleNF, rates, onBack }) {
+// ─── Costs Section ────────────────────────────────────────
+function CostsSection({ contract: c, saveC, contracts }) {
+  const [costs, setCosts] = useState(c.costs || []);
+  const toast = useToast();
+
+  const save = async (newCosts) => {
+    setCosts(newCosts);
+    await saveC(contracts.map(x => x.id === c.id ? {...x, costs: newCosts} : x));
+    toast?.("Custos salvos", "success");
+  };
+
+  const addCost = () => save([...costs, { id: uid(), label:"", value:"", category:"production" }]);
+  const updCost = (i, field, val) => {
+    const next = costs.map((c,j) => j===i ? {...c,[field]:val} : c);
+    setCosts(next);
+  };
+  const saveCost = () => save(costs);
+  const delCost = (i) => save(costs.filter((_,j) => j!==i));
+
+  const totalCosts = costs.reduce((s,x) => s+(Number(x.value)||0), 0);
+  const grossValue = contractTotal(c);
+  const netValue = Math.max(0, grossValue - totalCosts);
+  const commOnNet = netValue * 0.20;
+
+  const CAT_LABEL = { production:"Produção", travel:"Viagem", equipment:"Equipamento", crew:"Equipe", other:"Outro" };
+  const CAT_COLOR = { production:BLU, travel:"#8B5CF6", equipment:AMB, crew:GRN, other:TX2 };
+
+  return (
+    <div style={{ ...G, padding:"18px 20px" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+        <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Custos do Contrato</div>
+        <Btn onClick={addCost} variant="ghost" size="sm" icon={Plus}>Adicionar</Btn>
+      </div>
+
+      {costs.length === 0 && (
+        <div style={{ fontSize:12,color:TX3,fontStyle:"italic",textAlign:"center",padding:"16px 0" }}>
+          Nenhum custo. A comissão Ranked incide sobre o valor bruto.
+        </div>
+      )}
+
+      {costs.map((cost, i) => (
+        <div key={cost.id||i} style={{ display:"grid", gridTemplateColumns:"1fr 130px 140px 32px", gap:8, marginBottom:8, alignItems:"end" }}>
+          <div>
+            {i===0 && <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Descrição</div>}
+            <input value={cost.label} placeholder="ex: Passagem aérea" onChange={e=>updCost(i,"label",e.target.value)} onBlur={saveCost}
+              style={{width:"100%",padding:"8px 10px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+          </div>
+          <div>
+            {i===0 && <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Valor R$</div>}
+            <input type="number" min="0" value={cost.value} placeholder="0" onChange={e=>updCost(i,"value",e.target.value)} onBlur={saveCost}
+              style={{width:"100%",padding:"8px 10px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+          </div>
+          <div>
+            {i===0 && <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Categoria</div>}
+            <select value={cost.category||"production"} onChange={e=>{updCost(i,"category",e.target.value);saveCost();}}
+              style={{width:"100%",padding:"8px 10px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontSize:12,fontFamily:"inherit",outline:"none"}}>
+              {Object.entries(CAT_LABEL).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <button onClick={()=>delCost(i)}
+            style={{padding:"8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:RED,cursor:"pointer",alignSelf:"flex-end"}}>×</button>
+        </div>
+      ))}
+
+      {totalCosts > 0 && (
+        <div style={{ marginTop:14, padding:"12px 14px", background:`${BLU}06`, border:`1px solid ${BLU}18`, borderRadius:8 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+            <span style={{fontSize:11,color:TX2}}>Valor bruto do contrato</span>
+            <span style={{fontSize:12,color:TX}}>{fmtMoney(grossValue, c.currency)}</span>
+          </div>
+          {costs.filter(x=>Number(x.value)>0).map((x,i) => (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+              <span style={{fontSize:11,color:TX3,display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:9,padding:"1px 6px",borderRadius:99,background:`${CAT_COLOR[x.category]||TX3}15`,color:CAT_COLOR[x.category]||TX3}}>{CAT_LABEL[x.category]}</span>
+                {x.label||"Custo"}
+              </span>
+              <span style={{fontSize:11,color:RED}}>- {fmtMoney(Number(x.value))}</span>
+            </div>
+          ))}
+          <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 0 0", borderTop:`1px solid ${LN}`, marginTop:6 }}>
+            <span style={{fontSize:12,fontWeight:700,color:TX}}>Valor líquido</span>
+            <span style={{fontSize:13,fontWeight:700,color:TX}}>{fmtMoney(netValue, c.currency)}</span>
+          </div>
+          {c.hasCommission && (
+            <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
+              <span style={{fontSize:11,color:TX2}}>Comissão Ranked (20% s/ líquido)</span>
+              <span style={{fontSize:12,fontWeight:700,color:RED}}>{fmtMoney(commOnNet, c.currency)}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, saveP, saveDeliverables, toggleComm, toggleCommPaid, toggleNF, rates, onBack, setModal }) {
   const [tab, setTab]         = useState("overview");
   const [aiReport, setAiReport] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -1670,6 +1766,7 @@ Responda APENAS com o JSON.` }]
             {c.cnpj && <span>{c.cnpj}</span>}
           </div>
         </div>
+        <Btn onClick={()=>setModal({type:"contract",data:c})} variant="default" size="sm">✎ Editar</Btn>
         <Btn onClick={generateReport} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
           {aiLoading ? "Gerando…" : "Gerar Relatório IA"}
         </Btn>
@@ -1783,6 +1880,9 @@ Responda APENAS com o JSON.` }]
 
       {/* ── Tab: Financeiro ── */}
       {tab==="financial" && (
+        <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+        {/* Costs section */}
+        <CostsSection contract={c} saveC={saveC} contracts={contracts}/>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:20 }}>
           {/* NF */}
           <div style={{ ...G, padding:"18px 20px" }}>
@@ -1832,6 +1932,7 @@ Responda APENAS com o JSON.` }]
               </div>
             )}
           </div>
+        </div>
         </div>
       )}
 
@@ -1959,7 +2060,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
       contract={selected} contracts={contracts} posts={posts} deliverables={deliverables}
       saveC={saveC} saveP={saveP} saveDeliverables={saveDeliverables}
       toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF}
-      rates={rates} onBack={()=>setSelectedId(null)}
+      rates={rates} onBack={()=>setSelectedId(null)} setModal={setModal}
     />
   );
 

@@ -10,7 +10,7 @@
  */
 
 const ZAPI_URL      = process.env.ZAPI_URL
-const PHONE         = process.env.WHATSAPP_PHONE
+const PHONES        = (process.env.WHATSAPP_PHONE || "").split(",").map(p => p.trim()).filter(Boolean)
 const CLAUDE_KEY    = process.env.ANTHROPIC_API_KEY
 const FB_PROJECT    = process.env.FIREBASE_PROJECT_ID
 const FB_KEY        = process.env.FIREBASE_API_KEY
@@ -161,15 +161,19 @@ Responda APENAS com o texto da mensagem.`
 
 // ─── Send WhatsApp ────────────────────────────────────────
 async function sendWhatsApp(message) {
-  const res = await fetch(ZAPI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(process.env.ZAPI_CLIENT_TOKEN ? { "Client-Token": process.env.ZAPI_CLIENT_TOKEN } : {}),
-    },
-    body: JSON.stringify({ phone: PHONE, message })
-  })
-  return res.json()
+  const results = await Promise.all(PHONES.map(async phone => {
+    const res = await fetch(ZAPI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.ZAPI_CLIENT_TOKEN ? { "Client-Token": process.env.ZAPI_CLIENT_TOKEN } : {}),
+      },
+      body: JSON.stringify({ phone, message })
+    })
+    const data = await res.json()
+    return { phone, ...data }
+  }))
+  return results
 }
 
 // ─── Handler ─────────────────────────────────────────────

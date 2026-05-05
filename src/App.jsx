@@ -400,12 +400,11 @@ const NAV_ITEMS = [
   { id:"dashboard",      label:"Dashboard",       icon:LayoutDashboard },
   { id:"acompanhamento", label:"Produção",         icon:KanbanSquare },
   { id:"contratos",      label:"Contratos",        icon:FileText },
-  { id:"tarefas",        label:"Tarefas",          icon:CheckSquare },
   { id:"posts",          label:"Posts",            icon:Video },
   { id:"calendario",     label:"Calendário",       icon:Calendar },
 ];
 
-function Sidebar({ view, setView, user, onSignOut, onlineUsers, contracts }) {
+function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts }) {
   const my = useMemo(() => getMyPresence(), []);
   return (
     <div style={{ width:220, background:B0, borderRight:`1px solid ${LN}`, display:"flex", flexDirection:"column", height:"100vh", flexShrink:0, position:"sticky", top:0 }}>
@@ -459,7 +458,10 @@ function Sidebar({ view, setView, user, onSignOut, onlineUsers, contracts }) {
         )}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div style={{ fontSize:11, color:TX2 }}>{user?.email?.split("@")[0]}</div>
-          <button onClick={onSignOut} style={{ background:"none", border:"none", color:TX3, cursor:"pointer", padding:4 }} title="Sair"><LogOut size={14}/></button>
+          <div style={{display:"flex",gap:4}}>
+            <button onClick={onInvite} title="Convidar usuário" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,fontSize:12}}>👤+</button>
+            <button onClick={onSignOut} style={{ background:"none", border:"none", color:TX3, cursor:"pointer", padding:4 }} title="Sair"><LogOut size={14}/></button>
+          </div>
         </div>
       </div>
     </div>
@@ -500,7 +502,6 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
       {/* CTA */}
       {view==="contratos"      && <Btn onClick={onNewContract}    variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
       {view==="posts"          && <Btn onClick={onNewPost}        variant="primary" size="sm" icon={Plus}>Post</Btn>}
-      {view==="tarefas"        && <Btn onClick={onNewTask}         variant="primary" size="sm" icon={Plus}>Tarefa</Btn>}
       {view==="dashboard"      && <Btn onClick={onNewContract}    variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
     </div>
   );
@@ -1656,6 +1657,7 @@ function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, sa
   const [tab, setTab]         = useState("overview");
   const [aiReport, setAiReport] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [showClientReport, setShowClientReport] = useState(false);
   const [briefingNote, setBriefingNote] = useState(c.briefingNote || "");
   const [briefingFile, setBriefingFile] = useState(c.briefingFile || null);
   const toast = useToast();
@@ -1743,6 +1745,7 @@ Responda APENAS com o JSON.` }]
   const scoreColor = aiReport?.performance?.score >= 70 ? GRN : aiReport?.performance?.score >= 40 ? AMB : RED;
 
   return (
+    <>
     <div style={{ padding: 24, maxWidth: 1100 }}>
       {/* Back + header */}
       <div style={{ display:"flex", alignItems:"flex-start", gap:16, marginBottom:24 }}>
@@ -1765,6 +1768,7 @@ Responda APENAS com o JSON.` }]
           </div>
         </div>
         <Btn onClick={()=>setModal({type:"contract",data:c})} variant="default" size="sm">✎ Editar</Btn>
+        <Btn onClick={()=>setShowClientReport(true)} variant="default" size="sm">📊 Relatório Cliente</Btn>
         <Btn onClick={generateReport} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
           {aiLoading ? "Gerando…" : "Gerar Relatório IA"}
         </Btn>
@@ -2045,6 +2049,8 @@ Responda APENAS com o JSON.` }]
         </div>
       )}
     </div>
+    {showClientReport && <ClientReport contract={c} posts={posts} deliverables={deliverables} rates={rates} onClose={()=>setShowClientReport(false)}/>}
+    </>
   );
 }
 
@@ -2563,7 +2569,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>;
     if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates}/>;
-    if (view==="tarefas")        return <Tarefas contracts={contracts} externalNewTask={triggerNewTask} onExternalNewTaskHandled={()=>setTriggerNewTask(false)} navigateTo={setView}/>;
+
     if (view==="posts")          return <Posts contracts={contracts} posts={posts} saveP={saveP} setModal={setModal}/>;
     if (view==="calendario")     return <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     return null;
@@ -2572,6 +2578,236 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     return null;
   }
 }
+
+// ─── Client Report Modal ──────────────────────────────────
+function ClientReport({ contract: c, posts, deliverables, rates, onClose }) {
+  const [generating, setGenerating] = useState(false);
+  const [aiSummary, setAiSummary] = useState(null);
+
+  const cPosts = posts.filter(p => p.contractId === c.id && p.isPosted);
+  const cDels  = deliverables.filter(d => d.contractId === c.id);
+
+  // Aggregate metrics
+  const totalViews    = cPosts.reduce((s,p) => s+(Number(p.views)||0), 0) + cDels.reduce((s,d) => s+(Number(d.views)||0),0);
+  const totalReach    = cPosts.reduce((s,p) => s+(Number(p.reach)||0), 0) + cDels.reduce((s,d) => s+(Number(d.reach)||0),0);
+  const totalLikes    = cPosts.reduce((s,p) => s+(Number(p.likes)||0), 0) + cDels.reduce((s,d) => s+(Number(d.likes)||0),0);
+  const totalComments = cPosts.reduce((s,p) => s+(Number(p.comments)||0), 0) + cDels.reduce((s,d) => s+(Number(d.comments)||0),0);
+  const totalSaves    = cPosts.reduce((s,p) => s+(Number(p.saves)||0), 0);
+  const totalEngagements = totalLikes + totalComments + totalSaves;
+  const avgEngRate = totalReach > 0 ? (totalEngagements / totalReach * 100) : null;
+  const contractValue = contractTotal(c);
+  const contractBRL   = toBRL(contractValue, c.currency, rates);
+
+  // Brand KPIs
+  const CPM  = totalViews > 0   ? (contractBRL / totalViews * 1000) : null;
+  const CPV  = totalViews > 0   ? (contractBRL / totalViews)        : null;
+  const CPE  = totalEngagements > 0 ? (contractBRL / totalEngagements) : null;
+  const CPR  = totalReach > 0   ? (contractBRL / totalReach * 1000) : null; // Cost per thousand reach
+
+  const doneDels   = cDels.filter(d => d.stage === "done").length;
+  const totalDels  = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
+  const completionRate = totalDels > 0 ? Math.round(doneDels / totalDels * 100) : 0;
+
+  const today = new Date().toLocaleDateString("pt-BR", {day:"numeric",month:"long",year:"numeric"});
+
+  const generateAI = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/ai", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ max_tokens:800, messages:[{ role:"user", content:`
+Você é especialista em marketing de influência. Gere um parágrafo executivo em português para um relatório de performance de campanha com a marca ${c.company}.
+
+Dados: views=${totalViews.toLocaleString("pt-BR")}, alcance=${totalReach.toLocaleString("pt-BR")}, engajamento=${avgEngRate?.toFixed(2)||"—"}%, CPM=R$${CPM?.toFixed(2)||"—"}, entregas=${doneDels}/${totalDels}.
+
+Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 frases. Sem markdown.`
+        }] })
+      });
+      const data = await res.json();
+      setAiSummary(data.text || "");
+    } catch(e) { setAiSummary("Erro ao gerar resumo."); }
+    setGenerating(false);
+  };
+
+  const MetricCard = ({label, value, sub, color}) => (
+    <div style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"14px 16px",textAlign:"center"}}>
+      <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:6}}>{label}</div>
+      <div style={{fontSize:20,fontWeight:700,color:color||TX,lineHeight:1}}>{value}</div>
+      {sub&&<div style={{fontSize:10,color:TX3,marginTop:3}}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <Modal title={`Relatório de Performance · ${c.company}`} onClose={onClose} width={780}
+      footer={<>
+        <Btn onClick={()=>window.print()} variant="default" size="sm">🖨️ Imprimir / PDF</Btn>
+        <div style={{flex:1}}/>
+        <Btn onClick={onClose} variant="ghost" size="sm">Fechar</Btn>
+      </>}>
+      <style>{`@media print { body * { visibility:hidden; } .print-area, .print-area * { visibility:visible; } .print-area { position:absolute;left:0;top:0;width:100%; } }`}</style>
+      <div className="print-area">
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20,paddingBottom:16,borderBottom:`1px solid ${LN}`}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:c.color}}/>
+              <span style={{fontSize:18,fontWeight:700,color:TX}}>{c.company}</span>
+            </div>
+            <div style={{fontSize:12,color:TX2}}>Parceria com @veloso.lucas_ · Relatório de Performance</div>
+            <div style={{fontSize:11,color:TX3,marginTop:2}}>Gerado em {today} · Stand Produções</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:11,color:TX2}}>Investimento total</div>
+            <div style={{fontSize:20,fontWeight:700,color:TX}}>{fmtMoney(contractValue, c.currency)}</div>
+            {c.currency!=="BRL"&&<div style={{fontSize:11,color:TX3}}>≈ {fmtMoney(contractBRL)}</div>}
+          </div>
+        </div>
+
+        {/* AI Summary */}
+        {aiSummary ? (
+          <div style={{background:`${GRN}08`,border:`1px solid ${GRN}25`,borderRadius:8,padding:"14px 16px",marginBottom:20}}>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:GRN,marginBottom:6}}>Resumo Executivo</div>
+            <p style={{fontSize:13,color:TX,lineHeight:1.6}}>{aiSummary}</p>
+          </div>
+        ) : (
+          <div style={{marginBottom:20,textAlign:"center"}}>
+            <Btn onClick={generateAI} variant="primary" size="sm" disabled={generating}>
+              {generating?"Gerando resumo…":"⚡ Gerar resumo executivo com IA"}
+            </Btn>
+          </div>
+        )}
+
+        {/* Brand KPIs */}
+        <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Métricas de Performance</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+          <MetricCard label="Visualizações" value={totalViews>0?totalViews.toLocaleString("pt-BR"):"—"} sub="total acumulado"/>
+          <MetricCard label="Alcance" value={totalReach>0?totalReach.toLocaleString("pt-BR"):"—"} sub="pessoas únicas"/>
+          <MetricCard label="Engajamento" value={avgEngRate!=null?avgEngRate.toFixed(2)+"%":"—"} sub="média geral" color={avgEngRate!=null?(avgEngRate>=3?GRN:avgEngRate>=1?AMB:TX2):TX2}/>
+          <MetricCard label="Interações" value={totalEngagements>0?totalEngagements.toLocaleString("pt-BR"):"—"} sub="likes+comentários"/>
+        </div>
+
+        {/* ROI KPIs */}
+        <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Custo por Resultado (ROI)</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+          <MetricCard label="CPM" value={CPM!=null?fmtMoney(CPM):"—"} sub="custo por mil views" color={CPM!=null&&CPM<50?GRN:AMB}/>
+          <MetricCard label="CPV" value={CPV!=null?`R$ ${CPV.toFixed(4)}`:"—"} sub="custo por visualização"/>
+          <MetricCard label="CPE" value={CPE!=null?fmtMoney(CPE):"—"} sub="custo por engajamento" color={CPE!=null&&CPE<20?GRN:AMB}/>
+          <MetricCard label="CPM Alcance" value={CPR!=null?fmtMoney(CPR):"—"} sub="custo por mil alcançados"/>
+        </div>
+
+        {/* Delivery */}
+        <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Entregas do Contrato</div>
+        <div style={{...G,padding:"14px 16px",marginBottom:20}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <span style={{fontSize:12,color:TX2}}>{doneDels} de {totalDels} entregas concluídas</span>
+            <span style={{fontSize:13,fontWeight:700,color:completionRate===100?GRN:completionRate>=50?AMB:RED}}>{completionRate}%</span>
+          </div>
+          <div style={{height:6,background:LN,borderRadius:3}}>
+            <div style={{height:6,borderRadius:3,background:completionRate===100?GRN:c.color,width:`${completionRate}%`,transition:"width .5s"}}/>
+          </div>
+          {[["Posts/Reels",c.numPosts,cPosts.filter(p=>p.type==="post"||p.type==="reel").length],["Stories",c.numStories,cPosts.filter(p=>p.type==="story").length],["Links",c.numCommunityLinks,cPosts.filter(p=>p.type==="link").length]].filter(([,tot])=>tot>0).map(([lbl,tot,don],i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:`1px solid ${LN}`,marginTop:6}}>
+              <span style={{fontSize:12,color:TX2}}>{lbl}</span>
+              <span style={{fontSize:12,fontWeight:600,color:don>=tot?GRN:TX}}>{don}/{tot}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Posts breakdown */}
+        {cPosts.length > 0 && (
+          <>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Detalhamento por Publicação</div>
+            <div style={{border:`1px solid ${LN}`,borderRadius:8,overflow:"hidden",marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 90px 80px 80px",padding:"7px 14px",background:B2,fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:TX3}}>
+                <div>Publicação</div><div>Views</div><div>Alcance</div><div>Curtidas</div><div>Coment.</div><div>Eng.%</div>
+              </div>
+              {cPosts.map((p,i)=>{
+                const eng=calcEngagement(p);
+                return(
+                  <div key={p.id} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 90px 80px 80px",padding:"9px 14px",borderTop:`1px solid ${LN}`,fontSize:11,alignItems:"center"}}>
+                    <div style={{fontWeight:500,color:TX}}>{p.title}{p.link&&<a href={p.link} target="_blank" rel="noreferrer" style={{color:RED,marginLeft:6,fontSize:10}}>↗</a>}</div>
+                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{Number(p.views||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{Number(p.reach||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{Number(p.likes||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{Number(p.comments||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{fontWeight:700,color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3}}>{eng!=null?eng.toFixed(1)+"%":"—"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        <div style={{fontSize:10,color:TX3,textAlign:"center",paddingTop:12,borderTop:`1px solid ${LN}`}}>
+          Relatório gerado por COPA2026·OPS · @veloso.lucas_ · Ranked Produções
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── User Invite Modal ─────────────────────────────────────
+function UserInviteModal({ onClose }) {
+  const [email, setEmail]   = useState("");
+  const [pass, setPass]     = useState(() => Math.random().toString(36).slice(2,10).toUpperCase() + "!" + Math.floor(Math.random()*90+10));
+  const [done, setDone]     = useState(false);
+  const [error, setError]   = useState("");
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
+
+  const handleCreate = async () => {
+    if (!email) return setError("Informe o email.");
+    setLoading(true); setError("");
+    try {
+      const { createUserWithEmailAndPassword } = await import("firebase/auth");
+      const { auth } = await import("./firebase.js");
+      await createUserWithEmailAndPassword(auth, email, pass);
+      setDone(true);
+      toast?.("✓ Usuário criado com sucesso","success");
+    } catch(e) {
+      setError(e.message?.includes("email-already")?`${email} já tem conta.`:String(e.message));
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Modal title="Convidar Usuário" onClose={onClose} width={480}
+      footer={<>
+        <Btn onClick={onClose} variant="ghost" size="sm">Fechar</Btn>
+        {!done&&<Btn onClick={handleCreate} variant="primary" size="sm" disabled={loading}>{loading?"Criando…":"Criar conta"}</Btn>}
+      </>}>
+      {done ? (
+        <div style={{textAlign:"center",padding:"20px 0"}}>
+          <div style={{fontSize:32,marginBottom:12}}>✅</div>
+          <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:8}}>Conta criada!</div>
+          <div style={{fontSize:12,color:TX2,marginBottom:16}}>Compartilhe as credenciais abaixo:</div>
+          <div style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:16,textAlign:"left"}}>
+            <div style={{fontSize:12,marginBottom:6}}><b>Email:</b> {email}</div>
+            <div style={{fontSize:12}}><b>Senha temporária:</b> <code style={{background:B3,padding:"2px 6px",borderRadius:4}}>{pass}</code></div>
+          </div>
+          <div style={{fontSize:11,color:TX3,marginTop:10}}>O usuário pode alterar a senha após o primeiro login nas configurações do Firebase.</div>
+        </div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <Field label="Email do novo usuário">
+            <Input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="lucas@veloso.com"/>
+          </Field>
+          <Field label="Senha temporária">
+            <div style={{display:"flex",gap:8}}>
+              <Input value={pass} onChange={e=>setPass(e.target.value)} style={{flex:1}}/>
+              <Btn onClick={()=>setPass(Math.random().toString(36).slice(2,10).toUpperCase()+"!"+Math.floor(Math.random()*90+10))} variant="ghost" size="sm">🔄</Btn>
+            </div>
+          </Field>
+          {error&&<div style={{fontSize:11,color:RED,background:"rgba(200,16,46,.08)",border:"1px solid rgba(200,16,46,.2)",borderRadius:6,padding:"8px 12px"}}>{error}</div>}
+          <div style={{fontSize:11,color:TX3,padding:"10px 12px",background:B2,borderRadius:6}}>
+            O usuário receberá acesso completo ao app. Após o primeiro login, pode alterar a própria senha em <b>veloso-2026.vercel.app</b>.
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 
 // ─── App Root ─────────────────────────────────────────────
 export default function App() {
@@ -2588,6 +2824,7 @@ export default function App() {
   const [calMonth, setCal]  = useState(() => { const n=new Date(); return {y:n.getFullYear(),m:n.getMonth()}; });
   const [calFilter, setCalF] = useState("all");
   const [triggerNewTask, setTriggerNewTask] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const prevCIds = useRef([]); const prevPIds = useRef([]); const prevDIds = useRef([]);
 
   // Auth listener
@@ -2647,13 +2884,20 @@ export default function App() {
 
   const stats=useMemo(()=>{
     const totalBRL=contracts.reduce((s,c)=>s+toBRL(contractTotal(c),c.currency,rates),0);
+    // Count done deliverables as published posts per contract
+    const doneDeliverables=deliverables.filter(d=>d.stage==="done"||d.stage==="postagem");
     const commBRL=contracts.filter(c=>c.hasCommission).reduce((s,c)=>s+toBRL(contractTotal(c)*COMM_RATE,c.currency,rates),0);
     const totEur=contracts.filter(c=>c.currency==="EUR").reduce((s,c)=>s+contractTotal(c),0);
     const totUsd=contracts.filter(c=>c.currency==="USD").reduce((s,c)=>s+contractTotal(c),0);
     let commPaid=0,commPend=0;
     contracts.forEach(c=>{if(!c.hasCommission)return;getCommEntries(c).forEach(e=>{const v=toBRL(e.amount,c.currency,rates);e.isPaid?commPaid+=v:commPend+=v;});});
     const tot=k=>contracts.reduce((s,c)=>s+c[k],0);
-    const del=t=>posts.filter(p=>p.type===t).length;
+    // Combine posts + done deliverables for delivery counting
+    const del=t=>{
+      const fromPosts=posts.filter(p=>p.type===t&&p.isPosted).length;
+      const fromPipeline=doneDeliverables.filter(d=>d.type===t||((t==="post"||t==="reel")&&d.type==="reel")).length;
+      return fromPosts+fromPipeline;
+    };
     const engs=posts.map(calcEngagement).filter(e=>e!==null);
     const nfPending=contracts.reduce((s,c)=>s+getNFEntries(c).filter(e=>!e.isEmitted).length,0);
     const nfPendingValue=contracts.reduce((s,c)=>s+getNFEntries(c).filter(e=>!e.isEmitted).reduce((sv,e)=>sv+toBRL(e.amount,c.currency,rates),0),0);
@@ -2749,7 +2993,7 @@ a{color:${RED}}
 .hover-lift:hover{transform:translateY(-1px)!important;box-shadow:0 4px 12px rgba(0,0,0,0.08),0 1px 3px rgba(0,0,0,0.06)!important}
 .hover-row:hover{background:#F7F7F7!important}
 `}</style>
-        <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onlineUsers={onlineUsers} contracts={contracts}/>
+        <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts}/>
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <TopBar view={view} eurRate={eurRate} usdRate={usdRate} setEurRate={setEurRate} setUsdRate={setUsdRate}
             onNewContract={()=>setModal({type:"contract",data:null})}
@@ -2772,6 +3016,7 @@ a{color:${RED}}
             {modal.type==="post"    &&<PostModal modal={modal} setModal={setModal} contracts={contracts} posts={posts} saveP={saveP}/>}
           </div>
         )}
+        {showInvite && <UserInviteModal onClose={()=>setShowInvite(false)}/>}
       </div>
     </ToastProvider>
   );

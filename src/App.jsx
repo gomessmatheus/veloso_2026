@@ -295,7 +295,7 @@ function Field({ label, children, full }) {
 function CommToggle({ on, onToggle, label }) {
   return <div style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }} onClick={e=>{e.stopPropagation();onToggle();}}>
     <Toggle on={on} onToggle={()=>{}}/>
-    {label && <span style={{ fontSize:10, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:on?GRN:TX2 }}>{on?"Com. ativa":"Sem comissão"}</span>}
+    {label && <span style={{ fontSize:10, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:on?GRN:TX2 }}>{on?"✓ Comissão Ranked":"Sem comissão Ranked"}</span>}
   </div>;
 }
 
@@ -433,16 +433,7 @@ function Sidebar({ view, setView, user, onSignOut, onlineUsers, contracts }) {
           );
         })}
 
-        {/* Contract shortcuts */}
-        <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, padding:"4px 8px", marginTop:16, marginBottom:4 }}>Contratos</div>
-        {contracts.slice(0,6).map(c => (
-          <div key={c.id} onClick={()=>setView("contratos")}
-            style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 10px", borderRadius:6, cursor:"pointer", fontSize:11, color:TX2, marginBottom:1 }}>
-            <div style={{ width:6, height:6, borderRadius:"50%", background:c.color, flexShrink:0 }}/>
-            {c.company.split("/")[0].trim()}
-          </div>
-        ))}
-        {contracts.length>6 && <div style={{ fontSize:10, color:TX3, padding:"4px 10px" }}>+{contracts.length-6} mais</div>}
+
       </nav>
 
       {/* Online + user */}
@@ -683,7 +674,7 @@ function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, 
       };
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{"Content-Type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body: JSON.stringify({
           model:"claude-sonnet-4-20250514",
           max_tokens:1000,
@@ -700,6 +691,10 @@ Responda APENAS com o JSON, sem markdown.`
           }]
         })
       });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`API ${res.status}: ${errText.substr(0,200)}`);
+      }
       const data = await res.json();
       const raw = data.content?.[0]?.text || "{}";
       const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
@@ -1460,6 +1455,40 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
       <Field label="Observações / Briefing resumido">
         <Textarea value={f.notes || ""} onChange={e => set("notes", e.target.value)} rows={4} placeholder="Resumo do briefing, links de referência, pontos obrigatórios da marca…" />
       </Field>
+
+      {(f.stage === "postagem" || f.stage === "done") && (
+        <>
+          <SRule>Publicação</SRule>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Field label="Link do post">
+              <Input value={f.postLink || ""} onChange={e => set("postLink", e.target.value)} placeholder="https://instagram.com/p/..."/>
+            </Field>
+            <Field label="Data de publicação">
+              <Input type="date" value={f.publishedAt || ""} onChange={e => set("publishedAt", e.target.value)}/>
+            </Field>
+            <Field label="Views">
+              <Input type="number" min="0" value={f.views || ""} onChange={e => set("views", e.target.value)} placeholder="0"/>
+            </Field>
+            <Field label="Alcance">
+              <Input type="number" min="0" value={f.reach || ""} onChange={e => set("reach", e.target.value)} placeholder="0"/>
+            </Field>
+            <Field label="Curtidas">
+              <Input type="number" min="0" value={f.likes || ""} onChange={e => set("likes", e.target.value)} placeholder="0"/>
+            </Field>
+            <Field label="Comentários">
+              <Input type="number" min="0" value={f.comments || ""} onChange={e => set("comments", e.target.value)} placeholder="0"/>
+            </Field>
+          </div>
+          {Number(f.reach) > 0 && (
+            <div style={{ marginTop:8, padding:"10px 14px", background:`${GRN}10`, border:`1px solid ${GRN}30`, borderRadius:8, display:"flex", justifyContent:"space-between" }}>
+              <span style={{ fontSize:12, color:TX2 }}>Engajamento calculado</span>
+              <span style={{ fontSize:14, fontWeight:700, color:GRN }}>
+                {(((Number(f.likes)||0)+(Number(f.comments)||0))/Number(f.reach)*100).toFixed(2)}%
+              </span>
+            </div>
+          )}
+        </>
+      )}
     </Modal>
   );
 }
@@ -1698,8 +1727,33 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
       installments:f.paymentType==="split"?(f.installments||[]).map(i=>({value:Number(i.value)||0,date:i.date||""})):[],
       parc1Value:0,parc2Value:0,parc1Deadline:"",parc2Deadline:"",
       commPaid:f.commPaid||{},nfEmitted:f.nfEmitted||{},paymentDaysAfterNF:Number(f.paymentDaysAfterNF)||0};
-    if(isEdit) await saveC(contracts.map(c=>c.id===entry.id?entry:c));
-    else await saveC([...contracts,entry]);
+    if(isEdit) {
+      await saveC(contracts.map(c=>c.id===entry.id?entry:c));
+    } else {
+      await saveC([...contracts,entry]);
+      // Auto-create deliverables in Briefing stage
+      const TYPE_MAP = [
+        {key:"numPosts",    type:"reel",    label:"Reel"},
+        {key:"numStories",  type:"story",   label:"Story"},
+        {key:"numReposts",  type:"tiktok",  label:"TikTok"},
+        {key:"numCommunityLinks", type:"link", label:"Link"},
+      ];
+      const newDeliverables = [];
+      TYPE_MAP.forEach(({key,type,label}) => {
+        const n = Number(f[key])||0;
+        for(let i=1;i<=n;i++) {
+          newDeliverables.push({
+            id:uid(), contractId:entry.id, title:`${label} ${f.company} #${i}`,
+            type, stage:"briefing", plannedPostDate:"", notes:"",
+            responsible:{}, stageDateOverrides:{}, createdAt:new Date().toISOString(),
+          });
+        }
+      });
+      if(newDeliverables.length>0 && modal.saveDeliverables) {
+        const existing = lsLoad("copa6_deliverables",[]);
+        modal.saveDeliverables([...existing,...newDeliverables]);
+      }
+    }
     setModal(null);
   };
   return (
@@ -2010,17 +2064,48 @@ export default function App() {
       else if(c.paymentType==="split"){const O=["1ª","2ª","3ª","4ª","5ª","6ª"];getInstallments(c).forEach((inst,i)=>{if(inst.date)add(inst.date,{label:`${O[i]||`${i+1}ª`} PARC · ${c.company}`,color:c.color});});}
       else if(c.paymentDeadline)add(c.paymentDeadline,{label:`PGTO · ${c.company}`,color:c.color});
     });
-    posts.forEach(p=>{const c=contracts.find(x=>x.id===p.contractId);if(!c)return;if(calFilter!=="all"&&calFilter!==c.id)return;add(p.isPosted?(p.publishDate||p.plannedDate):p.plannedDate,{label:(p.isPosted?"":"📅 ")+p.title,color:c.color});});
+    posts.forEach(p=>{const c=contracts.find(x=>x.id===p.contractId);if(!c)return;if(calFilter!=="all"&&calFilter!==c.id)return;add(p.isPosted?(p.publishDate||p.plannedDate):p.plannedDate,{label:(p.isPosted?"✓ ":"📅 ")+p.title,color:c.color});});
+    // Pipeline deliverables on calendar (by plannedPostDate)
+    const pipeDeliverables = lsLoad("copa6_deliverables",[]);
+    pipeDeliverables.forEach(d=>{
+      if(!d||!d.plannedPostDate||d.stage==="done") return;
+      const c=contracts.find(x=>x.id===d.contractId);
+      if(!c) return;
+      if(calFilter!=="all"&&calFilter!==c.id) return;
+      // Stage deadlines
+      STAGES.filter(s=>s.id!=="done"&&s.id!=="postagem").forEach(s=>{
+        const stageDue = d.stageDateOverrides?.[s.id] || addDays(d.plannedPostDate, s.days);
+        if(stageDue) add(stageDue,{label:`${s.label} · ${d.title}`,color:c.color,dashed:true});
+      });
+      // Postagem
+      add(d.plannedPostDate,{label:`📅 ${d.title}`,color:c.color});
+    });
     try{const cronos=JSON.parse(localStorage.getItem("copa6_cron")||"{}");Object.entries(cronos).forEach(([cid,ms])=>{const c=contracts.find(x=>x.id===cid);if(!c)return;if(calFilter!=="all"&&calFilter!==c.id)return;(ms||[]).forEach(m=>{if(m.date&&m.fase)add(m.date,{label:`${m.fase}${m.resp?` · ${m.resp}`:""}`,color:c.color,dashed:true});});});}catch{}
-    // Travel dates
+    // Travel dates + period + conflict detection
     contracts.forEach(c => {
-      if (!c.hasTravel||!c.travelDates) return;
+      if (!c.hasTravel||!c.travelDates?.length) return;
       if (calFilter!=="all"&&calFilter!==c.id) return;
       const TYPE_EMOJI = {travel:"✈️",recording:"🎥",event:"🎯",return:"🏠"};
-      (c.travelDates||[]).forEach(td => {
-        if (!td.date) return;
-        add(td.date, { label:`${TYPE_EMOJI[td.type]||"✈️"} ${c.company}${td.note?` · ${td.note}`:""}`, color:BLU, dashed:false });
+      const sortedDates = [...c.travelDates].filter(td=>td.date).sort((a,b)=>a.date.localeCompare(b.date));
+      if(!sortedDates.length) return;
+      // Mark each travel date
+      sortedDates.forEach(td => {
+        add(td.date, { label:`${TYPE_EMOJI[td.type]||"✈️"} ${c.company}${td.note?` · ${td.note}`:""}`, color:BLU, isTravel:true });
       });
+      // Fill travel period (between first and last date)
+      if(sortedDates.length >= 2) {
+        const start = sortedDates[0].date;
+        const end   = sortedDates[sortedDates.length-1].date;
+        let cur = start;
+        while(cur <= end) {
+          const isMarked = sortedDates.some(td=>td.date===cur);
+          if(!isMarked) add(cur, { label:`━ ${c.company} (viagem)`, color:BLU, dashed:true, isTravelPeriod:true });
+          // Check conflict: any deliverable posting during travel period
+          const hasPipeConflict = (lsLoad("copa6_deliverables",[])||[]).some(d=>d.plannedPostDate===cur&&d.contractId!==c.id);
+          if(hasPipeConflict) add(cur, { label:`⚠️ Conflito com viagem`, color:AMB, isConflict:true });
+          cur = addDays(cur, 1);
+        }
+      }
     });
     return ev;
   },[contracts,posts,calFilter]);
@@ -2077,7 +2162,7 @@ a{color:${RED}}
         </div>
         {modal && (
           <div>
-            {modal.type==="contract"&&<ContractModal modal={modal} setModal={setModal} contracts={contracts} saveC={saveC}/>}
+            {modal.type==="contract"&&<ContractModal modal={{...modal,saveDeliverables:saveD}} setModal={setModal} contracts={contracts} saveC={saveC}/>}
             {modal.type==="post"    &&<PostModal modal={modal} setModal={setModal} contracts={contracts} posts={posts} saveP={saveP}/>}
           </div>
         )}

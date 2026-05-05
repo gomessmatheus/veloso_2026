@@ -677,11 +677,10 @@ function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, 
         conflictCount: conflicts.length,
         today: todayStr,
       };
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/ai", {
         method:"POST",
-        headers:{"Content-Type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
-          model:"claude-sonnet-4-20250514",
           max_tokens:1000,
           messages:[{
             role:"user",
@@ -697,11 +696,11 @@ Responda APENAS com o JSON, sem markdown.`
         })
       });
       if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`API ${res.status}: ${errText.substr(0,200)}`);
+        const errData = await res.json().catch(()=>({}));
+        throw new Error(`API ${res.status}: ${JSON.stringify(errData).substr(0,200)}`);
       }
       const data = await res.json();
-      const raw = data.content?.[0]?.text || "{}";
+      const raw = data.text || "{}";
       const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
       setAiInsight(parsed);
     } catch(e) { setAiInsight({ error: String(e) }); }
@@ -1705,11 +1704,10 @@ function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, sa
         avgEngagement: avgEng,
         briefing: c.briefingNote || "",
       };
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
           max_tokens: 1500,
           messages: [{ role: "user", content: `Você é o assistente operacional do @veloso.lucas_ para a Copa 2026. Gere um relatório executivo do contrato com ${c.company} em JSON:
 {
@@ -1728,7 +1726,7 @@ Responda APENAS com o JSON.` }]
       });
       if (!res.ok) throw new Error(`API ${res.status}`);
       const data = await res.json();
-      const raw = data.content?.[0]?.text || "{}";
+      const raw = data.text || "{}";
       setAiReport(JSON.parse(raw.replace(/```json|```/g,"").trim()));
     } catch(e) { setAiReport({ error: String(e) }); }
     setAiLoading(false);

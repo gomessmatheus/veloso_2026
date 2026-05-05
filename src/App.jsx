@@ -101,12 +101,17 @@ function getCommEntries(c) {
     while(cur<=e){const key=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`;entries.push({key,label:`${MONTHS_SH[cur.getMonth()]} ${cur.getFullYear()}`,amount:(c.monthlyValue||0)*COMM_RATE,currency:c.currency,isPaid:!!paid[key]});cur.setMonth(cur.getMonth()+1);}
     return entries;
   }
+  const totalCosts=(c.costs||[]).reduce((s,x)=>s+(Number(x.value)||0),0);
   if (c.paymentType==="split") {
     const O=["1ª","2ª","3ª","4ª","5ª","6ª"];
-    return getInstallments(c).map((inst,i)=>({key:`parc${i+1}`,label:`${O[i]||`${i+1}ª`} Parcela`,amount:(Number(inst.value)||0)*COMM_RATE,currency:c.currency,date:inst.date,isPaid:!!paid[`parc${i+1}`]}));
+    const insts=getInstallments(c);
+    const costPerInst=insts.length?totalCosts/insts.length:0;
+    return insts.map((inst,i)=>({key:`parc${i+1}`,label:`${O[i]||`${i+1}ª`} Parcela`,amount:Math.max(0,(Number(inst.value)||0)-costPerInst)*COMM_RATE,currency:c.currency,date:inst.date,isPaid:!!paid[`parc${i+1}`]}));
   }
   const total=contractTotal(c);
-  return [{key:"single",label:"Pagamento Único",amount:total*COMM_RATE,currency:c.currency,date:c.paymentDeadline,isPaid:!!paid["single"]}];
+  const costs=(c.costs||[]).reduce((s,x)=>s+(Number(x.value)||0),0);
+  const netTotal=Math.max(0,total-costs);
+  return [{key:"single",label:"Pagamento Único",amount:netTotal*COMM_RATE,currency:c.currency,date:c.paymentDeadline,isPaid:!!paid["single"]}];
 }
 function getNFEntries(c) {
   const nf=c.nfEmitted||{};
@@ -767,8 +772,9 @@ Responda APENAS com o JSON, sem markdown.`
       )}
 
       {/* KPIs - delivery focused */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12, marginBottom:20 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:12, marginBottom:20 }}>
         {[
+          { label:"Volume Total Ano", value:fmtMoney(stats.totalBRL), sub:`${contracts.length} contratos` },
           { label:"Entregáveis ativos", value:allDeliverables.filter(d=>d.stage!=="done").length, sub:`${allDeliverables.filter(d=>d.stage==="done").length} concluídos` },
           { label:"Posts publicados", value:`${stats.dp}/${stats.tp}`, sub:`${stats.ds}/${stats.ts} stories` },
           { label:"Atrasados", value:lateDeliverables.length, sub:"no pipeline", accent:lateDeliverables.length>0?RED:GRN },
@@ -2326,6 +2332,52 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
           )}
         </div>
       )}
+      <SRule>Custos do Contrato</SRule>
+      <div style={{marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span style={{fontSize:11,color:TX2}}>Deduza custos antes de calcular a comissão (passagens, produção, etc.)</span>
+        <Btn onClick={()=>set("costs",[...(f.costs||[]),{id:uid(),label:"",value:"",category:"production"}])} variant="ghost" size="sm" icon={Plus}>Adicionar custo</Btn>
+      </div>
+      {(f.costs||[]).length===0&&<div style={{fontSize:11,color:TX3,fontStyle:"italic",marginBottom:8}}>Nenhum custo cadastrado</div>}
+      {(f.costs||[]).map((cost,i)=>(
+        <div key={cost.id||i} style={{display:"grid",gridTemplateColumns:"1fr 120px 140px 32px",gap:8,marginBottom:8,alignItems:"end"}}>
+          <Field label={i===0?"Descrição":""}><Input value={cost.label} placeholder="ex: Passagem aérea" onChange={e=>{const c=[...(f.costs||[])];c[i]={...c[i],label:e.target.value};set("costs",c);}}/></Field>
+          <Field label={i===0?"Valor (R$)":""}>
+            <Input type="number" min="0" value={cost.value} placeholder="0" onChange={e=>{const c=[...(f.costs||[])];c[i]={...c[i],value:e.target.value};set("costs",c);}}/>
+          </Field>
+          <Field label={i===0?"Categoria":""}>
+            <Select value={cost.category||"production"} onChange={e=>{const c=[...(f.costs||[])];c[i]={...c[i],category:e.target.value};set("costs",c);}}>
+              <option value="production">Produção</option>
+              <option value="travel">Viagem</option>
+              <option value="equipment">Equipamento</option>
+              <option value="crew">Equipe</option>
+              <option value="other">Outro</option>
+            </Select>
+          </Field>
+          <button onClick={()=>set("costs",(f.costs||[]).filter((_,j)=>j!==i))} style={{padding:"8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:RED,cursor:"pointer",alignSelf:"flex-end"}}>×</button>
+        </div>
+      ))}
+      {(f.costs||[]).length>0&&(()=>{
+        const totalCosts=(f.costs||[]).reduce((s,c)=>s+(Number(c.value)||0),0);
+        const base=(()=>{if(f.paymentType==="monthly"){const m=monthsBetween(f.contractStart,f.contractDeadline);return m?(Number(f.monthlyValue)||0)*m:0;}if(f.paymentType==="split")return(f.installments||[]).reduce((s,i)=>s+(Number(i.value)||0),0);return Number(f.contractValue)||0;})();
+        const netValue=base-totalCosts;
+        const commOnNet=netValue>0&&f.hasCommission?netValue*0.20:0;
+        return(
+          <div style={{marginTop:4,padding:"12px 14px",background:`${BLU}08`,border:`1px solid ${BLU}20`,borderRadius:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:11,color:TX2}}>Total custos</span>
+              <span style={{fontSize:12,fontWeight:700,color:RED}}>- {fmtMoney(totalCosts)}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:11,color:TX2}}>Valor líquido</span>
+              <span style={{fontSize:12,fontWeight:700,color:TX}}>{fmtMoney(netValue)}</span>
+            </div>
+            {f.hasCommission&&<div style={{display:"flex",justifyContent:"space-between",paddingTop:6,borderTop:`1px solid ${LN}`}}>
+              <span style={{fontSize:11,color:TX2}}>Comissão Ranked (20% s/ líquido)</span>
+              <span style={{fontSize:12,fontWeight:700,color:RED}}>{fmtMoney(commOnNet)}</span>
+            </div>}
+          </div>
+        );
+      })()}
     </Modal>
   );
 }

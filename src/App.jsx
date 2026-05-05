@@ -1717,6 +1717,37 @@ function PostModal({ modal, setModal, contracts, posts, saveP, toast }) {
 }
 
 
+
+// ─── View Renderer (catches per-view errors) ──────────────
+function ViewRenderer({ view, contracts, posts, stats, rates, saveNote, toggleComm,
+  toggleCommPaid, toggleNF, setModal, setView, saveC, saveP,
+  calEvents, calMonth, setCal, calFilter, setCalF,
+  triggerNewTask, setTriggerNewTask }) {
+  const [err, setErr] = useState(null);
+  useEffect(() => { setErr(null); }, [view]);
+  if (err) return (
+    <div style={{ padding:40, maxWidth:600 }}>
+      <div style={{ background:"#FFF1F2", border:"1px solid #FCA5A5", borderRadius:10, padding:24 }}>
+        <div style={{ fontSize:14, fontWeight:700, color:RED, marginBottom:8 }}>Erro na renderização</div>
+        <div style={{ fontSize:12, color:TX, marginBottom:16, fontFamily:"monospace", background:B2, padding:12, borderRadius:6, whiteSpace:"pre-wrap", wordBreak:"break-all" }}>{String(err)}</div>
+        <Btn onClick={() => setErr(null)} variant="primary" size="sm">Tentar novamente</Btn>
+      </div>
+    </div>
+  );
+  try {
+    if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>;
+    if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
+    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} saveC={saveC} setModal={setModal} toggleComm={toggleComm} saveNote={saveNote} rates={rates}/>;
+    if (view==="tarefas")        return <Tarefas contracts={contracts} externalNewTask={triggerNewTask} onExternalNewTaskHandled={()=>setTriggerNewTask(false)} navigateTo={setView}/>;
+    if (view==="posts")          return <Posts contracts={contracts} posts={posts} saveP={saveP} setModal={setModal}/>;
+    if (view==="calendario")     return <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
+    return null;
+  } catch(e) {
+    setErr(e?.message || String(e));
+    return null;
+  }
+}
+
 // ─── App Root ─────────────────────────────────────────────
 export default function App() {
   const [user, setUser]     = useState(undefined); // undefined=loading
@@ -1857,12 +1888,13 @@ a{color:${RED}}
             onNewTask={()=>setTriggerNewTask(true)}
             syncStatus={syncStatus}/>
           <div style={{ flex:1, overflowY:"auto" }}>
-            {view==="dashboard"      && <Dashboard contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>}
-            {view==="acompanhamento" && <Acompanhamento contracts={contracts} posts={posts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>}
-            {view==="contratos"      && <Contratos contracts={contracts} posts={posts} saveC={saveC} setModal={setModal} toggleComm={toggleComm} saveNote={saveNote} rates={rates}/>}
-            {view==="tarefas"        && <Tarefas contracts={contracts} externalNewTask={triggerNewTask} onExternalNewTaskHandled={()=>setTriggerNewTask(false)} navigateTo={setView}/>}
-            {view==="posts"          && <Posts contracts={contracts} posts={posts} saveP={saveP} setModal={setModal}/>}
-            {view==="calendario"     && <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>}
+            <ViewRenderer view={view} contracts={contracts} posts={posts} stats={stats} rates={rates}
+              saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid}
+              toggleNF={toggleNF} setModal={setModal} setView={setView}
+              saveC={saveC} saveP={saveP}
+              calEvents={calEvents} calMonth={calMonth} setCal={setCal}
+              calFilter={calFilter} setCalF={setCalF}
+              triggerNewTask={triggerNewTask} setTriggerNewTask={setTriggerNewTask}/>
           </div>
         </div>
         {modal && (

@@ -2490,7 +2490,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
         }
       });
       if(newDeliverables.length>0 && modal.saveDeliverables) {
-        const existing = lsLoad("copa6_deliverables",[]);
+        const existing = modal.existingDeliverables || [];
         modal.saveDeliverables([...existing,...newDeliverables]);
       }
     }
@@ -3220,7 +3220,7 @@ a{color:${RED}}
         </div>
         {modal && (
           <div>
-            {modal.type==="contract"&&<ContractModal modal={{...modal,saveDeliverables:saveD}} setModal={setModal} contracts={contracts} saveC={saveC}/>}
+            {modal.type==="contract"&&<ContractModal modal={{...modal,saveDeliverables:saveD,existingDeliverables:deliverables}} setModal={setModal} contracts={contracts} saveC={saveC}/>}
             {modal.type==="post"    &&<PostModal modal={modal} setModal={setModal} contracts={contracts} posts={posts} saveP={saveP}/>}
           </div>
         )}

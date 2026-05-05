@@ -150,8 +150,13 @@ Responda APENAS com o texto da mensagem.`
       messages: [{ role: "user", content: prompt }]
     })
   })
-  const data = await res.json()
-  return data.content?.[0]?.text || "Erro ao gerar mensagem."
+  const rawText = await res.text()
+  let data
+  try { data = JSON.parse(rawText) } catch(e) { throw new Error("Parse error: " + rawText.substr(0,300)) }
+  if (!res.ok || data.error) throw new Error("Claude " + res.status + ": " + JSON.stringify(data.error || data).substr(0,300))
+  const msg = data.content?.[0]?.text
+  if (!msg) throw new Error("Empty response: " + JSON.stringify(data).substr(0,200))
+  return msg
 }
 
 // ─── Send WhatsApp ────────────────────────────────────────
@@ -181,9 +186,13 @@ export default async function handler(req, res) {
     let message, claudeError = null
     try {
       message = await generateMessage(type, contracts, deliverables, posts)
+      if (!message || message === "Erro ao gerar mensagem.") {
+        claudeError = "generateMessage returned empty/default"
+        message = claudeError
+      }
     } catch(claudeErr) {
       claudeError = String(claudeErr)
-      message = `Erro Claude: ${claudeError}`
+      message = `[ERRO] ${claudeError.substr(0,200)}`
     }
     const zapiRes = await sendWhatsApp(message)
 

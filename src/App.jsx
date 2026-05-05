@@ -783,49 +783,23 @@ Responda APENAS com o JSON, sem markdown.`
       const pendingDeliverables = allDeliverables.filter(d=>d.stage!=="done").length;
       const unscheduled = allDeliverables.filter(d=>!d.plannedPostDate&&d.stage!=="done").length;
 
-      const res = await fetch("/api/ai", {
+      // Only 3 months, compact prompt, robust parsing
+      const months3 = months.slice(0, 3);
+      const prompt = "Analise capacidade producao influencer. Dados por mes: " +
+        months3.map(m => m.month+"[agendados="+m.scheduled+",diasUteis="+m.availableDays+",viagem="+m.travelDays+"]").join(" ") +
+        " Regras: max1post/dia, 9dias producao. Contratos:"+totalContracts+" Pendentes:"+unscheduled+
+        ". Retorne JSON: {overview:str,months:[{month:str,scheduled:int,safeCapacity:int,availableSlots:int,status:str,recommendation:str}],globalRisks:[str],suggestions:[str]}" +
+        " status=ok/attention/full/critical. Recomendacoes max 8 palavras. APENAS JSON puro sem markdown.";
+      const capRes = await fetch("/api/ai", {
         method: "POST",
         headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          max_tokens: 1200,
-          messages: [{
-            role: "user",
-            content: `Você é especialista em planejamento de conteúdo para criadores digitais. Analise a capacidade de produção do @veloso.lucas_ para os próximos 6 meses.
-
-CONTEXTO:
-- Tempo mínimo de produção por peça: 9 dias (briefing → postagem)
-- Regra: máximo 1 publicação por dia
-- Contratos ativos: ${totalContracts}
-- Entregáveis pendentes sem data: ${unscheduled}
-- Total no pipeline: ${pendingDeliverables}
-
-DADOS MÊS A MÊS:
-${months.map(m => m.month+": "+m.scheduled+" agendados, "+m.availableDays+" dias úteis ("+m.travelDays+" de viagem)"+(m.conflicts>0?" "+m.conflicts+" conflitos":"")).join("\n")}
-Retorne um JSON com análise de cada mês:
-{
-  "overview": "frase resumo da situação geral",
-  "months": [
-    {
-      "month": "Maio 2026",
-      "scheduled": 2,
-      "safeCapacity": 4,
-      "availableSlots": 2,
-      "status": "ok|attention|full|critical",
-      "recommendation": "texto curto de recomendação",
-      "riskFactors": ["fator 1 se houver"]
-    }
-  ],
-  "globalRisks": ["risco global 1"],
-  "suggestions": ["sugestão 1", "sugestão 2"]
-}
-
-Considere que o Lucas precisa de tempo de recuperação entre gravações intensas e que viagens consomem energia criativa. Responda APENAS com o JSON.`
-          }]
-        })
+        body: JSON.stringify({ max_tokens: 700, messages:[{ role:"user", content: prompt }] })
       });
-      if (!res.ok) throw new Error(`API ${res.status}`);
-      const data = await res.json();
-      const parsed = JSON.parse((data.text||"{}").replace(/```json|```/g,"").trim());
+      if (!capRes.ok) throw new Error("API "+capRes.status);
+      const capData = await capRes.json();
+      const raw = (capData.text||"").trim().replace(/^[^{]*/,"").replace(/[^}]*$/,"");
+      if (!raw.startsWith("{")) throw new Error("JSON nao encontrado na resposta");
+      const parsed = JSON.parse(raw);
       setCapAnalysis({ ...parsed, rawMonths: months });
     } catch(e) { setCapAnalysis({ error: String(e) }); }
     setCapLoading(false);

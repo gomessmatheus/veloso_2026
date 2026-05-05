@@ -154,11 +154,10 @@ const SEED_TASKS = [];
 
 
 // ─── CSS ──────────────────────────────────────────────────
-const G = { // card style (shadow-sm from config)
-  background: B1, border: `1px solid ${LN}`,
-  borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.10), 0 1px 2px -1px rgba(0,0,0,0.10)",
-};
-const G2 = { ...G, background: B2, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" };
+const G  = { background:B1, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)" };
+const G2 = { background:B2, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 2px rgba(0,0,0,0.03)" };
+const GHV = { background:B1, border:`1px solid ${LN2}`, borderRadius:12, boxShadow:"0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)", transform:"translateY(-1px)" };
+const TRANS = "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)";
 
 // ─── Toast ────────────────────────────────────────────────
 const ToastCtx = createContext(null);
@@ -193,14 +192,16 @@ function ToastProvider({ children }) {
 
 // ─── Base components ──────────────────────────────────────
 function Btn({ children, onClick, variant="default", size="md", icon:Icon, disabled, style:st }) {
-  const base = { display:"inline-flex", alignItems:"center", gap:6, fontFamily:"inherit", fontWeight:600, letterSpacing:".03em", cursor:disabled?"not-allowed":"pointer", opacity:disabled?.5:1, border:"none", outline:"none", transition:"all .15s", borderRadius:6, fontSize: size==="sm"?10:12 };
+  const [hov, setHov] = useState(false);
+  const base = { display:"inline-flex", alignItems:"center", gap:6, fontFamily:"inherit", fontWeight:600, letterSpacing:".03em", cursor:disabled?"not-allowed":"pointer", opacity:disabled?.5:1, border:"none", outline:"none", transition:"all 0.18s cubic-bezier(0.4,0,0.2,1)", borderRadius:6, fontSize:size==="sm"?10:12 };
   const variants = {
-    default: { background:B2, color:TX, border:`1px solid ${LN2}`, padding:size==="sm"?"5px 10px":"7px 14px" },
-    primary: { background:RED, color:"#fff", padding:size==="sm"?"5px 10px":"7px 14px" },
-    ghost: { background:"transparent", color:TX2, padding:size==="sm"?"5px 8px":"7px 10px" },
-    danger: { background:"rgba(200,16,46,.15)", color:RED, border:`1px solid rgba(200,16,46,.25)`, padding:size==="sm"?"5px 10px":"7px 14px" },
+    default: { background:hov?B3:B2, color:TX, border:`1px solid ${hov?LN2:LN}`, padding:size==="sm"?"5px 10px":"7px 14px", boxShadow:hov?"0 2px 6px rgba(0,0,0,0.08)":"none" },
+    primary: { background:hov?"#a80d25":RED, color:"#fff", padding:size==="sm"?"5px 10px":"7px 14px", boxShadow:hov?"0 3px 10px rgba(200,16,46,0.35)":"0 1px 3px rgba(200,16,46,0.2)", transform:hov?"translateY(-1px)":"translateY(0)" },
+    ghost: { background:hov?B2:"transparent", color:hov?TX:TX2, padding:size==="sm"?"5px 8px":"7px 10px", borderRadius:4 },
+    danger: { background:hov?"rgba(200,16,46,.22)":"rgba(200,16,46,.1)", color:RED, border:`1px solid rgba(200,16,46,.3)`, padding:size==="sm"?"5px 10px":"7px 14px" },
   };
-  return <button style={{...base,...variants[variant],...st}} onClick={onClick} disabled={disabled}>
+  return <button style={{...base,...variants[variant],...st}} onClick={onClick} disabled={disabled}
+    onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
     {Icon && <Icon size={size==="sm"?11:13}/>}{children}
   </button>;
 }
@@ -375,7 +376,9 @@ function Sidebar({ view, setView, user, onSignOut, onlineUsers, contracts }) {
           const active = view===item.id;
           return (
             <div key={item.id} onClick={()=>setView(item.id)}
-              style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:active?600:400, color:active?TX:TX2, background:active?B2:"transparent", marginBottom:2, transition:"all .1s" }}>
+              style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:active?600:400, color:active?TX:TX2, background:active?B3:"transparent", marginBottom:2, transition:"all 0.18s cubic-bezier(0.4,0,0.2,1)", boxShadow:active?"0 1px 3px rgba(0,0,0,0.06)":"none" }}
+            onMouseEnter={e=>{ if(!active){e.currentTarget.style.background=B2;e.currentTarget.style.color=TX;}}}
+            onMouseLeave={e=>{ if(!active){e.currentTarget.style.background="transparent";e.currentTarget.style.color=TX2;}}}>
               <item.icon size={14} style={{ color:active?RED:TX3, flexShrink:0 }}/>
               {item.label}
               {item.id==="tarefas" && (
@@ -467,8 +470,10 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
 
 // ─── Dashboard ────────────────────────────────────────────
 function KpiCard({ label, value, sub, accent }) {
+  const [hov, setHov] = useState(false);
   return (
-    <div style={{ ...G, padding:"18px 20px" }}>
+    <div style={{ ...(hov?GHV:G), padding:"18px 20px", transition:TRANS }}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
       <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>{label}</div>
       <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-.02em", color:accent||TX, lineHeight:1 }}>{value}</div>
       {sub && <div style={{ fontSize:11, color:TX3, marginTop:5 }}>{sub}</div>}
@@ -538,8 +543,8 @@ function Dashboard({ contracts, posts, stats, rates, saveNote, toggleComm, toggl
             <div key={c.id} style={{ borderBottom:`1px solid ${LN}` }}>
               <div onClick={()=>setOpen(isOpen?null:c.id)}
                 style={{ display:"grid", gridTemplateColumns:"3px 1fr 130px 110px 180px 140px 32px", alignItems:"center", cursor:"pointer", background:isOpen?B2:B0, transition:"background .1s" }}
-                onMouseEnter={e=>!isOpen&&(e.currentTarget.style.background=B1)}
-                onMouseLeave={e=>!isOpen&&(e.currentTarget.style.background=B0)}>
+                onMouseEnter={e=>{ if(!isOpen){e.currentTarget.style.background=B2;e.currentTarget.style.boxShadow="inset 3px 0 0 "+RED;}}}
+                onMouseLeave={e=>{ if(!isOpen){e.currentTarget.style.background=B0;e.currentTarget.style.boxShadow="none";}}}>
                 <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }}/>
                 <div style={{ padding:"12px", display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                   <span style={{ fontWeight:600, fontSize:13, color:TX }}>{c.company}</span>
@@ -723,51 +728,57 @@ function Tarefas({ contracts, setNewTaskOpen }) {
         <Btn onClick={()=>setNewOpen(true)} variant="primary" size="sm" icon={Plus}>Nova tarefa</Btn>
       </div>
 
-      {/* Board view */}
-      {view==="board" && (
+      {/* Board view - drag & drop */}
+      {view==="board" && (() => {
+        const [dragOverCol, setDragOverCol] = useState(null);
+        const [hovCard, setHovCard] = useState(null);
+        return (
         <div style={{ display:"grid", gridTemplateColumns:`repeat(${ACTIVE_STATUSES.length},1fr)`, gap:10 }}>
           {ACTIVE_STATUSES.map(status => {
             const col = byStatus(status.id);
+            const dragOver = dragOverCol === status.id;
             return (
-              <div key={status.id} style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-                <div style={{ padding:"12px 14px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6 }}>
+              <div key={status.id}
+                style={{ background:dragOver?`${status.color}08`:B2, border:`1.5px solid ${dragOver?status.color:LN}`, borderRadius:12, overflow:"hidden", transition:"all 0.18s ease" }}
+                onDragOver={e=>{ e.preventDefault(); setDragOverCol(status.id); }}
+                onDragLeave={()=>setDragOverCol(null)}
+                onDrop={e=>{ e.preventDefault(); setDragOverCol(null); const id=e.dataTransfer.getData("taskId"); if(id) updateStatus(id,status.id); }}>
+                <div style={{ padding:"12px 14px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", gap:6, background:B1 }}>
                   <status.icon size={12} style={{color:status.color}}/>
                   <span style={{ fontSize:11, fontWeight:700, color:TX, flex:1 }}>{status.label}</span>
-                  <span style={{ fontSize:9, fontWeight:700, background:`rgba(255,255,255,.06)`, color:TX2, padding:"1px 6px", borderRadius:99 }}>{col.length}</span>
+                  <span style={{ fontSize:9, fontWeight:700, background:B3, color:TX2, padding:"2px 7px", borderRadius:99 }}>{col.length}</span>
                 </div>
-                <div style={{ padding:8, display:"flex", flexDirection:"column", gap:6, minHeight:100 }}>
+                <div style={{ padding:8, display:"flex", flexDirection:"column", gap:6, minHeight:120 }}>
                   {col.map(task => {
                     const prio = TASK_PRIORITIES.find(p=>p.id===(task.priority||"none"));
                     const contract = contracts.find(c=>c.id===task.contractId);
                     return (
-                      <div key={task.id} onClick={()=>setEditTask(task)}
-                        style={{ background:B2, border:`1px solid ${LN}`, borderRadius:7, padding:"10px 12px", cursor:"pointer", transition:"border .1s" }}
-                        onMouseEnter={e=>e.currentTarget.style.borderColor=LN2}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>
-                        <div style={{ fontSize:12, fontWeight:500, color:TX, marginBottom:6, lineHeight:1.4 }}>{task.title}</div>
+                      <div key={task.id}
+                        draggable
+                        onDragStart={e=>{ e.dataTransfer.setData("taskId",task.id); e.currentTarget.style.opacity=".5"; }}
+                        onDragEnd={e=>e.currentTarget.style.opacity="1"}
+                        onClick={()=>setEditTask(task)}
+                        onMouseEnter={()=>setHovCard(task.id)}
+                        onMouseLeave={()=>setHovCard(null)}
+                        style={{ background:B1, border:`1px solid ${hovCard===task.id?LN2:LN}`, borderRadius:8, padding:"11px 13px", cursor:"grab", transition:TRANS, boxShadow:hovCard===task.id?"0 4px 12px rgba(0,0,0,0.08),0 1px 3px rgba(0,0,0,0.05)":"0 1px 2px rgba(0,0,0,0.04)", transform:hovCard===task.id?"translateY(-2px)":"translateY(0)" }}>
+                        <div style={{ fontSize:12, fontWeight:500, color:TX, marginBottom:8, lineHeight:1.45 }}>{task.title}</div>
+                        {task.description && <div style={{ fontSize:11, color:TX2, marginBottom:8, lineHeight:1.4, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>{task.description}</div>}
                         <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                          {prio && <div title={prio.label} style={{ display:"flex", alignItems:"center", gap:3, fontSize:9, color:prio.color }}>
-                            <prio.icon size={10}/>{prio.label}
+                          {prio && <div style={{ display:"inline-flex", alignItems:"center", gap:3, fontSize:9, fontWeight:600, padding:"2px 7px", borderRadius:99, background:`${prio.color}15`, color:prio.color }}>
+                            <prio.icon size={9}/>{prio.label}
                           </div>}
-                          {contract && <div style={{ display:"flex", alignItems:"center", gap:3, fontSize:9, color:TX2 }}>
+                          {contract && <div style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:9, color:TX2, padding:"2px 7px", borderRadius:99, background:B3 }}>
                             <div style={{ width:5, height:5, borderRadius:"50%", background:contract.color }}/>{contract.company.split("/")[0].trim()}
                           </div>}
-                          {task.dueDate && <div style={{ fontSize:9, color:dlColor(daysLeft(task.dueDate)) }}>{fmtDate(task.dueDate)}</div>}
-                        </div>
-                        {/* Quick status change */}
-                        <div style={{ marginTop:8, display:"flex", gap:4, flexWrap:"wrap" }} onClick={e=>e.stopPropagation()}>
-                          {ACTIVE_STATUSES.filter(s=>s.id!==status.id).slice(0,3).map(s=>(
-                            <div key={s.id} onClick={()=>updateStatus(task.id,s.id)}
-                              style={{ fontSize:8, padding:"2px 6px", borderRadius:3, cursor:"pointer", background:B3, color:TX3, fontWeight:700 }}>
-                              → {s.label}
-                            </div>
-                          ))}
+                          {task.dueDate && <div style={{ fontSize:9, fontWeight:600, marginLeft:"auto", color:dlColor(daysLeft(task.dueDate)) }}>{fmtDate(task.dueDate)}</div>}
                         </div>
                       </div>
                     );
                   })}
-                  <div onClick={()=>{setNewOpen(true);}}
-                    style={{ padding:"8px 12px", fontSize:11, color:TX3, cursor:"pointer", borderRadius:6, border:`1px dashed ${LN}`, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>
+                  <div onClick={()=>setNewOpen(true)}
+                    style={{ padding:"9px 12px", fontSize:11, color:TX3, cursor:"pointer", borderRadius:8, border:`1.5px dashed ${LN2}`, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center", gap:4, transition:TRANS }}
+                    onMouseEnter={e=>{ e.currentTarget.style.borderColor=status.color; e.currentTarget.style.color=status.color; e.currentTarget.style.background=`${status.color}08`; }}
+                    onMouseLeave={e=>{ e.currentTarget.style.borderColor=LN2; e.currentTarget.style.color=TX3; e.currentTarget.style.background="transparent"; }}>
                     <Plus size={11}/> Adicionar
                   </div>
                 </div>
@@ -775,7 +786,8 @@ function Tarefas({ contracts, setNewTaskOpen }) {
             );
           })}
         </div>
-      )}
+        );
+      })()}
 
       {/* List view */}
       {view==="list" && (
@@ -827,10 +839,11 @@ function Tarefas({ contracts, setNewTaskOpen }) {
         <TaskModal
           task={editTask}
           contracts={contracts}
+          onNavigate={navigateTo}
           onClose={()=>{setNewOpen(false);setEditTask(null);}}
-          onSave={task=>{
-            if(editTask) saveTasks(tasks.map(t=>t.id===task.id?task:t));
-            else saveTasks([...tasks, {...task,id:uid(),status:"todo",createdAt:new Date().toISOString()}]);
+          onSave={t=>{
+            if(editTask) saveTasks(tasks.map(x=>x.id===t.id?t:x));
+            else saveTasks([...tasks, {...t,id:uid(),status:t.status||"todo",createdAt:new Date().toISOString()}]);
             toast?.(editTask?"Tarefa atualizada":"✓ Tarefa criada","success");
             setNewOpen(false); setEditTask(null);
           }}
@@ -846,7 +859,7 @@ function Tarefas({ contracts, setNewTaskOpen }) {
   );
 }
 
-function TaskModal({ task, contracts, onClose, onSave, onDelete }) {
+function TaskModal({ task, contracts, onClose, onSave, onDelete, onNavigate }) {
   const [f, setF] = useState(task || { title:"", description:"", status:"todo", priority:"medium", contractId:"", dueDate:"" });
   const set = (k,v) => setF(x=>({...x,[k]:v}));
   return (
@@ -854,6 +867,7 @@ function TaskModal({ task, contracts, onClose, onSave, onDelete }) {
       footer={<>
         {onDelete && <Btn onClick={()=>onDelete(task.id)} variant="danger" size="sm">Excluir</Btn>}
         <div style={{flex:1}}/>
+        {task?.contractId && onNavigate && <Btn onClick={()=>{onNavigate("contratos");onClose();}} variant="ghost" size="sm">Ver contrato ↗</Btn>}
         <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
         <Btn onClick={()=>onSave(f)} variant="primary" size="sm">{task?"Salvar":"Criar"}</Btn>
       </>}>
@@ -1073,8 +1087,8 @@ function Contratos({ contracts, posts, saveC, setModal, toggleComm, saveNote, ra
           const don=cp+cs+cl;
           return (
             <div key={c.id} style={{ display:"grid", gridTemplateColumns:"3px 1fr 130px 100px 160px 100px 80px 80px 80px 100px 60px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:12 }}
-              onMouseEnter={e=>e.currentTarget.style.background=B1}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              onMouseEnter={e=>{e.currentTarget.style.background=B2;e.currentTarget.style.transition="background 0.15s ease";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
               <div style={{ background:c.color, alignSelf:"stretch", minHeight:44 }}/>
               <div style={{ padding:"10px", display:"flex", alignItems:"center", gap:6 }}>
                 <span style={{ fontWeight:600, color:TX }}>{c.company}</span>
@@ -1143,8 +1157,8 @@ function Posts({ contracts, posts, saveP, setModal, toast }) {
           const [tcol,tlbl]=TYPE_BADGE[p.type]||[TX2,p.type];
           return (
             <div key={p.id} style={{ display:"grid", gridTemplateColumns:"1fr 80px 100px 80px 80px 80px 70px 70px 70px 70px 80px 60px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:11 }}
-              onMouseEnter={e=>e.currentTarget.style.background=B1}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              onMouseEnter={e=>{e.currentTarget.style.background=B2;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
               <div style={{ padding:"10px", color:TX, fontWeight:500 }}>{p.title}</div>
               <div style={{ padding:"0 10px" }}>{c&&<div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:5,height:5,borderRadius:"50%",background:c.color}}/><span style={{fontSize:10,color:TX2}}>{c.company.split("/")[0].slice(0,8)}</span></div>}</div>
               <div style={{ padding:"0 10px" }}>
@@ -1447,7 +1461,7 @@ export default function App() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [calMonth, setCal]  = useState(() => { const n=new Date(); return {y:n.getFullYear(),m:n.getMonth()}; });
   const [calFilter, setCalF] = useState("all");
-  const [newTaskOpener, setNewTaskOpener] = useState(null);
+  const [triggerNewTask, setTriggerNewTask] = useState(false);
   const prevCIds = useRef([]); const prevPIds = useRef([]);
 
   // Auth listener
@@ -1549,19 +1563,35 @@ export default function App() {
   return (
     <ToastProvider>
       <div style={{ display:"flex", minHeight:"100vh", background:B0, fontFamily:"Plus Jakarta Sans,system-ui,sans-serif", fontSize:13, color:TX }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif} input[type=date]::-webkit-calendar-picker-indicator{opacity:.5} select option{background:#F7F6EF;color:#1E2140} ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.12);border-radius:3px} ::placeholder{color:#A8B0C8} a{color:${RED}} `}</style>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+button,a,[role=button]{transition:all 0.18s cubic-bezier(0.4,0,0.2,1)!important;cursor:pointer}
+input,select,textarea{transition:border-color 0.15s ease,box-shadow 0.15s ease!important}
+input:focus,select:focus,textarea:focus{outline:none!important;border-color:#000!important;box-shadow:0 0 0 2px rgba(0,0,0,0.08)!important}
+input[type=date]::-webkit-calendar-picker-indicator{opacity:.5}
+select option{background:#FEFEFE;color:#000}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.25)}
+::placeholder{color:#ABABAB}
+a{color:${RED}}
+.hover-lift{transition:${TRANS}!important}
+.hover-lift:hover{transform:translateY(-1px)!important;box-shadow:0 4px 12px rgba(0,0,0,0.08),0 1px 3px rgba(0,0,0,0.06)!important}
+.hover-row:hover{background:#F7F7F7!important}
+`}</style>
         <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onlineUsers={onlineUsers} contracts={contracts}/>
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <TopBar view={view} eurRate={eurRate} usdRate={usdRate} setEurRate={setEurRate} setUsdRate={setUsdRate}
             onNewContract={()=>setModal({type:"contract",data:null})}
             onNewPost={()=>setModal({type:"post",data:null})}
-            onNewTask={()=>newTaskOpener?.()}
+            onNewTask={()=>setTriggerNewTask(true)}
             syncStatus={syncStatus}/>
           <div style={{ flex:1, overflowY:"auto" }}>
             {view==="dashboard"      && <Dashboard contracts={contracts} posts={posts} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal}/>}
             {view==="acompanhamento" && <Acompanhamento contracts={contracts} posts={posts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>}
             {view==="contratos"      && <Contratos contracts={contracts} posts={posts} saveC={saveC} setModal={setModal} toggleComm={toggleComm} saveNote={saveNote} rates={rates}/>}
-            {view==="tarefas"        && <Tarefas contracts={contracts} setNewTaskOpener={setNewTaskOpener}/>}
+            {view==="tarefas"        && <Tarefas contracts={contracts} externalNewTask={triggerNewTask} onExternalNewTaskHandled={()=>setTriggerNewTask(false)} navigateTo={setView}/>}
             {view==="posts"          && <Posts contracts={contracts} posts={posts} saveP={saveP} setModal={setModal}/>}
             {view==="calendario"     && <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>}
           </div>

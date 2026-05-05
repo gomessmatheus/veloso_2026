@@ -1493,15 +1493,476 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
   );
 }
 
-// ─── Contratos full view ──────────────────────────────────
-function Contratos({ contracts, posts, saveC, setModal, toggleComm, saveNote, rates }) {
-  const del = async id => { if(confirm("Excluir?")) await saveC(contracts.filter(c=>c.id!==id)); };
+// ─── Commission status inline ─────────────────────────────
+function CommStatusInline({ contract: c, toggleCommPaid, rates }) {
+  const entries = getCommEntries(c);
+  const [open, setOpen] = useState(false);
+  const total   = entries.reduce((s,e) => s + e.amount, 0);
+  const paid    = entries.filter(e => e.isPaid).reduce((s,e) => s + e.amount, 0);
+  const pending = total - paid;
+  const allPaid = entries.length > 0 && entries.every(e => e.isPaid);
+
+  if (entries.length === 0) return <span style={{fontSize:10,color:TX3}}>—</span>;
+
+  return (
+    <div style={{position:"relative"}}>
+      <div onClick={e=>{e.stopPropagation();setOpen(o=>!o);}}
+        style={{cursor:"pointer",display:"flex",flexDirection:"column",gap:2}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:allPaid?GRN:pending>0?AMB:GRN,flexShrink:0}}/>
+          <span style={{fontSize:10,fontWeight:700,color:allPaid?GRN:AMB}}>
+            {allPaid?"✓ Pago":"Pendente"}
+          </span>
+        </div>
+        <div style={{fontSize:9,color:TX3}}>{fmtMoney(pending,c.currency)} pend.</div>
+      </div>
+      {open && (
+        <div onClick={e=>e.stopPropagation()}
+          style={{position:"absolute",top:"100%",right:0,zIndex:100,background:B1,border:`1px solid ${LN2}`,borderRadius:8,padding:10,minWidth:220,boxShadow:"0 8px 24px rgba(0,0,0,0.12)"}}>
+          <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Comissão Ranked</div>
+          {entries.map((e,i) => (
+            <div key={e.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:i<entries.length-1?`1px solid ${LN}`:"none"}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:TX}}>{e.label}</div>
+                {e.date&&<div style={{fontSize:9,color:TX2}}>{fmtDate(e.date)}</div>}
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:11,fontWeight:700,color:RED}}>{fmtMoney(e.amount,c.currency)}</span>
+                <div onClick={()=>toggleCommPaid(c.id,e.key)}
+                  style={{padding:"3px 8px",fontSize:9,fontWeight:700,letterSpacing:".04em",cursor:"pointer",borderRadius:4,
+                    background:e.isPaid?`${GRN}18`:"rgba(0,0,0,.04)",
+                    border:`1px solid ${e.isPaid?GRN+"55":LN2}`,
+                    color:e.isPaid?GRN:TX2,transition:TRANS}}>
+                  {e.isPaid?"✓ Pago":"Marcar pago"}
+                </div>
+              </div>
+            </div>
+          ))}
+          <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${LN}`,display:"flex",justifyContent:"space-between"}}>
+            <span style={{fontSize:10,color:TX2}}>Total pago</span>
+            <span style={{fontSize:11,fontWeight:700,color:GRN}}>{fmtMoney(paid,c.currency)}</span>
+          </div>
+          <button onClick={()=>setOpen(false)} style={{marginTop:6,width:"100%",padding:"5px",fontSize:10,background:"none",border:`1px solid ${LN}`,borderRadius:5,cursor:"pointer",color:TX2}}>Fechar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── Contract Detail Page ────────────────────────────────
+function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, saveP, saveDeliverables, toggleComm, toggleCommPaid, toggleNF, rates, onBack }) {
+  const [tab, setTab]         = useState("overview");
+  const [aiReport, setAiReport] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [briefingNote, setBriefingNote] = useState(c.briefingNote || "");
+  const [briefingFile, setBriefingFile] = useState(c.briefingFile || null);
+  const toast = useToast();
+
+  const cPosts = posts.filter(p => p.contractId === c.id);
+  const cDeliverables = deliverables.filter(d => d.contractId === c.id);
+  const total = contractTotal(c);
+  const dl = daysLeft(c.contractDeadline);
+
+  const nfEntries   = getNFEntries(c);
+  const commEntries = getCommEntries(c);
+  const commPaid    = commEntries.filter(e => e.isPaid).reduce((s,e) => s + e.amount, 0);
+  const commPending = commEntries.filter(e => !e.isPaid).reduce((s,e) => s + e.amount, 0);
+
+  const avgEng = (() => {
+    const engs = cPosts.map(p => calcEngagement(p)).filter(e => e != null);
+    return engs.length ? engs.reduce((s,v) => s+v, 0) / engs.length : null;
+  })();
+
+  const saveNote = async (note) => {
+    setBriefingNote(note);
+    await saveC(contracts.map(x => x.id === c.id ? {...x, briefingNote: note} : x));
+  };
+
+  const handleBriefingFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const fileData = { name: file.name, size: file.size, type: file.type, data: ev.target.result, uploadedAt: new Date().toISOString() };
+      setBriefingFile(fileData);
+      await saveC(contracts.map(x => x.id === c.id ? {...x, briefingFile: fileData} : x));
+      toast?.("📎 Briefing salvo", "success");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const generateReport = async () => {
+    setAiLoading(true); setAiReport(null);
+    try {
+      const context = {
+        contract: { company: c.company, value: total, currency: c.currency, deadline: c.contractDeadline, paymentType: c.paymentType, hasTravel: c.hasTravel, travelDestination: c.travelDestination, notes: c.notes },
+        deliverables: cDeliverables.map(d => ({ title: d.title, stage: d.stage, plannedPostDate: d.plannedPostDate })),
+        posts: cPosts.map(p => ({ title: p.title, isPosted: p.isPosted, views: p.views, reach: p.reach, likes: p.likes, comments: p.comments, engagement: calcEngagement(p) })),
+        commission: { total: commEntries.reduce((s,e)=>s+e.amount,0), paid: commPaid, pending: commPending },
+        avgEngagement: avgEng,
+        briefing: c.briefingNote || "",
+      };
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1500,
+          messages: [{ role: "user", content: `Você é o assistente operacional do @veloso.lucas_ para a Copa 2026. Gere um relatório executivo do contrato com ${c.company} em JSON:
+{
+  "summary": "resumo executivo em 2 frases",
+  "performance": { "score": 0-100, "label": "Excelente/Bom/Regular/Atenção" },
+  "deliveryStatus": "texto sobre status das entregas",
+  "financialStatus": "texto sobre situação financeira",
+  "engagementAnalysis": "análise do engajamento se houver posts",
+  "highlights": ["ponto positivo 1", "ponto positivo 2"],
+  "risks": ["risco 1 se houver"],
+  "nextSteps": ["próxima ação 1", "próxima ação 2"]
+}
+Dados: ${JSON.stringify(context)}
+Responda APENAS com o JSON.` }]
+        })
+      });
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const data = await res.json();
+      const raw = data.content?.[0]?.text || "{}";
+      setAiReport(JSON.parse(raw.replace(/```json|```/g,"").trim()));
+    } catch(e) { setAiReport({ error: String(e) }); }
+    setAiLoading(false);
+  };
+
+  const TABS = [
+    { id:"overview",    label:"Visão Geral" },
+    { id:"deliveries",  label:`Entregas (${cDeliverables.length})` },
+    { id:"financial",   label:"Financeiro" },
+    { id:"briefing",    label:"Briefing" },
+    { id:"report",      label:"Relatório IA" },
+  ];
+
+  const scoreColor = aiReport?.performance?.score >= 70 ? GRN : aiReport?.performance?.score >= 40 ? AMB : RED;
+
+  return (
+    <div style={{ padding: 24, maxWidth: 1100 }}>
+      {/* Back + header */}
+      <div style={{ display:"flex", alignItems:"flex-start", gap:16, marginBottom:24 }}>
+        <button onClick={onBack} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"6px 12px", cursor:"pointer", fontSize:11, color:TX2, display:"flex", alignItems:"center", gap:6, transition:TRANS, flexShrink:0 }}
+          onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+          ← Contratos
+        </button>
+        <div style={{ flex:1 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+            <div style={{ width:10, height:10, borderRadius:"50%", background:c.color }}/>
+            <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{c.company}</h1>
+            {currBadge(c.currency)}
+            {c.paymentType==="monthly" && <Badge color={TX2}>Mensal</Badge>}
+            {c.hasTravel && <Badge color={BLU}>✈️ {c.travelDestination||"Viagem"}</Badge>}
+          </div>
+          <div style={{ display:"flex", gap:16, fontSize:12, color:TX2 }}>
+            <span style={{ fontWeight:700, fontSize:16, color:TX }}>{total>0?fmtMoney(total,c.currency):"Valor TBD"}</span>
+            {c.contractDeadline && <span style={{ color:dlColor(dl) }}>prazo {fmtDate(c.contractDeadline)} · {dl}d</span>}
+            {c.cnpj && <span>{c.cnpj}</span>}
+          </div>
+        </div>
+        <Btn onClick={generateReport} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
+          {aiLoading ? "Gerando…" : "Gerar Relatório IA"}
+        </Btn>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20 }}>
+        {TABS.map(t => (
+          <div key={t.id} onClick={()=>setTab(t.id)}
+            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1 }}>
+            {t.label}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Tab: Visão Geral ── */}
+      {tab==="overview" && (
+        <div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:24 }}>
+            {[
+              { label:"Valor total",    value:total>0?fmtMoney(total,c.currency):"TBD" },
+              { label:"Posts entregues", value:`${cPosts.filter(p=>p.isPosted).length}/${cDeliverables.length+cPosts.length}` },
+              { label:"Comissão Ranked", value:fmtMoney(commPending,c.currency), accent:commPending>0?AMB:GRN, sub:commPending>0?"pendente":"pago" },
+              { label:"Engajamento",     value:avgEng!=null?avgEng.toFixed(2)+"%":"—", accent:avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX2):TX2 },
+            ].map((k,i) => (
+              <div key={i} style={{ ...G, padding:"16px 18px" }}>
+                <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>{k.label}</div>
+                <div style={{ fontSize:20,fontWeight:700,color:k.accent||TX,lineHeight:1 }}>{k.value}</div>
+                {k.sub&&<div style={{fontSize:11,color:TX2,marginTop:4}}>{k.sub}</div>}
+              </div>
+            ))}
+          </div>
+          {c.notes && (
+            <div style={{ ...G, padding:"16px 18px", marginBottom:16 }}>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>Observações</div>
+              <p style={{ fontSize:13,color:TX,lineHeight:1.6 }}>{c.notes}</p>
+            </div>
+          )}
+          {/* Pipeline summary */}
+          {cDeliverables.length>0 && (
+            <div style={{ ...G, padding:"16px 18px" }}>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Pipeline de Produção</div>
+              {cDeliverables.map(d => {
+                const stage = STAGES.find(s=>s.id===d.stage);
+                const dl2 = d.plannedPostDate&&stage ? daysLeft(addDays(d.plannedPostDate,stage.days)) : null;
+                const isLate = dl2!==null&&dl2<0;
+                return (
+                  <div key={d.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"8px 0",borderBottom:`1px solid ${LN}` }}>
+                    <div style={{ width:6,height:6,borderRadius:"50%",background:isLate?RED:stage?.id==="done"?GRN:AMB,flexShrink:0 }}/>
+                    <span style={{ fontSize:12,fontWeight:500,color:isLate?RED:TX,flex:1 }}>{d.title}</span>
+                    <Badge color={isLate?RED:TX2}>{stage?.label||d.stage}</Badge>
+                    {d.plannedPostDate&&<span style={{fontSize:10,color:TX2}}>post {fmtDate(d.plannedPostDate)}</span>}
+                    {dl2!==null&&<span style={{fontSize:10,fontWeight:700,color:dlColor(dl2)}}>{dl2<0?`${Math.abs(dl2)}d atraso`:`${dl2}d`}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Entregas ── */}
+      {tab==="deliveries" && (
+        <div>
+          {/* Deliverables */}
+          {cDeliverables.length>0 && <>
+            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Pipeline</div>
+            <div style={{ border:`1px solid ${LN}`,borderRadius:10,overflow:"hidden",marginBottom:20 }}>
+              {cDeliverables.map((d,i) => {
+                const stage=STAGES.find(s=>s.id===d.stage);
+                return (
+                  <div key={d.id} style={{ display:"grid",gridTemplateColumns:"1fr 120px 120px 100px 120px",padding:"12px 16px",borderBottom:i<cDeliverables.length-1?`1px solid ${LN}`:"none",fontSize:12,alignItems:"center" }}>
+                    <div style={{ fontWeight:500,color:TX }}>{d.title}</div>
+                    <div><Badge color={TX2}>{stage?.label}</Badge></div>
+                    <div style={{ color:TX2 }}>{d.plannedPostDate?fmtDate(d.plannedPostDate):"—"}</div>
+                    <div>{d.postLink?<a href={d.postLink} target="_blank" rel="noreferrer" style={{color:RED,fontSize:11}}>↗ Ver post</a>:<span style={{color:TX3,fontSize:11}}>Sem link</span>}</div>
+                    <div style={{ color:d.views>0?TX:TX3 }}>{d.views>0?`${Number(d.views).toLocaleString("pt-BR")} views`:"—"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </>}
+          {/* Posts */}
+          {cPosts.length>0 && <>
+            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Posts registrados</div>
+            <div style={{ border:`1px solid ${LN}`,borderRadius:10,overflow:"hidden" }}>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 80px 80px 80px",padding:"8px 16px",background:B2,borderBottom:`1px solid ${LN}`,fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3 }}>
+                <div>Título</div><div>Views</div><div>Alcance</div><div>Curtidas</div><div>Coment.</div><div>Engaj.</div><div>Link</div>
+              </div>
+              {cPosts.map((p,i) => {
+                const eng=calcEngagement(p);
+                return (
+                  <div key={p.id} style={{ display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 80px 80px 80px",padding:"10px 16px",borderBottom:i<cPosts.length-1?`1px solid ${LN}`:"none",fontSize:12,alignItems:"center" }}>
+                    <div style={{ fontWeight:500,color:p.isPosted?TX:TX2 }}>{p.title}{!p.isPosted&&<span style={{fontSize:10,color:TX3,marginLeft:6}}>(planejado)</span>}</div>
+                    <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.views||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.reach||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.likes||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.comments||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{ fontWeight:700,color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3 }}>{eng!=null?eng.toFixed(1)+"%":"—"}</div>
+                    <div>{p.link?<a href={p.link} target="_blank" rel="noreferrer" style={{color:RED,fontSize:11}}>↗</a>:<span style={{color:TX3}}>—</span>}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </>}
+          {cDeliverables.length===0&&cPosts.length===0&&(
+            <div style={{ textAlign:"center",padding:48,color:TX3 }}>Nenhuma entrega registrada ainda.</div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Financeiro ── */}
+      {tab==="financial" && (
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:20 }}>
+          {/* NF */}
+          <div style={{ ...G, padding:"18px 20px" }}>
+            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:14 }}>Nota Fiscal</div>
+            {nfEntries.length===0&&<div style={{fontSize:12,color:TX3}}>Sem NF configurada</div>}
+            {nfEntries.map((e,i) => (
+              <div key={e.key} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<nfEntries.length-1?`1px solid ${LN}`:"none" }}>
+                <div>
+                  <div style={{ fontSize:12,fontWeight:600,color:TX }}>{e.label}</div>
+                  {e.date&&<div style={{fontSize:10,color:TX2}}>{fmtDate(e.date)}</div>}
+                </div>
+                <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                  {e.amount>0&&<span style={{fontSize:12,fontWeight:700,color:TX}}>{fmtMoney(e.amount,c.currency)}</span>}
+                  <div onClick={()=>toggleNF(c.id,e.key)} style={{ padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isEmitted?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isEmitted?GRN+"44":LN2}`,color:e.isEmitted?GRN:TX2 }}>
+                    {e.isEmitted?"✓ Emitida":"Emitir"}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Commission */}
+          <div style={{ ...G, padding:"18px 20px" }}>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+              <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Comissão Ranked (20%)</div>
+              <CommToggle on={c.hasCommission} onToggle={()=>toggleComm(c.id)} label/>
+            </div>
+            {!c.hasCommission&&<div style={{fontSize:12,color:TX3}}>Sem comissão neste contrato</div>}
+            {c.hasCommission&&commEntries.length===0&&<div style={{fontSize:12,color:TX3}}>Sem parcelas definidas</div>}
+            {c.hasCommission&&commEntries.map((e,i) => (
+              <div key={e.key} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<commEntries.length-1?`1px solid ${LN}`:"none" }}>
+                <div>
+                  <div style={{ fontSize:12,fontWeight:600,color:TX }}>{e.label}</div>
+                  {e.date&&<div style={{fontSize:10,color:TX2}}>{fmtDate(e.date)}</div>}
+                </div>
+                <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                  <span style={{ fontSize:13,fontWeight:700,color:RED }}>{fmtMoney(e.amount,c.currency)}</span>
+                  <div onClick={()=>toggleCommPaid(c.id,e.key)} style={{ padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isPaid?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isPaid?GRN+"44":LN2}`,color:e.isPaid?GRN:TX2 }}>
+                    {e.isPaid?"✓ Pago":"Marcar pago"}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {c.hasCommission&&commEntries.length>0&&(
+              <div style={{ marginTop:12,paddingTop:10,borderTop:`1px solid ${LN}`,display:"flex",justifyContent:"space-between" }}>
+                <span style={{fontSize:11,color:TX2}}>Total pago</span>
+                <span style={{fontSize:13,fontWeight:700,color:GRN}}>{fmtMoney(commPaid,c.currency)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Briefing ── */}
+      {tab==="briefing" && (
+        <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+          <div style={{ ...G, padding:"18px 20px" }}>
+            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Notas do Briefing</div>
+            <textarea value={briefingNote} onChange={e=>setBriefingNote(e.target.value)} onBlur={()=>saveNote(briefingNote)}
+              rows={8} placeholder="Cole aqui o briefing da marca, pontos obrigatórios, referências, restrições, tom de voz…"
+              style={{ width:"100%",padding:"12px",background:B2,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontSize:13,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none" }}/>
+            <div style={{ fontSize:10,color:TX3,marginTop:6 }}>Auto-salvo ao sair do campo</div>
+          </div>
+          <div style={{ ...G, padding:"18px 20px" }}>
+            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Arquivo do Briefing</div>
+            {briefingFile ? (
+              <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:B2,borderRadius:8,border:`1px solid ${LN}` }}>
+                <span style={{ fontSize:20 }}>📄</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12,fontWeight:600,color:TX }}>{briefingFile.name}</div>
+                  <div style={{ fontSize:10,color:TX2 }}>Enviado {new Date(briefingFile.uploadedAt).toLocaleDateString("pt-BR")}</div>
+                </div>
+                <a href={briefingFile.data} download={briefingFile.name}
+                  style={{ padding:"5px 12px",fontSize:11,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none" }}>
+                  ↓ Baixar
+                </a>
+                <button onClick={()=>{setBriefingFile(null);saveC(contracts.map(x=>x.id===c.id?{...x,briefingFile:null}:x));}}
+                  style={{ background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"5px 8px",cursor:"pointer",color:TX2,fontSize:11 }}>×</button>
+              </div>
+            ) : (
+              <label style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"32px",border:`2px dashed ${LN2}`,borderRadius:10,cursor:"pointer",transition:TRANS }}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=RED} onMouseLeave={e=>e.currentTarget.style.borderColor=LN2}>
+                <span style={{ fontSize:32 }}>📎</span>
+                <span style={{ fontSize:12,fontWeight:600,color:TX }}>Clique para anexar o briefing</span>
+                <span style={{ fontSize:11,color:TX3 }}>PDF, DOCX, imagens ou qualquer arquivo</span>
+                <input type="file" style={{ display:"none" }} onChange={handleBriefingFile}/>
+              </label>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Relatório IA ── */}
+      {tab==="report" && (
+        <div>
+          {!aiReport&&!aiLoading&&(
+            <div style={{ textAlign:"center",padding:60 }}>
+              <div style={{ fontSize:32,marginBottom:12 }}>⚡</div>
+              <div style={{ fontSize:14,fontWeight:700,color:TX,marginBottom:6 }}>Relatório de Desempenho</div>
+              <div style={{ fontSize:12,color:TX2,marginBottom:20 }}>Análise completa do contrato com {c.company} baseada em todos os dados disponíveis.</div>
+              <Btn onClick={generateReport} variant="primary" icon={Zap}>Gerar Relatório</Btn>
+            </div>
+          )}
+          {aiLoading&&(
+            <div style={{ textAlign:"center",padding:60,color:TX2 }}>
+              <div style={{ fontSize:32,marginBottom:12 }}>⚡</div>
+              <div style={{ fontSize:14 }}>Analisando contrato {c.company}…</div>
+            </div>
+          )}
+          {aiReport&&!aiReport.error&&(
+            <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+              {/* Score */}
+              <div style={{ ...G, padding:"20px 24px", borderLeft:`4px solid ${scoreColor}`, display:"flex",alignItems:"center",gap:20 }}>
+                <div style={{ textAlign:"center",flexShrink:0 }}>
+                  <div style={{ fontSize:36,fontWeight:700,color:scoreColor,lineHeight:1 }}>{aiReport.performance?.score}</div>
+                  <div style={{ fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:TX2,marginTop:4 }}>Score</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:14,fontWeight:700,color:TX,marginBottom:4 }}>{aiReport.performance?.label} · {c.company}</div>
+                  <p style={{ fontSize:13,color:TX2,lineHeight:1.6 }}>{aiReport.summary}</p>
+                </div>
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16 }}>
+                <div style={{ ...G, padding:"16px 18px" }}>
+                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Entregas</div>
+                  <p style={{ fontSize:12,color:TX,lineHeight:1.6 }}>{aiReport.deliveryStatus}</p>
+                </div>
+                <div style={{ ...G, padding:"16px 18px" }}>
+                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Financeiro</div>
+                  <p style={{ fontSize:12,color:TX,lineHeight:1.6 }}>{aiReport.financialStatus}</p>
+                </div>
+                {aiReport.engagementAnalysis&&<div style={{ ...G, padding:"16px 18px", gridColumn:"1/-1" }}>
+                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Engajamento</div>
+                  <p style={{ fontSize:12,color:TX,lineHeight:1.6 }}>{aiReport.engagementAnalysis}</p>
+                </div>}
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16 }}>
+                {aiReport.highlights?.length>0&&<div style={{ ...G, padding:"16px 18px",borderLeft:`3px solid ${GRN}` }}>
+                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:GRN,marginBottom:10 }}>✓ Pontos positivos</div>
+                  {aiReport.highlights.map((h,i)=><div key={i} style={{fontSize:12,color:TX,padding:"4px 0",borderBottom:i<aiReport.highlights.length-1?`1px solid ${LN}`:"none"}}>{h}</div>)}
+                </div>}
+                {aiReport.risks?.length>0&&<div style={{ ...G, padding:"16px 18px",borderLeft:`3px solid ${RED}` }}>
+                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:RED,marginBottom:10 }}>⚠ Riscos</div>
+                  {aiReport.risks.map((r,i)=><div key={i} style={{fontSize:12,color:TX,padding:"4px 0",borderBottom:i<aiReport.risks.length-1?`1px solid ${LN}`:"none"}}>{r}</div>)}
+                </div>}
+                {aiReport.nextSteps?.length>0&&<div style={{ ...G, padding:"16px 18px",borderLeft:`3px solid ${BLU}` }}>
+                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:BLU,marginBottom:10 }}>→ Próximos passos</div>
+                  {aiReport.nextSteps.map((s,i)=><div key={i} style={{fontSize:12,color:TX,padding:"4px 0",borderBottom:i<aiReport.nextSteps.length-1?`1px solid ${LN}`:"none"}}>{s}</div>)}
+                </div>}
+              </div>
+              <div style={{ textAlign:"center" }}>
+                <Btn onClick={generateReport} variant="ghost" size="sm" icon={Zap}>Regenerar</Btn>
+              </div>
+            </div>
+          )}
+          {aiReport?.error&&(
+            <div style={{ ...G, padding:20, borderLeft:`3px solid ${RED}` }}>
+              <div style={{ fontSize:12,color:RED }}>{aiReport.error}</div>
+              <Btn onClick={generateReport} variant="primary" size="sm" style={{marginTop:12}} icon={Zap}>Tentar novamente</Btn>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Contratos list ────────────────────────────────────────
+function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates }) {
+  const [selectedId, setSelectedId] = useState(null);
+  const selected = contracts.find(c => c.id === selectedId);
+
+  if (selected) return (
+    <ContractDetail
+      contract={selected} contracts={contracts} posts={posts} deliverables={deliverables}
+      saveC={saveC} saveP={saveP} saveDeliverables={saveDeliverables}
+      toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF}
+      rates={rates} onBack={()=>setSelectedId(null)}
+    />
+  );
+
   return (
     <div style={{ padding:24, maxWidth:1400 }}>
-      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 130px 100px 160px 100px 80px 80px 80px 100px 60px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
-          {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links","Comissão",""].map((h,i)=>(
-            <div key={i} style={{ padding:"0 10px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
+      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
+          {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links"].map((h,i)=>(
+            <div key={i} style={{ padding:"0 12px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
           ))}
         </div>
         {contracts.map(c=>{
@@ -1512,44 +1973,38 @@ function Contratos({ contracts, posts, saveC, setModal, toggleComm, saveNote, ra
           const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
           const don=cp+cs+cl;
           return (
-            <div key={c.id} style={{ display:"grid", gridTemplateColumns:"3px 1fr 130px 100px 160px 100px 80px 80px 80px 100px 60px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:12 }}
-              onMouseEnter={e=>{e.currentTarget.style.background=B2;e.currentTarget.style.transition="background 0.15s ease";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
-              <div style={{ background:c.color, alignSelf:"stretch", minHeight:44 }}/>
-              <div style={{ padding:"10px", display:"flex", alignItems:"center", gap:6 }}>
+            <div key={c.id}
+              onClick={()=>setSelectedId(c.id)}
+              style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:12, cursor:"pointer", transition:TRANS }}
+              onMouseEnter={e=>e.currentTarget.style.background=B2}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }}/>
+              <div style={{ padding:"12px", display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                 <span style={{ fontWeight:600, color:TX }}>{c.company}</span>
                 {currBadge(c.currency)}
                 {c.paymentType==="monthly"&&<Badge color={TX2}>M</Badge>}
-                {total===0&&<Badge color={TX3}>TBD</Badge>}
+                {c.hasTravel&&<Badge color={BLU}>✈️</Badge>}
               </div>
-              <div style={{ padding:"0 10px", fontWeight:700, color:TX }}>{total>0?fmtMoney(total,c.currency):"—"}</div>
-              <div style={{ padding:"0 10px", color:dlColor(dl), fontWeight:dl!=null&&dl<=14?700:400 }}>{fmtDate(c.contractDeadline)}</div>
-              <div style={{ padding:"0 10px", fontSize:11, color:TX2 }}>
+              <div style={{ padding:"0 12px", fontWeight:700, color:TX }}>{total>0?fmtMoney(total,c.currency):"—"}</div>
+              <div style={{ padding:"0 12px", color:dlColor(dl), fontWeight:dl!=null&&dl<=14?700:400 }}>{fmtDate(c.contractDeadline)}</div>
+              <div style={{ padding:"0 12px", fontSize:11, color:TX2 }}>
                 {c.paymentType==="monthly"&&`${fmtMoney(c.monthlyValue)}/mês`}
                 {c.paymentType==="split"&&`${getInstallments(c).length} parcelas`}
                 {c.paymentType==="single"&&fmtDate(c.paymentDeadline)}
               </div>
-              <div style={{ padding:"0 10px" }}>
-                <div style={{ height:2, background:"rgba(255,255,255,.08)", borderRadius:2, marginBottom:3 }}>
-                  <div style={{ height:2, background:tot&&don/tot===1?GRN:c.color, width:`${tot?Math.min(100,don/tot*100):0}%`, borderRadius:2 }}/>
+              <div style={{ padding:"0 12px" }}>
+                <div style={{ height:3, background:"rgba(0,0,0,.08)", borderRadius:2, marginBottom:3 }}>
+                  <div style={{ height:3, background:tot&&don/tot===1?GRN:c.color, width:`${tot?Math.min(100,don/tot*100):0}%`, borderRadius:2 }}/>
                 </div>
                 <div style={{ fontSize:9, color:TX3 }}>{don}/{tot}</div>
               </div>
-              <div style={{ padding:"0 10px", color:TX2 }}>{cp}/{c.numPosts}</div>
-              <div style={{ padding:"0 10px", color:TX2 }}>{cs}/{c.numStories}</div>
-              <div style={{ padding:"0 10px", color:TX2 }}>{cl}/{c.numCommunityLinks}</div>
-              <div style={{ padding:"0 10px" }}>
-                <CommToggle on={c.hasCommission} onToggle={()=>toggleComm(c.id)}/>
-                {c.hasCommission&&total>0&&<div style={{fontSize:9,color:RED,marginTop:2}}>{fmtMoney(total*COMM_RATE,c.currency)}</div>}
-              </div>
-              <div style={{ padding:"0 8px", display:"flex", gap:4 }}>
-                <Btn onClick={()=>setModal({type:"contract",data:c})} variant="ghost" size="sm">✎</Btn>
-                <Btn onClick={()=>del(c.id)} variant="ghost" size="sm" style={{color:RED}}>×</Btn>
-              </div>
+              <div style={{ padding:"0 12px", color:TX2 }}>{cp}/{c.numPosts}</div>
+              <div style={{ padding:"0 12px", color:TX2 }}>{cs}/{c.numStories}</div>
+              <div style={{ padding:"0 12px", color:TX2 }}>{cl}/{c.numCommunityLinks}</div>
             </div>
           );
         })}
-        {contracts.length===0&&<div style={{padding:48,textAlign:"center",color:TX3}}>Nenhum contrato. Clique em + Contrato para começar.</div>}
+        {contracts.length===0&&<div style={{padding:48,textAlign:"center",color:TX3}}>Nenhum contrato.</div>}
       </div>
     </div>
   );
@@ -1956,7 +2411,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
   try {
     if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>;
     if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
-    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} saveC={saveC} setModal={setModal} toggleComm={toggleComm} saveNote={saveNote} rates={rates}/>;
+    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates}/>;
     if (view==="tarefas")        return <Tarefas contracts={contracts} externalNewTask={triggerNewTask} onExternalNewTaskHandled={()=>setTriggerNewTask(false)} navigateTo={setView}/>;
     if (view==="posts")          return <Posts contracts={contracts} posts={posts} saveP={saveP} setModal={setModal}/>;
     if (view==="calendario")     return <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;

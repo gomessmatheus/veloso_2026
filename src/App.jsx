@@ -152,6 +152,41 @@ const SEED_POSTS = [
 ];
 const SEED_TASKS = [];
 
+// ─── Pipeline constants ───────────────────────────────────
+const STAGES = [
+  { id:"briefing",    label:"Briefing",       days:-9, resp:"Marca → Matheus" },
+  { id:"roteiro",     label:"Roteiro",         days:-7, resp:"Lucas"           },
+  { id:"ap_roteiro",  label:"Ap. Roteiro",     days:-5, resp:"Marca"           },
+  { id:"gravacao",    label:"Gravação",         days:-4, resp:"Lucas"           },
+  { id:"edicao",      label:"Edição",           days:-3, resp:"Leandro"         },
+  { id:"ap_final",    label:"Ap. Final",        days:-1, resp:"Marca"           },
+  { id:"postagem",    label:"Postagem",         days:0,  resp:"Lucas"           },
+  { id:"done",        label:"✓ Entregue",       days:0,  resp:""               },
+];
+const STAGE_IDS = STAGES.map(s => s.id);
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().substr(0, 10);
+}
+
+function calcStageDates(postDate) {
+  if (!postDate) return {};
+  const dates = {};
+  STAGES.forEach(s => {
+    dates[s.id] = addDays(postDate, s.days);
+  });
+  return dates;
+}
+
+function stageDeadline(deliverable, stageId) {
+  if (deliverable.stageDateOverrides?.[stageId]) return deliverable.stageDateOverrides[stageId];
+  if (deliverable.plannedPostDate) return addDays(deliverable.plannedPostDate, STAGES.find(s=>s.id===stageId)?.days || 0);
+  return null;
+}
+
+
 
 // ─── CSS ──────────────────────────────────────────────────
 const G  = { background:B1, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)" };
@@ -181,7 +216,7 @@ function ToastProvider({ children }) {
             animation:"toastIn .2s ease",
           }}>
             <span style={{fontSize:16}}>{t.type==="success"?"✓":t.type==="error"?"✕":"!"}</span>
-            {msg}
+            {t.msg}
           </div>
         ))}
       </div>
@@ -992,40 +1027,6 @@ function TaskModal({ task, contracts, onClose, onSave, onDelete, navigateTo }) {
       </div>
     </Modal>
   );
-}
-
-// ─── Pipeline constants ───────────────────────────────────
-const STAGES = [
-  { id:"briefing",    label:"Briefing",       days:-9, resp:"Marca → Matheus" },
-  { id:"roteiro",     label:"Roteiro",         days:-7, resp:"Lucas"           },
-  { id:"ap_roteiro",  label:"Ap. Roteiro",     days:-5, resp:"Marca"           },
-  { id:"gravacao",    label:"Gravação",         days:-4, resp:"Lucas"           },
-  { id:"edicao",      label:"Edição",           days:-3, resp:"Leandro"         },
-  { id:"ap_final",    label:"Ap. Final",        days:-1, resp:"Marca"           },
-  { id:"postagem",    label:"Postagem",         days:0,  resp:"Lucas"           },
-  { id:"done",        label:"✓ Entregue",       days:0,  resp:""               },
-];
-const STAGE_IDS = STAGES.map(s => s.id);
-
-function addDays(dateStr, n) {
-  const d = new Date(dateStr + "T12:00:00");
-  d.setDate(d.getDate() + n);
-  return d.toISOString().substr(0, 10);
-}
-
-function calcStageDates(postDate) {
-  if (!postDate) return {};
-  const dates = {};
-  STAGES.forEach(s => {
-    dates[s.id] = addDays(postDate, s.days);
-  });
-  return dates;
-}
-
-function stageDeadline(deliverable, stageId) {
-  if (deliverable.stageDateOverrides?.[stageId]) return deliverable.stageDateOverrides[stageId];
-  if (deliverable.plannedPostDate) return addDays(deliverable.plannedPostDate, STAGES.find(s=>s.id===stageId)?.days || 0);
-  return null;
 }
 
 // ─── Acompanhamento (Pipeline de Produção) ────────────────

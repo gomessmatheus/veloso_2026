@@ -724,6 +724,113 @@ Responda APENAS com o JSON, sem markdown.`
   const hour = today.getHours();
   const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
 
+  // Capacity analysis state
+  const [capAnalysis, setCapAnalysis] = useState(null);
+  const [capLoading, setCapLoading] = useState(false);
+
+  const analyzeCapacity = async () => {
+    setCapLoading(true); setCapAnalysis(null);
+    try {
+      // Build month-by-month data for next 6 months
+      const months = [];
+      for (let i = 0; i < 6; i++) {
+        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        const monthLabel = `${MONTHS_PT[d.getMonth()]} ${d.getFullYear()}`;
+        const daysInMonth = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+        
+        // Count deliverables already scheduled this month
+        const scheduled = allDeliverables.filter(del => del.plannedPostDate?.startsWith(monthKey));
+        
+        // Count days blocked by travel
+        const travelDays = new Set();
+        contracts.forEach(c => {
+          if (!c.hasTravel || !c.travelDates?.length) return;
+          const sortedT = c.travelDates.filter(td=>td.date).sort((a,b)=>a.date.localeCompare(b.date));
+          if (sortedT.length < 2) { sortedT.forEach(td => { if(td.date.startsWith(monthKey)) travelDays.add(td.date); }); return; }
+          let cur = sortedT[0].date;
+          const end = sortedT[sortedT.length-1].date;
+          while(cur <= end) { if(cur.startsWith(monthKey)) travelDays.add(cur); cur = addDays(cur,1); }
+        });
+
+        // Dates with conflicts (2+ posts)
+        const dateCounts = {};
+        scheduled.forEach(d => { if(d.plannedPostDate) dateCounts[d.plannedPostDate] = (dateCounts[d.plannedPostDate]||0)+1; });
+        const conflictDates = Object.entries(dateCounts).filter(([,c])=>c>1).length;
+
+        // Available days = total - travel - weekends (Sundays)
+        let availableDays = 0;
+        for(let day=1; day<=daysInMonth; day++) {
+          const ds = `${monthKey}-${String(day).padStart(2,"0")}`;
+          const dow = new Date(ds+"T12:00:00").getDay();
+          if(dow !== 0 && !travelDays.has(ds)) availableDays++;
+        }
+
+        months.push({
+          month: monthLabel,
+          monthKey,
+          daysInMonth,
+          availableDays,
+          travelDays: travelDays.size,
+          scheduled: scheduled.length,
+          conflicts: conflictDates,
+          scheduledTitles: scheduled.map(d=>d.title).slice(0,5),
+        });
+      }
+
+      // Total pipeline load
+      const totalContracts = contracts.length;
+      const pendingDeliverables = allDeliverables.filter(d=>d.stage!=="done").length;
+      const unscheduled = allDeliverables.filter(d=>!d.plannedPostDate&&d.stage!=="done").length;
+
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          max_tokens: 1200,
+          messages: [{
+            role: "user",
+            content: `Você é especialista em planejamento de conteúdo para criadores digitais. Analise a capacidade de produção do @veloso.lucas_ para os próximos 6 meses.
+
+CONTEXTO:
+- Tempo mínimo de produção por peça: 9 dias (briefing → postagem)
+- Regra: máximo 1 publicação por dia
+- Contratos ativos: ${totalContracts}
+- Entregáveis pendentes sem data: ${unscheduled}
+- Total no pipeline: ${pendingDeliverables}
+
+DADOS MÊS A MÊS:
+${months.map(m => m.month+": "+m.scheduled+" agendados, "+m.availableDays+" dias úteis ("+m.travelDays+" de viagem)"+(m.conflicts>0?" "+m.conflicts+" conflitos":"")).join("\n")}
+Retorne um JSON com análise de cada mês:
+{
+  "overview": "frase resumo da situação geral",
+  "months": [
+    {
+      "month": "Maio 2026",
+      "scheduled": 2,
+      "safeCapacity": 4,
+      "availableSlots": 2,
+      "status": "ok|attention|full|critical",
+      "recommendation": "texto curto de recomendação",
+      "riskFactors": ["fator 1 se houver"]
+    }
+  ],
+  "globalRisks": ["risco global 1"],
+  "suggestions": ["sugestão 1", "sugestão 2"]
+}
+
+Considere que o Lucas precisa de tempo de recuperação entre gravações intensas e que viagens consomem energia criativa. Responda APENAS com o JSON.`
+          }]
+        })
+      });
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const data = await res.json();
+      const parsed = JSON.parse((data.text||"{}").replace(/```json|```/g,"").trim());
+      setCapAnalysis({ ...parsed, rawMonths: months });
+    } catch(e) { setCapAnalysis({ error: String(e) }); }
+    setCapLoading(false);
+  };
+
   return (
     <div style={{ padding:24, maxWidth:1400 }}>
       {/* Header */}
@@ -842,7 +949,7 @@ Responda APENAS com o JSON, sem markdown.`
               <button onClick={()=>navigateTo("contratos")} style={{ fontSize:10,color:TX2,background:"none",border:"none",cursor:"pointer",transition:TRANS }} onMouseEnter={e=>e.currentTarget.style.color=TX} onMouseLeave={e=>e.currentTarget.style.color=TX2}>Ver todos →</button>
             </div>
             {contracts.filter(c=>c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts>0).slice(0,7).map(c => {
-              const cp=posts.filter(p=>p.contractId===c.id&&p.type==="post").length;
+              const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")).length;
               const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
               const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
               const don=cp+cs;
@@ -888,6 +995,87 @@ Responda APENAS com o JSON, sem markdown.`
             }
           </div>
         </div>
+      </div>
+      {/* Capacity Analysis */}
+      <div style={{ marginTop:24, ...G, padding:"18px 20px" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:capAnalysis?16:0 }}>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:TX, marginBottom:2 }}>🧠 Capacidade de Absorção</div>
+            <div style={{ fontSize:11, color:TX2 }}>Quantos conteúdos cabem com segurança nos próximos meses</div>
+          </div>
+          <Btn onClick={analyzeCapacity} variant="primary" size="sm" disabled={capLoading} icon={capLoading?null:Zap}>
+            {capLoading ? "Analisando…" : capAnalysis ? "Reanalisar" : "Analisar capacidade"}
+          </Btn>
+        </div>
+
+        {capAnalysis?.error && (
+          <div style={{ fontSize:11, color:RED, marginTop:12 }}>Erro: {capAnalysis.error}</div>
+        )}
+
+        {capAnalysis && !capAnalysis.error && (
+          <>
+            {capAnalysis.overview && (
+              <p style={{ fontSize:12, color:TX2, lineHeight:1.6, marginBottom:16, fontStyle:"italic", borderLeft:`3px solid ${BLU}`, paddingLeft:12 }}>{capAnalysis.overview}</p>
+            )}
+
+            {/* Month grid */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }} className="mob-col2">
+              {(capAnalysis.months||[]).map((m,i) => {
+                const STATUS_COLOR = { ok:GRN, attention:AMB, full:RED, critical:RED };
+                const STATUS_LABEL = { ok:"✓ Disponível", attention:"⚠ Atenção", full:"● Cheio", critical:"🔴 Crítico" };
+                const STATUS_BG    = { ok:`${GRN}08`, attention:`${AMB}08`, full:`${RED}08`, critical:`${RED}12` };
+                const sc = STATUS_COLOR[m.status] || TX2;
+                const rawM = capAnalysis.rawMonths?.find(r=>r.month===m.month);
+                return (
+                  <div key={i} style={{ background:STATUS_BG[m.status]||B2, border:`1px solid ${sc}30`, borderRadius:10, padding:"14px 16px" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:TX }}>{m.month}</div>
+                      <span style={{ fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:99, background:`${sc}15`, color:sc }}>{STATUS_LABEL[m.status]||m.status}</span>
+                    </div>
+
+                    {/* Capacity bar */}
+                    <div style={{ marginBottom:10 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:TX2, marginBottom:4 }}>
+                        <span>{m.scheduled} agendados</span>
+                        <span style={{ fontWeight:700, color:sc }}>{m.availableSlots > 0 ? `+${m.availableSlots} slots` : "sem espaço"}</span>
+                      </div>
+                      <div style={{ height:6, background:"rgba(0,0,0,.08)", borderRadius:3, overflow:"hidden" }}>
+                        <div style={{ height:6, borderRadius:3, background:sc, width:`${Math.min(100, m.safeCapacity>0?(m.scheduled/m.safeCapacity*100):100)}%`, transition:"width .5s" }}/>
+                      </div>
+                      <div style={{ fontSize:9, color:TX3, marginTop:3 }}>cap. segura: {m.safeCapacity} conteúdos</div>
+                    </div>
+
+                    {rawM?.travelDays>0 && (
+                      <div style={{ fontSize:10, color:"#7C3AED", marginBottom:6 }}>✈️ {rawM.travelDays} dias de viagem</div>
+                    )}
+                    {m.riskFactors?.length>0 && (
+                      <div style={{ fontSize:10, color:AMB, marginBottom:6 }}>⚠ {m.riskFactors[0]}</div>
+                    )}
+                    <p style={{ fontSize:11, color:TX2, lineHeight:1.5, margin:0 }}>{m.recommendation}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Global risks + suggestions */}
+            {(capAnalysis.globalRisks?.length>0 || capAnalysis.suggestions?.length>0) && (
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }} className="mob-col1">
+                {capAnalysis.globalRisks?.length>0 && (
+                  <div style={{ background:`${RED}06`, border:`1px solid ${RED}20`, borderRadius:8, padding:"12px 14px" }}>
+                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:RED, marginBottom:8 }}>⚠ Riscos Globais</div>
+                    {capAnalysis.globalRisks.map((r,i)=><div key={i} style={{fontSize:11,color:TX,padding:"3px 0",borderBottom:i<capAnalysis.globalRisks.length-1?`1px solid ${LN}`:"none"}}>{r}</div>)}
+                  </div>
+                )}
+                {capAnalysis.suggestions?.length>0 && (
+                  <div style={{ background:`${GRN}06`, border:`1px solid ${GRN}20`, borderRadius:8, padding:"12px 14px" }}>
+                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:GRN, marginBottom:8 }}>→ Sugestões</div>
+                    {capAnalysis.suggestions.map((s,i)=><div key={i} style={{fontSize:11,color:TX,padding:"3px 0",borderBottom:i<capAnalysis.suggestions.length-1?`1px solid ${LN}`:"none"}}>{s}</div>)}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -2088,12 +2276,13 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
           ))}
         </div>
         {contracts.map(c=>{
-          const cp=posts.filter(p=>p.contractId===c.id&&p.type==="post").length;
+          const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")).length;
           const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
           const cl=posts.filter(p=>p.contractId===c.id&&p.type==="link").length;
+          const cr=posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")).length;
           const total=contractTotal(c); const dl=daysLeft(c.contractDeadline);
           const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
-          const don=cp+cs+cl;
+          const don=cp+cs+cl+cr;
           return (
             <div key={c.id}
               onClick={()=>setSelectedId(c.id)}
@@ -2721,7 +2910,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
           <div style={{height:6,background:LN,borderRadius:3}}>
             <div style={{height:6,borderRadius:3,background:completionRate===100?GRN:c.color,width:`${completionRate}%`,transition:"width .5s"}}/>
           </div>
-          {[["Posts/Reels",c.numPosts,cPosts.filter(p=>p.type==="post"||p.type==="reel").length],["Stories",c.numStories,cPosts.filter(p=>p.type==="story").length],["Links",c.numCommunityLinks,cPosts.filter(p=>p.type==="link").length]].filter(([,tot])=>tot>0).map(([lbl,tot,don],i)=>(
+          {[["Posts/Reels",c.numPosts,cPosts.filter(p=>p.type==="post"||p.type==="reel").length],["Stories",c.numStories,cPosts.filter(p=>p.type==="story").length],["Links",c.numCommunityLinks,cPosts.filter(p=>p.type==="link").length],["TikTok/Reposts",c.numReposts,cPosts.filter(p=>p.type==="tiktok"||p.type==="repost").length]].filter(([,tot])=>tot>0).map(([lbl,tot,don],i)=>(
             <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:`1px solid ${LN}`,marginTop:6}}>
               <span style={{fontSize:12,color:TX2}}>{lbl}</span>
               <span style={{fontSize:12,fontWeight:600,color:don>=tot?GRN:TX}}>{don}/{tot}</span>
@@ -2938,8 +3127,9 @@ export default function App() {
     const tot=k=>contracts.reduce((s,c)=>s+c[k],0);
     // Combine posts + done deliverables for delivery counting
     const del=t=>{
-      const fromPosts=posts.filter(p=>p.type===t&&p.isPosted).length;
-      const fromPipeline=doneDeliverables.filter(d=>d.type===t||((t==="post"||t==="reel")&&d.type==="reel")).length;
+      const postTypes = t==="post"?["post","reel"]:t==="repost"?["repost","tiktok"]:[t];
+      const fromPosts=posts.filter(p=>postTypes.includes(p.type)&&p.isPosted).length;
+      const fromPipeline=doneDeliverables.filter(d=>postTypes.includes(d.type)).length;
       return fromPosts+fromPipeline;
     };
     const engs=posts.map(calcEngagement).filter(e=>e!==null);

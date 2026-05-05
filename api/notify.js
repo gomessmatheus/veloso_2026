@@ -158,7 +158,10 @@ Responda APENAS com o texto da mensagem.`
 async function sendWhatsApp(message) {
   const res = await fetch(ZAPI_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Client-Token": process.env.ZAPI_CLIENT_TOKEN || "",
+    },
     body: JSON.stringify({ phone: PHONE, message })
   })
   return res.json()

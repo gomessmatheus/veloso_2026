@@ -3390,7 +3390,7 @@ const TX_TYPES = [
 ];
 
 const EXPENSE_CATS = {
-  entrada:    ["Recebimento de Contrato","Rendimento Financeiro","Reembolso","Outros Ingressos"],
+  entrada:    ["Recebimento de Contrato","Receita Meta (Facebook/Instagram)","Receita YouTube","Receita TikTok","Receita Kwai","Rendimento Financeiro","Reembolso","Outros Ingressos"],
   saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Utilidades (Luz, Água, Internet)","Outros"],
   dividendos: ["Distribuição de Lucros","Pro-labore","Outros Dividendos"],
   imposto:    ["ISS","PIS/COFINS","IRPJ","CSLL","Simples Nacional","Outros Impostos"],
@@ -3400,6 +3400,10 @@ const EXPENSE_CATS = {
 const DRE_MAP = {
   // Receitas
   "Recebimento de Contrato":          "receita_bruta",
+  "Receita Meta (Facebook/Instagram)": "receita_bruta",
+  "Receita YouTube":                  "receita_bruta",
+  "Receita TikTok":                   "receita_bruta",
+  "Receita Kwai":                     "receita_bruta",
   "Rendimento Financeiro":            "rec_financeira",
   "Reembolso":                        "outras_receitas",
   "Outros Ingressos":                 "outras_receitas",
@@ -3510,8 +3514,8 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
   const isEdit = !!initial?.id;
   const [f, setF] = useState(initial || {
     type:"saida", date:defaultDate||new Date().toISOString().substr(0,10),
-    description:"", amount:"", category:"", originId:accounts[0]?.id||"",
-    destId:"", nfLink:"", nfFile:null, contractId:"", notes:""
+    description:"", amount:"", category:"", originId:"",
+    destId:"", nfLink:"", nfFile:null, contractId:"", notes:"", beneficiario:""
   });
   const set = (k,v) => setF(x=>({...x,[k]:v}));
   const cats = EXPENSE_CATS[f.type] || [];
@@ -3557,6 +3561,16 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
             {contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
           </Select>
         </Field>
+        {f.type==="dividendos" && (
+          <Field label="Beneficiário">
+            <Select value={f.beneficiario||""} onChange={e=>set("beneficiario",e.target.value)}>
+              <option value="">Selecione</option>
+              <option value="Matheus">Matheus</option>
+              <option value="Lucas">Lucas</option>
+              <option value="Ambos">Ambos (50/50)</option>
+            </Select>
+          </Field>
+        )}
 
       </div>
 
@@ -3706,6 +3720,37 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
           ))}
         </div>
       </div>
+
+      {/* Dividend per person */}
+      {transactions.filter(t=>t.type==="dividendos").length>0&&(
+        <div style={{ ...G,padding:"18px 20px" }}>
+          <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:12 }}>Dividendos por Sócio</div>
+          {[["Matheus","#C8102E"],["Lucas","#7C3AED"],["Ambos","#2563EB"]].map(([name,color])=>{
+            const total = transactions.filter(t=>t.type==="dividendos"&&t.beneficiario===name).reduce((s,t)=>s+(Number(t.amount)||0),0);
+            const totalAmbos = transactions.filter(t=>t.type==="dividendos"&&t.beneficiario==="Ambos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+            const effective = name==="Matheus"?total+(totalAmbos/2):name==="Lucas"?total+(totalAmbos/2):total;
+            if (name==="Ambos"&&totalAmbos===0) return null;
+            return (
+              <div key={name} style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:`1px solid ${LN}` }}>
+                <div style={{ width:32,height:32,borderRadius:"50%",background:color+"18",border:`2px solid ${color}30`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0 }}>
+                  {name==="Matheus"?"M":name==="Lucas"?"L":"A"}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:600,fontSize:13,color:TX }}>{name}</div>
+                  {name!=="Ambos"&&totalAmbos>0&&<div style={{ fontSize:10,color:TX2 }}>Direto {fmtMoney(total)} + {fmtMoney(totalAmbos/2)} (metade dos "Ambos")</div>}
+                </div>
+                <div style={{ fontWeight:700,fontSize:16,color }}>
+                  {name==="Ambos"?fmtMoney(total):fmtMoney(effective)}
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:`1px solid ${LN2}`,marginTop:4 }}>
+            <span style={{ fontSize:11,color:TX2 }}>Total distribuído</span>
+            <span style={{ fontWeight:700,fontSize:13,color:"#7C3AED" }}>{fmtMoney(transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0))}</span>
+          </div>
+        </div>
+      )}
 
       {/* Category breakdown */}
       {transactions.length>0&&(
@@ -3930,6 +3975,7 @@ function Caixa({ contracts }) {
                       <div style={{ fontSize:11,color:TX2,display:"flex",gap:8,marginTop:2,flexWrap:"wrap" }}>
                         <span>{fmtDate(tx.date)}</span>
                         {tx.category&&<span>· {tx.category}</span>}
+                        {tx.beneficiario&&<span style={{fontWeight:600,color:"#7C3AED"}}>· {tx.beneficiario}</span>}
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
                         {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· 📄 NF</span>}
                       </div>

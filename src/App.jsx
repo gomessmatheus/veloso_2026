@@ -9,7 +9,7 @@ import {
 } from "./db.js";
 import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSameDay, isSameMonth, isToday, parse, startOfToday, startOfWeek, add } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote } from "lucide-react";
 
 // ─── Design tokens ────────────────────────────────────────
 const B0  = "#FEFEFE";           // background (oklch 0.9940 0 0)

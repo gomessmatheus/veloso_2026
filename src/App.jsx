@@ -1362,7 +1362,8 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
   const [view, setView]   = useState("pipeline");
   const [editItem, setEditItem] = useState(null);
   const [newOpen, setNewOpen]   = useState(false);
-  const [filter, setFilter]     = useState("all");
+  const [filter, setFilter]       = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const toast = useToast();
 
   const save = list => { setDeliverables(list); };
@@ -1372,7 +1373,9 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
     toast?.(`Movido para ${STAGES.find(s=>s.id===newStage)?.label}`, "info");
   };
 
-  const filtered = filter === "all" ? deliverables : deliverables.filter(d => d.contractId === filter);
+  const filtered = deliverables
+    .filter(d => filter === "all" || d.contractId === filter)
+    .filter(d => typeFilter === "all" || d.type === typeFilter);
 
   // Conflict detection: same plannedPostDate
   const postDateCounts = {};
@@ -1415,6 +1418,14 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
               style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, cursor: "pointer", transition: TRANS, color: view===v?TX:TX2, background: view===v?B3:"transparent" }}>{l}</div>
           ))}
         </div>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+          style={{ padding: "5px 10px", background: B1, border: `1px solid ${LN}`, borderRadius: 6, color: TX2, fontSize: 11, fontFamily: "inherit", outline: "none" }}>
+          <option value="all">Todos os tipos</option>
+          <option value="reel">Reel / Post</option>
+          <option value="story">Story</option>
+          <option value="tiktok">TikTok</option>
+          <option value="link">Link Comunidade</option>
+        </select>
         <select value={filter} onChange={e => setFilter(e.target.value)}
           style={{ padding: "5px 10px", background: B1, border: `1px solid ${LN}`, borderRadius: 6, color: TX2, fontSize: 11, fontFamily: "inherit", outline: "none" }}>
           <option value="all">Todos contratos</option>
@@ -2186,6 +2197,114 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
     </div>
   );
 }
+
+// ─── Calendar View ───────────────────────────────────────
+function CalendarView({ contracts, calEvents, calMonth, setCal, calFilter, setCalF }) {
+  const isMobile = useIsMobile();
+  const { y, m } = calMonth;
+  const today = startOfToday();
+  const [sel, setSel] = useState(today);
+  const firstDay = new Date(y, m, 1).getDay();
+  const daysInMo = new Date(y, m+1, 0).getDate();
+  const todayStr = today.toISOString().substr(0, 10);
+  const cells = [];
+  for(let i=0;i<firstDay;i++) cells.push(null);
+  for(let d=1;d<=daysInMo;d++) cells.push(d);
+  while(cells.length%7) cells.push(null);
+  const MONTHS_LONG=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const prev=()=>setCal(p=>{const d=new Date(p.y,p.m-1,1);return{y:d.getFullYear(),m:d.getMonth()};});
+  const next=()=>setCal(p=>{const d=new Date(p.y,p.m+1,1);return{y:d.getFullYear(),m:d.getMonth()};});
+  const selStr = sel ? `${y}-${String(m+1).padStart(2,"0")}-${String(sel.getDate()).padStart(2,"0")}` : "";
+  const selEvs = selStr ? (calEvents[selStr]||[]) : [];
+
+  return (
+    <div>
+      {/* Month nav */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+        <div style={{ fontWeight:700, fontSize:isMobile?15:14, color:TX, flex:1 }}>{MONTHS_LONG[m]} {y}</div>
+        <button onClick={prev} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, width:30, height:30, cursor:"pointer", color:TX2, fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
+        <button onClick={()=>setCal({y:today.getFullYear(),m:today.getMonth()})} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"0 12px", height:30, cursor:"pointer", color:TX2, fontSize:11, fontWeight:600 }}>Hoje</button>
+        <button onClick={next} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, width:30, height:30, cursor:"pointer", color:TX2, fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
+      </div>
+      {/* Filters */}
+      <div style={{ display:"flex", gap:6, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:8, marginBottom:12, scrollbarWidth:"none" }}>
+        <div onClick={()=>setCalF("all")} style={{ padding:"5px 12px", fontSize:10, fontWeight:700, cursor:"pointer", borderRadius:99, flexShrink:0, background:calFilter==="all"?TX:B2, color:calFilter==="all"?"white":TX2, border:`1px solid ${calFilter==="all"?TX:LN}`, transition:TRANS }}>Todos</div>
+        {contracts.map(c=>(
+          <div key={c.id} onClick={()=>setCalF(calFilter===c.id?"all":c.id)} style={{ padding:"5px 12px", fontSize:10, fontWeight:600, cursor:"pointer", borderRadius:99, flexShrink:0, display:"flex", alignItems:"center", gap:5, background:calFilter===c.id?c.color+"22":B2, color:calFilter===c.id?c.color:TX2, border:`1px solid ${calFilter===c.id?c.color+"66":LN}`, transition:TRANS }}>
+            <div style={{ width:5, height:5, borderRadius:"50%", background:c.color }}/>{c.company.split("/")[0].trim().slice(0,12)}
+          </div>
+        ))}
+      </div>
+      {/* Grid */}
+      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:B2 }}>
+          {(isMobile?["D","S","T","Q","Q","S","S"]:["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"]).map((d,i)=>(
+            <div key={i} style={{ padding:isMobile?"6px 0":"8px 0", textAlign:"center", fontSize:isMobile?10:9, fontWeight:700, letterSpacing:isMobile?0:".1em", textTransform:"uppercase", color:TX3 }}>{d}</div>
+          ))}
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:1, background:LN }}>
+          {cells.map((d,i)=>{
+            if(!d) return <div key={`e${i}`} style={{ minHeight:isMobile?50:90, background:B0 }}/>;
+            const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+            const evs=calEvents[ds]||[];
+            const isT=ds===todayStr;
+            const isSel=ds===selStr;
+            const maxEvs=isMobile?0:3;
+            return (
+              <div key={d} onClick={()=>setSel(new Date(y,m,d))}
+                style={{ minHeight:isMobile?50:90, padding:isMobile?3:5, background:isSel?`${RED}08`:isT?`${RED}05`:B0, cursor:"pointer", transition:TRANS }}
+                onMouseEnter={e=>!(isSel||isT)&&(e.currentTarget.style.background=B2)}
+                onMouseLeave={e=>!(isSel||isT)&&(e.currentTarget.style.background=B0)}>
+                <div style={{ fontSize:11, fontWeight:isT?700:400, marginBottom:isMobile?3:3, textAlign:isMobile?"center":"left" }}>
+                  {isT
+                    ? <span style={{ background:RED, color:"white", borderRadius:"50%", width:18, height:18, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10 }}>{d}</span>
+                    : <span style={{ color:isSel?RED:TX }}>{d}</span>}
+                </div>
+                {!isMobile && evs.slice(0,maxEvs).map((ev,ei)=>(
+                  <div key={ei} style={{ fontSize:8, fontWeight:700, padding:"1px 4px", marginBottom:2, borderLeft:`2px solid ${ev.color}`, background:ev.dashed?"transparent":`${ev.color}18`, color:ev.color, borderLeftStyle:ev.dashed?"dashed":"solid", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", textTransform:"uppercase", letterSpacing:".03em" }}>{ev.label}</div>
+                ))}
+                {isMobile && evs.length>0 && (
+                  <div style={{ display:"flex", justifyContent:"center", gap:2, flexWrap:"wrap" }}>
+                    {evs.slice(0,4).map((ev,ei)=>(
+                      <div key={ei} style={{ width:5, height:5, borderRadius:"50%", background:ev.color }}/>
+                    ))}
+                  </div>
+                )}
+                {!isMobile && evs.length>maxEvs&&<div style={{fontSize:8,color:TX3}}>+{evs.length-maxEvs}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {/* Selected day events */}
+      {selEvs.length>0&&(
+        <div style={{ marginTop:12, background:B1, border:`1px solid ${LN}`, borderRadius:10, padding:14 }}>
+          <div style={{ fontSize:10, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>
+            {sel?.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {selEvs.map((ev,i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", borderRadius:7, background:B2, borderLeft:`3px solid ${ev.color}` }}>
+                <div style={{ fontSize:12, fontWeight:500, color:TX, flex:1, lineHeight:1.4 }}>{ev.label}</div>
+                {ev.dashed&&<Badge color={TX2}>Fase</Badge>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Calendario({ contracts, calEvents, calMonth, setCal, calFilter, setCalF }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ padding:isMobile?"12px":24, maxWidth:1400 }}>
+      <CalendarView contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
+    </div>
+  );
+}
+
 
 // ─── Contract Modal ───────────────────────────────────────
 function ContractModal({ modal, setModal, contracts, saveC }) {

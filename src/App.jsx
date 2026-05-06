@@ -4217,6 +4217,9 @@ function Caixa({ contracts }) {
   const [baseDate, setBaseDate]       = useState(() => lsLoad("caixa_base_date", ""));
   const [txModal, setTxModal] = useState(null);
   const [showExport, setShowExport] = useState(false);
+  const [aiMessages, setAiMessages] = useState([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
   const [dreYear, setDreYear] = useState(new Date().getFullYear());
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
@@ -4265,6 +4268,7 @@ function Caixa({ contracts }) {
     { id:"lancamentos", label:"Lançamentos" },
     { id:"dre",         label:"DRE" },
     { id:"indicadores", label:"Indicadores" },
+    { id:"ia",          label:"⚡ Consulta IA" },
   ];
 
   return (
@@ -4396,6 +4400,86 @@ function Caixa({ contracts }) {
       )}
 
       {tab==="indicadores" && <IndicadoresFinanceiros transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} contracts={contracts}/>}
+
+      {/* IA Financeira */}
+      {tab==="ia" && (() => {
+        const totalEnt2 = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const totalSai2 = transactions.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const totalDiv2 = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const lucro2 = totalEnt2 - totalSai2 - totalDiv2;
+        const catBreakdown = Object.entries(transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>`${k}: R$${v.toLocaleString("pt-BR")}`).join(", ");
+        const ctx = `Empresa: Stand/Veloso Produções. Saldo: R$${saldoTotal.toLocaleString("pt-BR")}. Entradas: R$${totalEnt2.toLocaleString("pt-BR")}. Saídas: R$${totalSai2.toLocaleString("pt-BR")}. Dividendos: R$${totalDiv2.toLocaleString("pt-BR")}. Lucro líquido: R$${lucro2.toLocaleString("pt-BR")}. Contratos ativos: ${contracts.length}. Top despesas: ${catBreakdown||"nenhuma"}. Lançamentos: ${transactions.length}.`;
+
+        const sendMsg = async () => {
+          if (!aiInput.trim()) return;
+          const userMsg = aiInput.trim();
+          setAiInput("");
+          setAiMessages(m => [...m, { role:"user", text:userMsg }]);
+          setAiLoading(true);
+          try {
+            const history = aiMessages.slice(-6).map(m=>({ role:m.role==="user"?"user":"assistant", content:m.text }));
+            const res = await fetch("/api/ai",{ method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+              max_tokens: 1000,
+              system: `Você é o consultor financeiro do criador de conteúdo @veloso.lucas_ (canal de futebol, 2M seguidores). A empresa é Stand/Veloso Produções. Responda em português, de forma direta e prática. Contexto financeiro: ${ctx}`,
+              messages: [...history, { role:"user", content:userMsg }]
+            })});
+            const data = await res.json();
+            setAiMessages(m => [...m, { role:"assistant", text:data.text||"Não consegui processar." }]);
+          } catch(e) { setAiMessages(m => [...m, { role:"assistant", text:"Erro: "+String(e) }]); }
+          setAiLoading(false);
+        };
+
+        return (
+          <div style={{ display:"flex",flexDirection:"column",height:"60vh",maxHeight:600 }}>
+            <div style={{ ...G,padding:"10px 16px",marginBottom:16,fontSize:11,color:TX2 }}>
+              💡 Pergunte sobre seus números, estratégias financeiras, como reduzir custos, melhorar margens, planejamento tributário, etc.
+            </div>
+            {/* Messages */}
+            <div style={{ flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12,marginBottom:16,padding:"4px 0" }}>
+              {aiMessages.length===0&&(
+                <div style={{ textAlign:"center",padding:"40px 20px",color:TX3 }}>
+                  <div style={{ fontSize:32,marginBottom:12 }}>⚡</div>
+                  <div style={{ fontSize:13,fontWeight:600,color:TX2,marginBottom:8 }}>Consultor Financeiro IA</div>
+                  <div style={{ fontSize:12,color:TX3 }}>Exemplos de perguntas:</div>
+                  <div style={{ display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginTop:12 }}>
+                    {["Qual minha margem de lucro?","Como posso reduzir custos?","Estou gastando muito com RH?","Quando devo distribuir dividendos?","Como melhorar o fluxo de caixa?"].map(q=>(
+                      <div key={q} onClick={()=>{setAiInput(q);}} style={{ padding:"6px 12px",fontSize:11,background:B2,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:TX2,transition:TRANS }} onMouseEnter={e=>e.currentTarget.style.borderColor=RED} onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>{q}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {aiMessages.map((msg,i)=>(
+                <div key={i} style={{ display:"flex",gap:10,flexDirection:msg.role==="user"?"row-reverse":"row",alignItems:"flex-start" }}>
+                  <div style={{ width:28,height:28,borderRadius:"50%",background:msg.role==="user"?RED:`${BLU}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0,color:msg.role==="user"?"white":BLU,fontWeight:700 }}>
+                    {msg.role==="user"?"M":"⚡"}
+                  </div>
+                  <div style={{ maxWidth:"80%",padding:"10px 14px",borderRadius:msg.role==="user"?"12px 12px 0 12px":"12px 12px 12px 0",background:msg.role==="user"?RED:B2,color:msg.role==="user"?"white":TX,fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap" }}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {aiLoading&&(
+                <div style={{ display:"flex",gap:10,alignItems:"center" }}>
+                  <div style={{ width:28,height:28,borderRadius:"50%",background:`${BLU}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:BLU,fontWeight:700 }}>⚡</div>
+                  <div style={{ padding:"10px 14px",borderRadius:"12px 12px 12px 0",background:B2,fontSize:12,color:TX2 }}>Analisando seus dados...</div>
+                </div>
+              )}
+            </div>
+            {/* Input */}
+            <div style={{ display:"flex",gap:8 }}>
+              <input value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendMsg()}
+                placeholder="Pergunte algo sobre suas finanças..."
+                style={{ flex:1,padding:"10px 14px",fontSize:13,background:B2,border:`1px solid ${LN}`,borderRadius:10,color:TX,fontFamily:"inherit",outline:"none",transition:TRANS }}
+                onFocus={e=>e.currentTarget.style.borderColor=RED} onBlur={e=>e.currentTarget.style.borderColor=LN}/>
+              <button onClick={sendMsg} disabled={aiLoading||!aiInput.trim()}
+                style={{ padding:"10px 18px",background:RED,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:700,cursor:aiLoading||!aiInput.trim()?"not-allowed":"pointer",opacity:aiLoading||!aiInput.trim()?0.6:1 }}>
+                Enviar
+              </button>
+              {aiMessages.length>0&&<button onClick={()=>setAiMessages([])} style={{ padding:"10px 12px",background:"none",border:`1px solid ${LN}`,borderRadius:10,color:TX2,fontSize:11,cursor:"pointer" }}>Limpar</button>}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* DRE */}
       {tab==="dre" && (

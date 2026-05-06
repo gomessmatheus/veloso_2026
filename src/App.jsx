@@ -867,12 +867,10 @@ Responda APENAS com o JSON, sem markdown.`
 
       {/* KPIs — 4 cards, produção only */}
       <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?10:12, marginBottom:20 }}>
-        {[
-          { label:"Entregáveis ativos", value:allDeliverables.filter(d=>d.stage!=="done").length, sub:`${allDeliverables.filter(d=>d.stage==="done").length} concluídos` },
-          { label:"Posts publicados",   value:`${stats.dp}/${stats.tp}`, sub:`${stats.ds}/${stats.ts} stories` },
-          { label:"Atrasados",          value:lateDeliverables.length, sub:"no pipeline", accent:lateDeliverables.length>0?RED:GRN },
-          { label:"Engajamento",        value:stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—", sub:"média das publis", accent:stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2 },
-        ].map((k,i) => <DashKpi key={i} label={k.label} value={k.value} sub={k.sub} accent={k.accent} small={isMobile}/>)}
+        <DashKpi label="Entregáveis ativos" value={allDeliverables.filter(d=>d.stage!=="done").length} sub={`${allDeliverables.filter(d=>d.stage==="done").length} concluídos`}/>
+        <MonthDeliverables deliverables={allDeliverables} contracts={contracts}/>
+        <DashKpi label="Atrasados" value={lateDeliverables.length} sub="no pipeline" accent={lateDeliverables.length>0?RED:GRN}/>
+        <DashKpi label="Engajamento" value={stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—"} sub="média das publis" accent={stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2}/>
       </div>
 
       {/* Capacidade de Absorção */}
@@ -3096,6 +3094,59 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
           })()}
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ─── Month Deliverables KPI ───────────────────────────────
+function MonthDeliverables({ deliverables, contracts }) {
+  const [offset, setOffset] = useState(0); // 0 = current month
+  
+  const getMonth = (off) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + off);
+    return { y: d.getFullYear(), m: d.getMonth() };
+  };
+
+  const { y, m } = getMonth(offset);
+  const monthKey = `${y}-${String(m+1).padStart(2,"0")}`;
+  const monthLabel = new Date(y, m, 1).toLocaleDateString("pt-BR", { month:"long", year:"numeric" });
+  const monthLabelShort = new Date(y, m, 1).toLocaleDateString("pt-BR", { month:"short" }).replace(".","");
+
+  const monthDels = deliverables.filter(d => d.plannedPostDate?.startsWith(monthKey));
+  const done   = monthDels.filter(d => d.stage === "done").length;
+  const total  = monthDels.length;
+  const byStage = {};
+  monthDels.forEach(d => { byStage[d.stage] = (byStage[d.stage]||0)+1; });
+
+  return (
+    <div style={{ ...G, padding:"16px 18px", position:"relative" }}>
+      {/* Nav arrows */}
+      <div style={{ position:"absolute", top:10, right:10, display:"flex", gap:2 }}>
+        <button onClick={()=>setOffset(o=>o-1)} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:4, width:20, height:20, cursor:"pointer", color:TX2, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>‹</button>
+        <button onClick={()=>setOffset(0)} style={{ background:offset===0?TX2:"none", border:`1px solid ${LN}`, borderRadius:4, width:20, height:20, cursor:"pointer", color:offset===0?"white":TX2, fontSize:9, display:"flex", alignItems:"center", justifyContent:"center" }} title="Mês atual">●</button>
+        <button onClick={()=>setOffset(o=>o+1)} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:4, width:20, height:20, cursor:"pointer", color:TX2, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>›</button>
+      </div>
+
+      <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:6 }}>
+        Entregas · {monthLabelShort} {y !== new Date().getFullYear() ? y : ""}
+      </div>
+      <div style={{ fontSize:20, fontWeight:700, color:TX, lineHeight:1, marginBottom:4 }}>
+        {done}<span style={{ fontSize:13, color:TX2, fontWeight:400 }}>/{total}</span>
+      </div>
+      <div style={{ height:3, background:LN, borderRadius:2, marginBottom:6, overflow:"hidden" }}>
+        <div style={{ height:3, borderRadius:2, background:total>0&&done===total?GRN:RED, width:`${total>0?Math.round(done/total*100):0}%`, transition:"width .4s" }}/>
+      </div>
+      {total === 0
+        ? <div style={{ fontSize:10, color:TX3 }}>Sem entregáveis</div>
+        : <div style={{ fontSize:10, color:TX2 }}>
+            {byStage["done"]?`✓ ${byStage["done"]} entregues`:""}
+            {byStage["postagem"]?` · 📅 ${byStage["postagem"]} para postar`:""}
+            {total - (byStage["done"]||0) - (byStage["postagem"]||0) > 0
+              ? ` · ⚙️ ${total-(byStage["done"]||0)-(byStage["postagem"]||0)} em prod.`:""}
+          </div>
+      }
     </div>
   );
 }

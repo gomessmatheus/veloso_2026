@@ -951,7 +951,7 @@ Responda APENAS com o JSON, sem markdown.`
           const c = contracts.find(x=>x.id===d.contractId);
           const stage = STAGES.find(s=>s.id===d.stage);
           const dl = d.plannedPostDate ? daysLeft(d.plannedPostDate) : null;
-          const isLate = dl !== null && dl < 0;
+          const isLate = d.stage!=="done" && !d.publishedAt && !d.postLink && dl !== null && dl < 0;
           return (
             <div key={d.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<upcomingDeliverables.slice(0,6).length-1?`1px solid ${LN}`:"none" }}>
               <div style={{ width:6, height:6, borderRadius:"50%", background:c?.color||TX3, flexShrink:0 }}/>
@@ -1277,7 +1277,8 @@ function DeliverableCard({ item, contracts, onEdit, stageId }) {
   const dl = stageDeadline(item, stageId);
   const daysUntil = dl ? daysLeft(dl) : null;
   const TYPE_LABEL = { reel:"Reel", story:"Story", link:"Link", tiktok:"TikTok", post:"Reel" };
-  const isLate = daysUntil !== null && daysUntil < 0;
+  const isDone = item.stage === "done";
+  const isLate = !isDone && !item.publishedAt && !item.postLink && daysUntil !== null && daysUntil < 0;
   const isUrgent = daysUntil !== null && daysUntil >= 0 && daysUntil <= 1;
 
   return (

@@ -311,7 +311,7 @@ function Field({ label, children, full }) {
 function CommToggle({ on, onToggle, label }) {
   return <div style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }} onClick={e=>{e.stopPropagation();onToggle();}}>
     <Toggle on={on} onToggle={()=>{}}/>
-    {label && <span style={{ fontSize:10, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:on?GRN:TX2 }}>{on?"✓ Comissão Ranked":"Sem comissão Ranked"}</span>}
+    {label && <span style={{ fontSize:10, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:on?GRN:TX2 }}>{on?"✓ Comissão Ranked (a pagar)":"Sem comissão"}</span>}
   </div>;
 }
 
@@ -411,6 +411,7 @@ const NAV_ITEMS = [
   { id:"dashboard",      label:"Dashboard",       icon:LayoutDashboard },
   { id:"acompanhamento", label:"Produção",         icon:KanbanSquare },
   { id:"contratos",      label:"Contratos",        icon:FileText },
+  { id:"financeiro",     label:"Financeiro",       icon:DollarSign },
   { id:"posts",          label:"Posts",            icon:Video },
   { id:"calendario",     label:"Calendário",       icon:Calendar },
 ];
@@ -654,20 +655,7 @@ function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, 
     sub: postsDue.map(p=>p.title).slice(0,3).join(", "),
     action:"Ver posts", onAction:()=>navigateTo("posts"),
   });
-  const nfPendingList = contracts.filter(c => getNFEntries(c).some(e => !e.isEmitted));
-  if (nfPendingList.length >= 3) urgency.push({
-    type:"info", key:"nf",
-    title:`${stats.nfPending} NFs pendentes · ${fmtMoney(stats.nfPendingValue)}`,
-    sub: nfPendingList.slice(0,3).map(c=>c.company).join(", "),
-    action:"Ver NFs", onAction:()=>navigateTo("contratos"),
-  });
-  if (stats.commPendBRL > 0) urgency.push({
-    type:"info", key:"comm",
-    title:"Comissão a receber · Ranked",
-    sub:"Pendente de recebimento",
-    value:fmtMoney(stats.commPendBRL),
-    action:"Ver comissões", onAction:()=>navigateTo("contratos"),
-  });
+  // NF and commission moved to Financeiro tab
   if (urgency.length === 0) urgency.push({ type:"success", key:"ok", title:"Tudo em dia", sub:"Nenhuma ação urgente. Bom trabalho!" });
 
   // Upcoming payments
@@ -885,7 +873,7 @@ Responda APENAS com o JSON, sem markdown.`
           { label:"Posts publicados", value:`${stats.dp}/${stats.tp}`, sub:`${stats.ds}/${stats.ts} stories` },
           { label:"Atrasados", value:lateDeliverables.length, sub:"no pipeline", accent:lateDeliverables.length>0?RED:GRN },
           { label:"Engajamento", value:stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—", sub:"média das publis", accent:stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2 },
-          { label:"Comissão Ranked", value:fmtMoney(stats.commPendBRL), sub:"pendente", accent:stats.commPendBRL>0?AMB:GRN },
+          { label:"Comissão Ranked (a pagar)", value:fmtMoney(stats.commPendBRL), sub:"pendente", accent:stats.commPendBRL>0?AMB:GRN },
         ].map((k,i) => <DashKpi key={i} label={k.label} value={k.value} sub={k.sub} accent={k.accent} small={isMobile}/>)}
       </div>
 
@@ -1713,7 +1701,7 @@ function CostsSection({ contract: c, saveC, contracts }) {
           </div>
           {c.hasCommission && (
             <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
-              <span style={{fontSize:11,color:TX2}}>Comissão Ranked (20% s/ líquido)</span>
+              <span style={{fontSize:11,color:TX2}}>Comissão Ranked (a pagar) (20% s/ líquido)</span>
               <span style={{fontSize:12,fontWeight:700,color:RED}}>{fmtMoney(commOnNet, c.currency)}</span>
             </div>
           )}
@@ -1871,7 +1859,7 @@ Responda APENAS com o JSON.` }]
             {[
               { label:"Valor total",    value:total>0?fmtMoney(total,c.currency):"TBD" },
               { label:"Posts entregues", value:`${cPosts.filter(p=>p.isPosted).length}/${cDeliverables.length+cPosts.length}` },
-              { label:"Comissão Ranked", value:fmtMoney(commPending,c.currency), accent:commPending>0?AMB:GRN, sub:commPending>0?"pendente":"pago" },
+              { label:"Comissão Ranked (a pagar)", value:fmtMoney(commPending,c.currency), accent:commPending>0?AMB:GRN, sub:commPending>0?"pendente":"pago" },
               { label:"Engajamento",     value:avgEng!=null?avgEng.toFixed(2)+"%":"—", accent:avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX2):TX2 },
             ].map((k,i) => (
               <div key={i} style={{ ...G, padding:"16px 18px" }}>
@@ -1988,7 +1976,7 @@ Responda APENAS com o JSON.` }]
           {/* Commission */}
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-              <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Comissão Ranked (20%)</div>
+              <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Comissão Ranked (a pagar) (20%)</div>
               <CommToggle on={c.hasCommission} onToggle={()=>toggleComm(c.id)} label/>
             </div>
             {!c.hasCommission&&<div style={{fontSize:12,color:TX3}}>Sem comissão neste contrato</div>}
@@ -2002,7 +1990,7 @@ Responda APENAS com o JSON.` }]
                 <div style={{ display:"flex",alignItems:"center",gap:10 }}>
                   <span style={{ fontSize:13,fontWeight:700,color:RED }}>{fmtMoney(e.amount,c.currency)}</span>
                   <div onClick={()=>toggleCommPaid(c.id,e.key)} style={{ padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isPaid?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isPaid?GRN+"44":LN2}`,color:e.isPaid?GRN:TX2 }}>
-                    {e.isPaid?"✓ Pago":"Marcar pago"}
+                    {e.isPaid?"✓ Pago à Ranked":"Marcar pago"}
                   </div>
                 </div>
               </div>
@@ -2570,7 +2558,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
               <span style={{fontSize:12,fontWeight:700,color:TX}}>{fmtMoney(netValue)}</span>
             </div>
             {f.hasCommission&&<div style={{display:"flex",justifyContent:"space-between",paddingTop:6,borderTop:`1px solid ${LN}`}}>
-              <span style={{fontSize:11,color:TX2}}>Comissão Ranked (20% s/ líquido)</span>
+              <span style={{fontSize:11,color:TX2}}>Comissão Ranked (a pagar) (20% s/ líquido)</span>
               <span style={{fontSize:12,fontWeight:700,color:RED}}>{fmtMoney(commOnNet)}</span>
             </div>}
           </div>
@@ -2663,6 +2651,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates}/>;
 
+    if (view==="financeiro")     return <Financeiro contracts={contracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC}/>;
     if (view==="posts")          return <Posts contracts={contracts} posts={posts} saveP={saveP} setModal={setModal}/>;
     if (view==="calendario")     return <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     return null;
@@ -2916,6 +2905,7 @@ function NavIcon({ type, active }) {
   if (type==="contracts") return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
   if (type==="posts")     return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>;
   if (type==="calendar")  return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+  if (type==="money")     return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
   return null;
 }
 
@@ -2924,7 +2914,7 @@ function MobileNav({ view, setView }) {
     { id:"dashboard",      label:"Home",      icon:"home" },
     { id:"acompanhamento", label:"Produção",  icon:"prod" },
     { id:"contratos",      label:"Contratos", icon:"contracts" },
-    { id:"posts",          label:"Posts",     icon:"posts" },
+    { id:"financeiro",     label:"Financeiro",icon:"money" },
     { id:"calendario",     label:"Agenda",    icon:"calendar" },
   ];
   return (
@@ -2940,6 +2930,243 @@ function MobileNav({ view, setView }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+
+// ─── Financeiro View ──────────────────────────────────────
+function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCommPaid, saveC }) {
+  const [tab, setTab] = useState("visao");
+
+  const totalBRL = contracts.reduce((s,c) => s + toBRL(contractTotal(c),c.currency,rates), 0);
+  const totalCosts = contracts.reduce((s,c) => s + (c.costs||[]).reduce((a,x)=>a+(Number(x.value)||0),0), 0);
+  const totalComm  = contracts.reduce((s,c) => {
+    if (!c.hasCommission) return s;
+    return s + getCommEntries(c).reduce((a,e)=>a+e.amount,0);
+  }, 0);
+  const commPaid   = contracts.reduce((s,c) => {
+    if (!c.hasCommission) return s;
+    return s + getCommEntries(c).filter(e=>e.isPaid).reduce((a,e)=>a+e.amount,0);
+  }, 0);
+  const commPend   = totalComm - commPaid;
+  const nfPending  = contracts.filter(c => getNFEntries(c).some(e=>!e.isEmitted));
+
+  const TABS = [
+    { id:"visao",       label:"Visão Geral" },
+    { id:"comissoes",   label:`Comissões (${contracts.filter(c=>c.hasCommission).length})` },
+    { id:"nf",          label:`Notas Fiscais` },
+    { id:"pagamentos",  label:"Pagamentos" },
+  ];
+
+  return (
+    <div style={{ padding:"24px 28px", maxWidth:1100 }}>
+      {/* Header */}
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em", marginBottom:4 }}>Financeiro</h1>
+        <p style={{ fontSize:13, color:TX2 }}>Gestão de NFs, comissões Ranked e pagamentos</p>
+      </div>
+
+      {/* Summary KPIs */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:24 }}>
+        {[
+          { label:"Volume bruto total", value:fmtMoney(totalBRL), sub:`${contracts.length} contratos` },
+          { label:"Custos deduzidos",   value:fmtMoney(totalCosts), sub:"passagens, equipe, etc.", accent:totalCosts>0?AMB:TX2 },
+          { label:"Comissão a pagar",   value:fmtMoney(commPend), sub:"pendente à Ranked", accent:commPend>0?RED:GRN },
+          { label:"NFs a emitir",       value:nfPending.length, sub:`de ${contracts.length} contratos`, accent:nfPending.length>0?AMB:GRN },
+        ].map((k,i) => (
+          <div key={i} style={{ ...G, padding:"16px 18px" }}>
+            <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>{k.label}</div>
+            <div style={{ fontSize:20,fontWeight:700,color:k.accent||TX,lineHeight:1 }}>{k.value}</div>
+            <div style={{ fontSize:11,color:TX2,marginTop:4 }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20 }}>
+        {TABS.map(t => (
+          <div key={t.id} onClick={()=>setTab(t.id)}
+            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1 }}>
+            {t.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Visão Geral */}
+      {tab==="visao" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {contracts.map(c => {
+            const gross = contractTotal(c);
+            const costs = (c.costs||[]).reduce((s,x)=>s+(Number(x.value)||0),0);
+            const net   = Math.max(0, gross - costs);
+            const comm  = c.hasCommission ? getCommEntries(c).reduce((s,e)=>s+e.amount,0) : 0;
+            const commP = c.hasCommission ? getCommEntries(c).filter(e=>e.isPaid).reduce((s,e)=>s+e.amount,0) : 0;
+            const nfDone= getNFEntries(c).every(e=>e.isEmitted);
+            return (
+              <div key={c.id} style={{ ...G, padding:"14px 18px", display:"grid", gridTemplateColumns:"3px 1fr 130px 130px 130px 120px", alignItems:"center", gap:0 }}>
+                <div style={{ background:c.color, alignSelf:"stretch", borderRadius:2 }}/>
+                <div style={{ padding:"0 14px" }}>
+                  <div style={{ fontWeight:600, fontSize:13, color:TX }}>{c.company}</div>
+                  <div style={{ fontSize:11, color:TX2, marginTop:2 }}>
+                    {c.currency!=="BRL"?currBadge(c.currency):null}
+                    {c.paymentType==="monthly"?" · Mensal":""}
+                    {c.contractDeadline?` · prazo ${fmtDate(c.contractDeadline)}`:""}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:TX2, marginBottom:2 }}>Valor bruto</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:TX }}>{fmtMoney(gross,c.currency)}</div>
+                  {costs>0&&<div style={{ fontSize:10, color:AMB }}>- {fmtMoney(costs)} custos</div>}
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:TX2, marginBottom:2 }}>Líquido</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:costs>0?TX:TX2 }}>{costs>0?fmtMoney(net,c.currency):"—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:TX2, marginBottom:2 }}>Comissão Ranked</div>
+                  {c.hasCommission ? (
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700, color:comm-commP>0?RED:GRN }}>{fmtMoney(comm,c.currency)}</div>
+                      {commP>0&&commP<comm&&<div style={{ fontSize:10, color:TX2 }}>{fmtMoney(commP)} pago</div>}
+                      {commP===comm&&<div style={{ fontSize:10, color:GRN }}>✓ Quitado</div>}
+                    </div>
+                  ) : <div style={{ fontSize:12, color:TX3 }}>—</div>}
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 9px", borderRadius:99, fontSize:10, fontWeight:700,
+                    background: nfDone?`${GRN}15`:`${AMB}15`,
+                    color: nfDone?GRN:AMB,
+                    border: `1px solid ${nfDone?GRN+"30":AMB+"30"}` }}>
+                    {nfDone?"✓ NF ok":"NF pendente"}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Comissões */}
+      {tab==="comissoes" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {/* Summary bar */}
+          <div style={{ ...G, padding:"14px 18px", display:"flex", alignItems:"center", gap:24, marginBottom:4 }}>
+            <div>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Total comissão</div>
+              <div style={{ fontSize:18,fontWeight:700,color:TX }}>{fmtMoney(totalComm)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Pago à Ranked</div>
+              <div style={{ fontSize:18,fontWeight:700,color:GRN }}>{fmtMoney(commPaid)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Pendente</div>
+              <div style={{ fontSize:18,fontWeight:700,color:commPend>0?RED:GRN }}>{fmtMoney(commPend)}</div>
+            </div>
+            <div style={{ flex:1 }}/>
+            <div style={{ fontSize:11, color:TX2 }}>20% sobre valor líquido por contrato</div>
+          </div>
+          {contracts.filter(c=>c.hasCommission).map(c => {
+            const entries = getCommEntries(c);
+            return (
+              <div key={c.id} style={{ ...G, padding:"14px 18px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: entries.length>1?12:0 }}>
+                  <div style={{ width:8,height:8,borderRadius:"50%",background:c.color,flexShrink:0 }}/>
+                  <span style={{ fontWeight:600,fontSize:13,color:TX,flex:1 }}>{c.company}</span>
+                  <span style={{ fontSize:11,color:TX2 }}>Total: {fmtMoney(entries.reduce((s,e)=>s+e.amount,0),c.currency)}</span>
+                </div>
+                {entries.map((e,i) => (
+                  <div key={e.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderTop:`1px solid ${LN}` }}>
+                    <div style={{ flex:1 }}>
+                      <span style={{ fontSize:12, color:TX }}>{e.label}</span>
+                      {e.date&&<span style={{ fontSize:11, color:TX2, marginLeft:8 }}>{fmtDate(e.date)}</span>}
+                    </div>
+                    <span style={{ fontSize:13, fontWeight:700, color:RED }}>{fmtMoney(e.amount,c.currency)}</span>
+                    <div onClick={()=>toggleCommPaid(c.id,e.key)}
+                      style={{ padding:"5px 14px", fontSize:11, fontWeight:700, cursor:"pointer", borderRadius:6, transition:TRANS,
+                        background:e.isPaid?`${GRN}15`:"rgba(0,0,0,.04)",
+                        border:`1px solid ${e.isPaid?GRN+"44":LN2}`,
+                        color:e.isPaid?GRN:TX2 }}>
+                      {e.isPaid?"✓ Pago à Ranked":"Marcar pago"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* NF */}
+      {tab==="nf" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {contracts.map(c => {
+            const entries = getNFEntries(c);
+            if (!entries.length) return null;
+            return (
+              <div key={c.id} style={{ ...G, padding:"14px 18px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:entries.length>1?12:0 }}>
+                  <div style={{ width:8,height:8,borderRadius:"50%",background:c.color,flexShrink:0 }}/>
+                  <span style={{ fontWeight:600,fontSize:13,color:TX,flex:1 }}>{c.company}</span>
+                  <span style={{ fontSize:11,color:TX2 }}>{entries.filter(e=>e.isEmitted).length}/{entries.length} emitidas</span>
+                </div>
+                {entries.map((e,i) => (
+                  <div key={e.key} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderTop:`1px solid ${LN}` }}>
+                    <div style={{ flex:1 }}>
+                      <span style={{ fontSize:12, color:TX }}>{e.label}</span>
+                      {e.date&&<span style={{ fontSize:11, color:TX2, marginLeft:8 }}>{fmtDate(e.date)}</span>}
+                    </div>
+                    {e.amount>0&&<span style={{ fontSize:13, fontWeight:700, color:TX }}>{fmtMoney(e.amount,c.currency)}</span>}
+                    <div onClick={()=>toggleNF(c.id,e.key)}
+                      style={{ padding:"5px 14px", fontSize:11, fontWeight:700, cursor:"pointer", borderRadius:6, transition:TRANS,
+                        background:e.isEmitted?`${GRN}15`:"rgba(0,0,0,.04)",
+                        border:`1px solid ${e.isEmitted?GRN+"44":LN2}`,
+                        color:e.isEmitted?GRN:TX2 }}>
+                      {e.isEmitted?"✓ Emitida":"Emitir NF"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Pagamentos */}
+      {tab==="pagamentos" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {(() => {
+            const payments = [];
+            contracts.forEach(c => {
+              if (c.paymentType==="single"&&c.paymentDeadline) payments.push({ company:c.company, color:c.color, date:c.paymentDeadline, value:contractTotal(c), currency:c.currency, label:"Pagamento único" });
+              if (c.paymentType==="split") getInstallments(c).forEach((inst,i)=>{ if(inst.date) payments.push({ company:c.company, color:c.color, date:inst.date, value:inst.value, currency:c.currency, label:`${i+1}ª parcela` }); });
+              if (c.paymentType==="monthly"&&c.contractDeadline) payments.push({ company:c.company, color:c.color, date:c.contractDeadline, value:c.monthlyValue, currency:c.currency, label:"Mensalidade (prazo)" });
+            });
+            payments.sort((a,b)=>a.date.localeCompare(b.date));
+            if (!payments.length) return <div style={{ textAlign:"center", padding:48, color:TX3 }}>Nenhum pagamento com data definida.</div>;
+            return payments.map((p,i) => {
+              const dl = daysLeft(p.date);
+              return (
+                <div key={i} style={{ ...G, padding:"14px 18px", display:"flex", alignItems:"center", gap:14 }}>
+                  <div style={{ width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0 }}/>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:600,fontSize:13,color:TX }}>{p.company}</div>
+                    <div style={{ fontSize:11,color:TX2 }}>{p.label}</div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:13,fontWeight:700,color:TX }}>{fmtMoney(p.value,p.currency)}</div>
+                    <div style={{ fontSize:11,color:TX2 }}>{fmtDate(p.date)}</div>
+                  </div>
+                  <div style={{ textAlign:"right", minWidth:70 }}>
+                    <div style={{ fontSize:12,fontWeight:700,color:dlColor(dl) }}>{dl===null?"—":dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</div>
+                  </div>
+                </div>
+              );
+            });
+          })()}
+        </div>
+      )}
     </div>
   );
 }

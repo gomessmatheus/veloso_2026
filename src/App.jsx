@@ -612,6 +612,9 @@ function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, 
   const lateDeliverables = useMemo(() => {
     try { return allDeliverables.filter(d => {
       if (!d || d.stage === "done") return false;
+      // If already published (has link or date), not late
+      if (d.publishedAt || d.postLink) return false;
+      // If stage is postagem and plannedPostDate hasn't passed yet by more than 1 day, grace period
       const stageIdx = STAGE_IDS.indexOf(d.stage || "briefing");
       if (stageIdx < 0 || !d.plannedPostDate) return false;
       const currentStage = STAGES[stageIdx];
@@ -1896,20 +1899,52 @@ Responda APENAS com o JSON.` }]
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:14 }}>Nota Fiscal</div>
             {nfEntries.length===0&&<div style={{fontSize:12,color:TX3}}>Sem NF configurada</div>}
-            {nfEntries.map((e,i) => (
-              <div key={e.key} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<nfEntries.length-1?`1px solid ${LN}`:"none" }}>
-                <div>
-                  <div style={{ fontSize:12,fontWeight:600,color:TX }}>{e.label}</div>
-                  {e.date&&<div style={{fontSize:10,color:TX2}}>{fmtDate(e.date)}</div>}
-                </div>
-                <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                  {e.amount>0&&<span style={{fontSize:12,fontWeight:700,color:TX}}>{fmtMoney(e.amount,c.currency)}</span>}
-                  <div onClick={()=>toggleNF(c.id,e.key)} style={{ padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isEmitted?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isEmitted?GRN+"44":LN2}`,color:e.isEmitted?GRN:TX2 }}>
-                    {e.isEmitted?"✓ Emitida":"Emitir"}
+            {nfEntries.map((e,i) => {
+              const nfFile = c.nfFiles?.[e.key];
+              return (
+                <div key={e.key} style={{ padding:"12px 0", borderBottom:i<nfEntries.length-1?`1px solid ${LN}`:"none" }}>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:nfFile||e.isEmitted?8:0 }}>
+                    <div>
+                      <div style={{ fontSize:12,fontWeight:600,color:TX }}>{e.label}</div>
+                      {e.date&&<div style={{fontSize:10,color:TX2}}>{fmtDate(e.date)}</div>}
+                    </div>
+                    <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                      {e.amount>0&&<span style={{fontSize:12,fontWeight:700,color:TX}}>{fmtMoney(e.amount,c.currency)}</span>}
+                      <div onClick={()=>toggleNF(c.id,e.key)} style={{ padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isEmitted?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isEmitted?GRN+"44":LN2}`,color:e.isEmitted?GRN:TX2 }}>
+                        {e.isEmitted?"✓ Emitida":"Emitir"}
+                      </div>
+                    </div>
                   </div>
+                  {/* NF File attachment */}
+                  {nfFile ? (
+                    <div style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:B2,borderRadius:7,border:`1px solid ${LN}` }}>
+                      <span style={{ fontSize:16 }}>📄</span>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontSize:11,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{nfFile.name}</div>
+                        <div style={{ fontSize:9,color:TX3 }}>{new Date(nfFile.uploadedAt).toLocaleDateString("pt-BR")}</div>
+                      </div>
+                      <a href={nfFile.data} download={nfFile.name} style={{ padding:"3px 8px",fontSize:10,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:4,textDecoration:"none",flexShrink:0 }}>↓</a>
+                      <button onClick={async()=>{const nf={...(c.nfFiles||{})};delete nf[e.key];await saveC(contracts.map(x=>x.id===c.id?{...x,nfFiles:nf}:x));}} style={{ padding:"3px 6px",fontSize:11,background:"none",border:`1px solid ${LN}`,borderRadius:4,cursor:"pointer",color:TX2 }}>×</button>
+                    </div>
+                  ) : (
+                    <label style={{ display:"flex",alignItems:"center",gap:8,padding:"7px 12px",background:B2,borderRadius:7,border:`1px dashed ${LN2}`,cursor:"pointer",transition:TRANS }}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor=BLU} onMouseLeave={e=>e.currentTarget.style.borderColor=LN2}>
+                      <span style={{ fontSize:13 }}>📎</span>
+                      <span style={{ fontSize:11,color:TX2 }}>Anexar arquivo da NF</span>
+                      <input type="file" style={{ display:"none" }} onChange={async(ev)=>{
+                        const file=ev.target.files[0]; if(!file) return;
+                        const reader=new FileReader();
+                        reader.onload=async(re)=>{
+                          const fileData={name:file.name,size:file.size,type:file.type,data:re.target.result,uploadedAt:new Date().toISOString()};
+                          await saveC(contracts.map(x=>x.id===c.id?{...x,nfFiles:{...(x.nfFiles||{}),[e.key]:fileData}}:x));
+                        };
+                        reader.readAsDataURL(file);
+                      }}/>
+                    </label>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {/* Commission */}
           <div style={{ ...G, padding:"18px 20px" }}>

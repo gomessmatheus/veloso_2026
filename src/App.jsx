@@ -1983,11 +1983,44 @@ Responda APENAS com o JSON.` }]
       {tab==="briefing" && (
         <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
           <div style={{ ...G, padding:"18px 20px" }}>
-            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Notas do Briefing</div>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
+              <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Notas do Briefing</div>
+              <Btn onClick={async()=>{
+                const [genLoading, setGenLoading] = [setBriefingNote, setBriefingNote]; // placeholder
+                const btn = document.getElementById("briefing-ai-btn");
+                if(btn) btn.textContent="Gerando…";
+                try {
+                  const cDels = deliverables?.filter(d=>d.contractId===c.id)||[];
+                  const res = await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({max_tokens:1000,messages:[{role:"user",content:`Você é especialista em briefing para criadores de conteúdo digital. Com base nos dados abaixo, gere um briefing completo e estruturado para o criador @veloso.lucas_ sobre a parceria com ${c.company}.
+
+Inclua:
+- **Sobre a marca**: contexto e posicionamento
+- **Objetivo da campanha**: o que a marca quer comunicar
+- **Dos (obrigatório)**: o que DEVE aparecer no conteúdo
+- **Don'ts (proibido)**: o que NÃO pode aparecer
+- **Tom de voz**: como se comunicar
+- **Pontos de atenção**: detalhes críticos para aprovação
+- **Entregáveis**: resumo do que foi contratado
+
+Dados do contrato:
+- Empresa: ${c.company}
+- Valor: ${contractTotal(c)} ${c.currency}
+- Entregas: ${c.numPosts} reels, ${c.numStories} stories, ${c.numReposts} tiktoks, ${c.numCommunityLinks} links
+- Observações existentes: ${c.notes||"nenhuma"}
+- Entregáveis no pipeline: ${cDels.map(d=>d.title).join(", ")||"nenhum"}
+
+Escreva em português, de forma direta e prática. Use marcadores claros.`}]})});
+                  const data = await res.json();
+                  const text = data.text||"";
+                  if(text) { setBriefingNote(text); await saveNote(text); }
+                } catch(e) { console.error(e); }
+                if(btn) btn.textContent="✨ Gerar com IA";
+              }} variant="primary" size="sm" id="briefing-ai-btn">✨ Gerar com IA</Btn>
+            </div>
             <textarea value={briefingNote} onChange={e=>setBriefingNote(e.target.value)} onBlur={()=>saveNote(briefingNote)}
-              rows={8} placeholder="Cole aqui o briefing da marca, pontos obrigatórios, referências, restrições, tom de voz…"
+              rows={12} placeholder="Cole aqui o briefing da marca, ou use ✨ Gerar com IA para criar automaticamente com os principais pontos, dos & don'ts e tom de voz…"
               style={{ width:"100%",padding:"12px",background:B2,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontSize:13,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none" }}/>
-            <div style={{ fontSize:10,color:TX3,marginTop:6 }}>Auto-salvo ao sair do campo</div>
+            <div style={{ fontSize:10,color:TX3,marginTop:6 }}>Auto-salvo ao sair do campo · ✨ IA gera estrutura completa baseada no contrato</div>
           </div>
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Arquivo do Briefing</div>

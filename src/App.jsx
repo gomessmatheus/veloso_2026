@@ -412,7 +412,6 @@ const NAV_ITEMS = [
   { id:"acompanhamento", label:"Produção",         icon:KanbanSquare },
   { id:"contratos",      label:"Contratos",        icon:FileText },
   { id:"financeiro",     label:"Financeiro",       icon:Banknote },
-  { id:"posts",          label:"Posts",            icon:Video },
   { id:"calendario",     label:"Calendário",       icon:Calendar },
 ];
 
@@ -526,7 +525,6 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
       </div>
       {/* CTA */}
       {view==="contratos"      && <Btn onClick={onNewContract}    variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
-      {view==="posts"          && <Btn onClick={onNewPost}        variant="primary" size="sm" icon={Plus}>Post</Btn>}
       {view==="dashboard"      && <Btn onClick={onNewContract}    variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
     </div>
   );
@@ -1868,7 +1866,7 @@ Responda APENAS com o JSON.` }]
                 <div>Título</div><div>Views</div><div>Alcance</div><div>Curtidas</div><div>Coment.</div><div>Engaj.</div><div>Link</div>
               </div>
               {cPosts.map((p,i) => {
-                const eng=calcEngagement(p);
+                const pRch=sumNetworkMetrics(p,"reach"),pLk=sumNetworkMetrics(p,"likes"),pCm=sumNetworkMetrics(p,"comments");const eng=pRch>0?((pLk+pCm)/pRch*100):calcEngagement(p);
                 return (
                   <div key={p.id} style={{ display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 80px 80px 80px",padding:"10px 16px",borderBottom:i<cPosts.length-1?`1px solid ${LN}`:"none",fontSize:12,alignItems:"center" }}>
                     <div style={{ fontWeight:500,color:p.isPosted?TX:TX2 }}>{p.title}{!p.isPosted&&<span style={{fontSize:10,color:TX3,marginLeft:6}}>(planejado)</span>}</div>
@@ -2678,7 +2676,6 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates}/>;
 
     if (view==="financeiro")     return <Financeiro contracts={contracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC}/>;
-    if (view==="posts")          return <Posts contracts={contracts} posts={posts} saveP={saveP} setModal={setModal}/>;
     if (view==="calendario")     return <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     return null;
   } catch(e) {
@@ -2695,12 +2692,20 @@ function ClientReport({ contract: c, posts, deliverables, rates, onClose }) {
   const cPosts = posts.filter(p => p.contractId === c.id && p.isPosted);
   const cDels  = deliverables.filter(d => d.contractId === c.id);
 
-  // Aggregate metrics
-  const totalViews    = cPosts.reduce((s,p) => s+(Number(p.views)||0), 0) + cDels.reduce((s,d) => s+(Number(d.views)||0),0);
-  const totalReach    = cPosts.reduce((s,p) => s+(Number(p.reach)||0), 0) + cDels.reduce((s,d) => s+(Number(d.reach)||0),0);
-  const totalLikes    = cPosts.reduce((s,p) => s+(Number(p.likes)||0), 0) + cDels.reduce((s,d) => s+(Number(d.likes)||0),0);
-  const totalComments = cPosts.reduce((s,p) => s+(Number(p.comments)||0), 0) + cDels.reduce((s,d) => s+(Number(d.comments)||0),0);
-  const totalSaves    = cPosts.reduce((s,p) => s+(Number(p.saves)||0), 0);
+  // Aggregate metrics — supports both old flat fields and new networkMetrics per network
+  const sumNetworkMetrics = (item, field) => {
+    // New format: networkMetrics.Instagram.views etc
+    const nm = item.networkMetrics || {};
+    const netTotal = Object.values(nm).reduce((s, net) => s + (Number(net[field])||0), 0);
+    // Also include flat field (legacy posts)
+    const flat = Number(item[field])||0;
+    return netTotal > 0 ? netTotal : flat;
+  };
+  const totalViews    = cPosts.reduce((s,p) => s+sumNetworkMetrics(p,"views"), 0) + cDels.reduce((s,d) => s+sumNetworkMetrics(d,"views"),0);
+  const totalReach    = cPosts.reduce((s,p) => s+sumNetworkMetrics(p,"reach"), 0) + cDels.reduce((s,d) => s+sumNetworkMetrics(d,"reach"),0);
+  const totalLikes    = cPosts.reduce((s,p) => s+sumNetworkMetrics(p,"likes"), 0) + cDels.reduce((s,d) => s+sumNetworkMetrics(d,"likes"),0);
+  const totalComments = cPosts.reduce((s,p) => s+sumNetworkMetrics(p,"comments"), 0) + cDels.reduce((s,d) => s+sumNetworkMetrics(d,"comments"),0);
+  const totalSaves    = cPosts.reduce((s,p) => s+sumNetworkMetrics(p,"saves"), 0) + cDels.reduce((s,d) => s+sumNetworkMetrics(d,"saves"),0);
   const totalEngagements = totalLikes + totalComments + totalSaves;
   const avgEngRate = totalReach > 0 ? (totalEngagements / totalReach * 100) : null;
   const contractValue = contractTotal(c);
@@ -2835,14 +2840,14 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
                 <div>Publicação</div><div>Views</div><div>Alcance</div><div>Curtidas</div><div>Coment.</div><div>Eng.%</div>
               </div>
               {cPosts.map((p,i)=>{
-                const eng=calcEngagement(p);
+                const pRch=sumNetworkMetrics(p,"reach"),pLk=sumNetworkMetrics(p,"likes"),pCm=sumNetworkMetrics(p,"comments");const eng=pRch>0?((pLk+pCm)/pRch*100):calcEngagement(p);
                 return(
                   <div key={p.id} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 90px 80px 80px",padding:"9px 14px",borderTop:`1px solid ${LN}`,fontSize:11,alignItems:"center"}}>
                     <div style={{fontWeight:500,color:TX}}>{p.title}{p.link&&<a href={p.link} target="_blank" rel="noreferrer" style={{color:RED,marginLeft:6,fontSize:10}}>↗</a>}</div>
-                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{Number(p.views||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{Number(p.reach||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{Number(p.likes||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{Number(p.comments||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"views")||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"reach")||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"likes")||0).toLocaleString("pt-BR")||"—"}</div>
+                    <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"comments")||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{fontWeight:700,color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3}}>{eng!=null?eng.toFixed(1)+"%":"—"}</div>
                   </div>
                 );
@@ -3559,7 +3564,7 @@ a{color:${RED}}
         {showInvite && <UserInviteModal onClose={()=>setShowInvite(false)}/>}
         {isMobile && <MobileNav view={view} setView={setView} onNew={()=>{
           if(view==="contratos") setModal({type:"contract",data:null});
-          else if(view==="posts") setModal({type:"post",data:null});
+          else if(view==="acompanhamento") setView("acompanhamento");
           else if(view==="acompanhamento") setView("acompanhamento");
         }}/>}
       </div>

@@ -2961,6 +2961,132 @@ function MobileNav({ view, setView }) {
 }
 
 
+// ─── Payments List ────────────────────────────────────────
+function PaymentsList({ contracts, saveC, rates }) {
+  const [openId, setOpenId] = useState(null);
+
+  const payments = [];
+  contracts.forEach(c => {
+    const received = c.paymentsReceived || {};
+    if (c.paymentType==="single" && c.paymentDeadline) {
+      payments.push({ key:`${c.id}_single`, contractId:c.id, company:c.company, color:c.color, date:c.paymentDeadline, value:contractTotal(c), currency:c.currency, label:"Pagamento único", received:received["single"]||null });
+    }
+    if (c.paymentType==="split") {
+      getInstallments(c).forEach((inst,i) => {
+        if(inst.date) payments.push({ key:`${c.id}_parc${i+1}`, contractId:c.id, company:c.company, color:c.color, date:inst.date, value:inst.value, currency:c.currency, label:`${i+1}ª parcela`, received:received[`parc${i+1}`]||null });
+      });
+    }
+    if (c.paymentType==="monthly" && c.contractDeadline) {
+      payments.push({ key:`${c.id}_monthly`, contractId:c.id, company:c.company, color:c.color, date:c.contractDeadline, value:c.monthlyValue, currency:c.currency, label:"Mensalidade (prazo final)", received:received["monthly"]||null });
+    }
+  });
+  payments.sort((a,b) => a.date.localeCompare(b.date));
+
+  const totalReceived = payments.filter(p=>p.received).reduce((s,p)=>s+toBRL(p.value,p.currency,rates),0);
+  const totalPending  = payments.filter(p=>!p.received).reduce((s,p)=>s+toBRL(p.value,p.currency,rates),0);
+
+  const markReceived = async (key, contractId, instKey, dateStr) => {
+    const c = contracts.find(x=>x.id===contractId);
+    if (!c) return;
+    const received = {...(c.paymentsReceived||{})};
+    if (received[instKey]) {
+      delete received[instKey];
+    } else {
+      received[instKey] = { date: dateStr || new Date().toISOString().substr(0,10) };
+    }
+    await saveC(contracts.map(x => x.id===contractId ? {...x, paymentsReceived:received} : x));
+  };
+
+  if (!payments.length) return <div style={{ textAlign:"center",padding:48,color:TX3 }}>Nenhum pagamento com data definida.</div>;
+
+  return (
+    <div>
+      {/* Summary */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+        <div style={{ ...G, padding:"14px 16px", borderLeft:`3px solid ${GRN}` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Recebido</div>
+          <div style={{ fontSize:18,fontWeight:700,color:GRN }}>{fmtMoney(totalReceived)}</div>
+          <div style={{ fontSize:11,color:TX2 }}>{payments.filter(p=>p.received).length} pagamentos</div>
+        </div>
+        <div style={{ ...G, padding:"14px 16px", borderLeft:`3px solid ${AMB}` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>A receber</div>
+          <div style={{ fontSize:18,fontWeight:700,color:AMB }}>{fmtMoney(totalPending)}</div>
+          <div style={{ fontSize:11,color:TX2 }}>{payments.filter(p=>!p.received).length} pendentes</div>
+        </div>
+      </div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {payments.map((p) => {
+          const dl = daysLeft(p.date);
+          const instKey = p.key.replace(`${p.contractId}_`,"");
+          const isOpen = openId === p.key;
+          const recDate = p.received?.date;
+
+          return (
+            <div key={p.key} style={{ ...G, overflow:"hidden", borderLeft:p.received?`3px solid ${GRN}`:`3px solid ${LN}` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", cursor:"pointer" }}
+                onClick={()=>setOpenId(isOpen?null:p.key)}>
+                <div style={{ width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0 }}/>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:600,fontSize:13,color:TX }}>{p.company}</div>
+                  <div style={{ fontSize:11,color:TX2 }}>{p.label}</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:13,fontWeight:700,color:TX }}>{fmtMoney(p.value,p.currency)}</div>
+                  <div style={{ fontSize:11,color:TX2 }}>Previsto: {fmtDate(p.date)}</div>
+                </div>
+                <div style={{ minWidth:90, textAlign:"right" }}>
+                  {p.received ? (
+                    <div>
+                      <div style={{ fontSize:11,fontWeight:700,color:GRN }}>✓ Recebido</div>
+                      <div style={{ fontSize:10,color:TX2 }}>{fmtDate(recDate)}</div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize:12,fontWeight:700,color:dlColor(dl) }}>
+                      {dl===null?"—":dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize:11,color:TX3 }}>{isOpen?"▲":"▼"}</div>
+              </div>
+
+              {isOpen && (
+                <div style={{ padding:"12px 18px 16px", borderTop:`1px solid ${LN}`, background:B2 }}>
+                  {p.received ? (
+                    <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+                      <div style={{ flex:1,fontSize:12,color:TX2 }}>
+                        Recebido em <strong style={{color:TX}}>{fmtDate(recDate)}</strong>
+                      </div>
+                      <button onClick={()=>markReceived(p.key,p.contractId,instKey,null)}
+                        style={{ padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN2}`,color:TX2 }}>
+                        Desmarcar
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display:"flex",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+                      <div style={{ fontSize:12,color:TX2,flex:1 }}>Data de recebimento:</div>
+                      <input type="date" id={`date-${p.key}`} defaultValue={new Date().toISOString().substr(0,10)}
+                        style={{ padding:"6px 10px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
+                      <button onClick={()=>{
+                        const dateInput = document.getElementById(`date-${p.key}`);
+                        markReceived(p.key,p.contractId,instKey,dateInput?.value||new Date().toISOString().substr(0,10));
+                        setOpenId(null);
+                      }} style={{ padding:"6px 16px",fontSize:11,fontWeight:700,cursor:"pointer",borderRadius:6,background:GRN,border:"none",color:"white" }}>
+                        ✓ Marcar recebido
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 // ─── Financeiro View ──────────────────────────────────────
 function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCommPaid, saveC }) {
   const [tab, setTab] = useState("visao");
@@ -3161,37 +3287,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
 
       {/* Pagamentos */}
       {tab==="pagamentos" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {(() => {
-            const payments = [];
-            contracts.forEach(c => {
-              if (c.paymentType==="single"&&c.paymentDeadline) payments.push({ company:c.company, color:c.color, date:c.paymentDeadline, value:contractTotal(c), currency:c.currency, label:"Pagamento único" });
-              if (c.paymentType==="split") getInstallments(c).forEach((inst,i)=>{ if(inst.date) payments.push({ company:c.company, color:c.color, date:inst.date, value:inst.value, currency:c.currency, label:`${i+1}ª parcela` }); });
-              if (c.paymentType==="monthly"&&c.contractDeadline) payments.push({ company:c.company, color:c.color, date:c.contractDeadline, value:c.monthlyValue, currency:c.currency, label:"Mensalidade (prazo)" });
-            });
-            payments.sort((a,b)=>a.date.localeCompare(b.date));
-            if (!payments.length) return <div style={{ textAlign:"center", padding:48, color:TX3 }}>Nenhum pagamento com data definida.</div>;
-            return payments.map((p,i) => {
-              const dl = daysLeft(p.date);
-              return (
-                <div key={i} style={{ ...G, padding:"14px 18px", display:"flex", alignItems:"center", gap:14 }}>
-                  <div style={{ width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0 }}/>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600,fontSize:13,color:TX }}>{p.company}</div>
-                    <div style={{ fontSize:11,color:TX2 }}>{p.label}</div>
-                  </div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontSize:13,fontWeight:700,color:TX }}>{fmtMoney(p.value,p.currency)}</div>
-                    <div style={{ fontSize:11,color:TX2 }}>{fmtDate(p.date)}</div>
-                  </div>
-                  <div style={{ textAlign:"right", minWidth:70 }}>
-                    <div style={{ fontSize:12,fontWeight:700,color:dlColor(dl) }}>{dl===null?"—":dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</div>
-                  </div>
-                </div>
-              );
-            });
-          })()}
-        </div>
+        <PaymentsList contracts={contracts} saveC={saveC} rates={rates}/>
       )}
     </div>
   );

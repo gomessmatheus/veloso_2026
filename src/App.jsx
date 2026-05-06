@@ -411,7 +411,7 @@ const NAV_ITEMS = [
   { id:"dashboard",      label:"Dashboard",       icon:LayoutDashboard },
   { id:"acompanhamento", label:"Produção",         icon:KanbanSquare },
   { id:"contratos",      label:"Contratos",        icon:FileText },
-  { id:"financeiro",     label:"Financeiro",       icon:DollarSign },
+  { id:"financeiro",     label:"Financeiro",       icon:Banknote },
   { id:"posts",          label:"Posts",            icon:Video },
   { id:"calendario",     label:"Calendário",       icon:Calendar },
 ];

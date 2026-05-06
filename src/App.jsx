@@ -3513,7 +3513,7 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
   const [f, setF] = useState(initial || {
     type:"saida", date:defaultDate||new Date().toISOString().substr(0,10),
     description:"", amount:"", category:"", originId:"",
-    destId:"", nfLink:"", nfFile:null, contractId:"", notes:"", beneficiario:""
+    destId:"", nfLink:"", nfFile:null, contractId:"", notes:"", beneficiario:"", parcelaAtual:"", parcelaTotal:""
   });
   const set = (k,v) => setF(x=>({...x,[k]:v}));
   const cats = EXPENSE_CATS[f.type] || [];
@@ -3595,6 +3595,27 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
 
       <SRule>Observações</SRule>
       <Field label="Notas"><Input value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Informações adicionais"/></Field>
+
+      <SRule>Parcelamento (opcional)</SRule>
+      <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+        <Field label="Parcela atual">
+          <Input type="number" min="1" value={f.parcelaAtual||""} onChange={e=>set("parcelaAtual",e.target.value)} placeholder="ex: 2"/>
+        </Field>
+        <div style={{ fontSize:16,color:TX2,paddingTop:20 }}>de</div>
+        <Field label="Total de parcelas">
+          <Input type="number" min="1" value={f.parcelaTotal||""} onChange={e=>set("parcelaTotal",e.target.value)} placeholder="ex: 6"/>
+        </Field>
+        {f.parcelaAtual&&f.parcelaTotal&&(
+          <div style={{ paddingTop:20,fontSize:12,color:TX2,whiteSpace:"nowrap" }}>
+            → faltam {Math.max(0,Number(f.parcelaTotal)-Number(f.parcelaAtual))} parcelas
+          </div>
+        )}
+      </div>
+      {f.parcelaAtual&&f.parcelaTotal&&Number(f.parcelaTotal)>1&&(
+        <div style={{ fontSize:11,color:BLU,padding:"6px 10px",background:`${BLU}08`,borderRadius:6,marginTop:-8 }}>
+          💡 Dica: registre uma saída por mês para cada parcela com o mesmo título.
+        </div>
+      )}
     </Modal>
   );
 }
@@ -3816,6 +3837,182 @@ function NewAccountModal({ onClose, onSave }) {
   );
 }
 
+// ─── Contador Export Modal ────────────────────────────────
+function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose }) {
+  const [period, setPeriod] = useState("month");
+  const [selMonth, setSelMonth] = useState(new Date().toISOString().substr(0,7));
+  const [selYear, setSelYear] = useState(String(new Date().getFullYear()));
+
+  const filtered = transactions.filter(t => {
+    if (period==="month") return t.date?.startsWith(selMonth);
+    if (period==="year")  return t.date?.startsWith(selYear);
+    return true;
+  });
+
+  const nfItems = filtered.filter(t => t.nfFile || t.nfLink);
+  const totalEnt = filtered.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const totalSai = filtered.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const totalDiv = filtered.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+
+  const periodLabel = period==="month" ? new Date(selMonth+"-15").toLocaleDateString("pt-BR",{month:"long",year:"numeric"})
+    : period==="year" ? selYear : "Todos os períodos";
+
+  const generateReport = () => {
+    const cats = {};
+    filtered.forEach(t => {
+      const k = t.category || "Sem categoria";
+      if (!cats[k]) cats[k] = [];
+      cats[k].push(t);
+    });
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<title>Relatório Contábil — ${periodLabel}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:40px;line-height:1.5}
+  h1{font-size:18px;margin-bottom:4px}
+  h2{font-size:13px;margin:24px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px;color:#444}
+  h3{font-size:11px;color:#666;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+  table{width:100%;border-collapse:collapse;margin-bottom:16px}
+  th{background:#f5f5f5;text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #ddd}
+  td{padding:6px 8px;border-bottom:1px solid #eee;vertical-align:top}
+  .valor{text-align:right;font-variant-numeric:tabular-nums}
+  .entrada{color:#16a34a;font-weight:700}
+  .saida{color:#c8102e;font-weight:700}
+  .dividendo{color:#7c3aed;font-weight:700}
+  .total-row{font-weight:700;background:#fafafa}
+  .resumo{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px}
+  .resumo-card{border:1px solid #ddd;border-radius:6px;padding:12px}
+  .resumo-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#666;margin-bottom:4px}
+  .resumo-valor{font-size:18px;font-weight:700}
+  .footer{margin-top:32px;padding-top:12px;border-top:1px solid #ddd;font-size:10px;color:#888;text-align:center}
+  @media print{body{margin:20px}}
+</style>
+</head>
+<body>
+<h1>Relatório Contábil · Stand Produções / Veloso Produções</h1>
+<p style="color:#666;margin-bottom:24px">Período: <strong>${periodLabel}</strong> · Gerado em ${new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"})}</p>
+
+<div class="resumo">
+  <div class="resumo-card">
+    <div class="resumo-label">Entradas</div>
+    <div class="resumo-valor" style="color:#16a34a">R$ ${totalEnt.toLocaleString("pt-BR",{minimumFractionDigits:2})}</div>
+  </div>
+  <div class="resumo-card">
+    <div class="resumo-label">Saídas + Impostos</div>
+    <div class="resumo-valor" style="color:#c8102e">R$ ${totalSai.toLocaleString("pt-BR",{minimumFractionDigits:2})}</div>
+  </div>
+  <div class="resumo-card">
+    <div class="resumo-label">Dividendos</div>
+    <div class="resumo-valor" style="color:#7c3aed">R$ ${totalDiv.toLocaleString("pt-BR",{minimumFractionDigits:2})}</div>
+  </div>
+</div>
+
+<h2>Lançamentos por Categoria</h2>
+${Object.entries(cats).map(([cat,items])=>`
+  <h3>${cat}</h3>
+  <table>
+    <tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Parcela</th><th>NF</th><th class="valor">Valor</th></tr>
+    ${items.map(t=>`
+      <tr>
+        <td>${new Date(t.date+"T12:00:00").toLocaleDateString("pt-BR")}</td>
+        <td>${t.description||"—"}${t.beneficiario?` (${t.beneficiario})`:""}</td>
+        <td>${t.type==="entrada"?"Entrada":t.type==="saida"?"Saída":t.type==="dividendos"?"Dividendos":t.type==="imposto"?"Imposto":"Transfer."}</td>
+        <td>${t.parcelaAtual&&t.parcelaTotal?`${t.parcelaAtual}/${t.parcelaTotal}x`:"—"}</td>
+        <td>${t.nfFile?"📄 Anexada":t.nfLink?`<a href="${t.nfLink}" target="_blank">Ver NF</a>`:"—"}</td>
+        <td class="valor ${t.type==="entrada"?"entrada":t.type==="dividendos"?"dividendo":"saida"}">
+          ${t.type==="entrada"?"+":"−"} R$ ${Number(t.amount).toLocaleString("pt-BR",{minimumFractionDigits:2})}
+        </td>
+      </tr>
+    `).join("")}
+    <tr class="total-row">
+      <td colspan="5">Total ${cat}</td>
+      <td class="valor">R$ ${items.reduce((s,t)=>s+(Number(t.amount)||0),0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</td>
+    </tr>
+  </table>
+`).join("")}
+
+<h2>Resumo Final</h2>
+<table>
+  <tr><th>Item</th><th class="valor">Valor</th></tr>
+  <tr><td>Receitas</td><td class="valor entrada">+ R$ ${totalEnt.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
+  <tr><td>Despesas e Impostos</td><td class="valor saida">− R$ ${totalSai.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
+  <tr><td>Dividendos Distribuídos</td><td class="valor dividendo">− R$ ${totalDiv.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
+  <tr class="total-row"><td>Resultado do período</td><td class="valor">R$ ${(totalEnt-totalSai-totalDiv).toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
+</table>
+
+<div class="footer">
+  ENTREGAS · Stand / Veloso Produções · Gerado automaticamente · ${new Date().toLocaleString("pt-BR")}
+</div>
+</body></html>`;
+
+    const w = window.open("", "_blank");
+    w.document.write(html);
+    w.document.close();
+    setTimeout(()=>w.print(), 500);
+  };
+
+  return (
+    <Modal title="Exportar para Contador" onClose={onClose} width={560}
+      footer={<>
+        <Btn onClick={onClose} variant="ghost" size="sm">Fechar</Btn>
+        <Btn onClick={generateReport} variant="primary" size="sm">🖨️ Gerar relatório PDF</Btn>
+      </>}>
+
+      <SRule>Período</SRule>
+      <div style={{ display:"flex",gap:8,marginBottom:16 }}>
+        {[{id:"month",label:"Mês"},{id:"year",label:"Ano"},{id:"all",label:"Todos"}].map(p=>(
+          <div key={p.id} onClick={()=>setPeriod(p.id)}
+            style={{ padding:"6px 14px",fontSize:12,fontWeight:period===p.id?700:400,cursor:"pointer",borderRadius:99,border:`1px solid ${period===p.id?TX:LN}`,background:period===p.id?TX:"none",color:period===p.id?"white":TX2,transition:TRANS }}>
+            {p.label}
+          </div>
+        ))}
+      </div>
+      {period==="month"&&<Field label="Mês"><Input type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)}/></Field>}
+      {period==="year"&&<Field label="Ano"><Select value={selYear} onChange={e=>setSelYear(e.target.value)}>{[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}</Select></Field>}
+
+      <SRule>Resumo do período</SRule>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+        {[["Entradas",totalEnt,GRN],["Saídas",totalSai,RED],["Dividendos",totalDiv,"#7C3AED"]].map(([l,v,c])=>(
+          <div key={l} style={{ ...G,padding:"10px 12px",borderLeft:`3px solid ${c}` }}>
+            <div style={{ fontSize:9,color:TX2,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>{l}</div>
+            <div style={{ fontSize:15,fontWeight:700,color:c }}>{fmtMoney(v)}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize:11,color:TX2,marginBottom:8 }}>{filtered.length} lançamentos no período</div>
+
+      {nfItems.length>0&&(
+        <>
+          <SRule>Notas Fiscais anexadas ({nfItems.length})</SRule>
+          <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+            {nfItems.map((tx,i)=>(
+              <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:B2,borderRadius:7 }}>
+                <span style={{ fontSize:14 }}>{tx.nfFile?.type?.includes("image")?"🖼":"📄"}</span>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ fontSize:11,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
+                  <div style={{ fontSize:10,color:TX2 }}>{fmtDate(tx.date)} · {fmtMoney(tx.amount)}</div>
+                </div>
+                {tx.nfFile&&<a href={tx.nfFile.data} download={tx.nfFile.name||`NF_${tx.description}.pdf`}
+                  style={{ padding:"4px 10px",fontSize:10,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>↓ Baixar</a>}
+                {tx.nfLink&&!tx.nfFile&&<a href={tx.nfLink} target="_blank" rel="noreferrer"
+                  style={{ padding:"4px 10px",fontSize:10,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>↗ Ver</a>}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize:10,color:TX3,marginTop:8 }}>💡 Baixe cada NF individualmente e envie junto com o relatório PDF para o contador.</div>
+        </>
+      )}
+      {nfItems.length===0&&filtered.length>0&&(
+        <div style={{ fontSize:11,color:TX3,fontStyle:"italic" }}>Nenhuma NF anexada nos lançamentos deste período.</div>
+      )}
+    </Modal>
+  );
+}
+
+
 function Caixa({ contracts }) {
   const [unlocked, setUnlocked] = useState(false);
   const [tab, setTab] = useState("dash");
@@ -3823,6 +4020,7 @@ function Caixa({ contracts }) {
   const [baseBalance, setBaseBalance] = useState(() => lsLoad("caixa_base", 0));
   const [baseDate, setBaseDate]       = useState(() => lsLoad("caixa_base_date", ""));
   const [txModal, setTxModal] = useState(null);
+  const [showExport, setShowExport] = useState(false);
   const [dreYear, setDreYear] = useState(new Date().getFullYear());
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
@@ -3878,6 +4076,9 @@ function Caixa({ contracts }) {
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:4 }}>
           <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
           <span style={{ fontSize:10,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
+          <button onClick={()=>setShowExport(true)} style={{ marginLeft:"auto",padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:8,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",gap:6 }}>
+            📤 Exportar para contador
+          </button>
         </div>
         <p style={{ fontSize:13,color:TX2 }}>Lançamentos, saldo e DRE</p>
       </div>
@@ -3975,6 +4176,7 @@ function Caixa({ contracts }) {
                         {tx.category&&<span>· {tx.category}</span>}
                         {tx.beneficiario&&<span style={{fontWeight:600,color:"#7C3AED"}}>· {tx.beneficiario}</span>}
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
+                        {tx.parcelaAtual&&tx.parcelaTotal&&<span style={{color:AMB,fontWeight:700}}>· {tx.parcelaAtual}/{tx.parcelaTotal}x</span>}
                         {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· 📄 NF</span>}
                       </div>
                       {tx.notes&&<div style={{ fontSize:10,color:TX3,marginTop:2 }}>{tx.notes}</div>}
@@ -4012,6 +4214,7 @@ function Caixa({ contracts }) {
         </div>
       )}
 
+      {showExport && <ContadorExportModal transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} onClose={()=>setShowExport(false)}/>}
       {txModal!==null && (
         <TransactionModal accounts={[]} contracts={contracts} initial={txModal.id?txModal:null}
           defaultDate={`${monthKey}-01`}

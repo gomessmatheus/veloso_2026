@@ -1667,6 +1667,10 @@ function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, sa
 
   const nfEntries   = getNFEntries(c);
   const commEntries = getCommEntries(c);
+  const doneDelsFromPipeline = cDeliverables.filter(d => d.stage==="done"||d.stage==="postagem").length;
+  const doneDelsFromPosts    = cPosts.filter(p => p.isPosted).length;
+  const doneDels   = doneDelsFromPipeline + doneDelsFromPosts;
+  const totalDels  = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
   const commPaid    = commEntries.filter(e => e.isPaid).reduce((s,e) => s + e.amount, 0);
   const commPending = commEntries.filter(e => !e.isPaid).reduce((s,e) => s + e.amount, 0);
 
@@ -1797,7 +1801,7 @@ Responda APENAS com o JSON.` }]
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:24 }}>
             {[
               { label:"Valor total",    value:total>0?fmtMoney(total,c.currency):"TBD" },
-              { label:"Posts entregues", value:`${cPosts.filter(p=>p.isPosted).length}/${cDeliverables.length+cPosts.length}` },
+              { label:"Entregas concluídas", value:`${doneDels}/${totalDels}` },
               { label:"Comissão Ranked (a pagar)", value:fmtMoney(commPending,c.currency), accent:commPending>0?AMB:GRN, sub:commPending>0?"pendente":"pago" },
               { label:"Engajamento",     value:avgEng!=null?avgEng.toFixed(2)+"%":"—", accent:avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX2):TX2 },
             ].map((k,i) => (
@@ -1821,14 +1825,15 @@ Responda APENAS com o JSON.` }]
               {cDeliverables.map(d => {
                 const stage = STAGES.find(s=>s.id===d.stage);
                 const dl2 = d.plannedPostDate&&stage ? daysLeft(addDays(d.plannedPostDate,stage.days)) : null;
-                const isLate = dl2!==null&&dl2<0;
+                const isDone = d.stage==="done";
+                const isLate = !isDone&&!d.publishedAt&&!d.postLink&&dl2!==null&&dl2<0;
                 return (
                   <div key={d.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"8px 0",borderBottom:`1px solid ${LN}` }}>
-                    <div style={{ width:6,height:6,borderRadius:"50%",background:isLate?RED:stage?.id==="done"?GRN:AMB,flexShrink:0 }}/>
+                    <div style={{ width:6,height:6,borderRadius:"50%",background:isDone?GRN:isLate?RED:AMB,flexShrink:0 }}/>
                     <span style={{ fontSize:12,fontWeight:500,color:isLate?RED:TX,flex:1 }}>{d.title}</span>
-                    <Badge color={isLate?RED:TX2}>{stage?.label||d.stage}</Badge>
+                    <Badge color={isDone?GRN:isLate?RED:TX2}>{stage?.label||d.stage}</Badge>
                     {d.plannedPostDate&&<span style={{fontSize:10,color:TX2}}>post {fmtDate(d.plannedPostDate)}</span>}
-                    {dl2!==null&&<span style={{fontSize:10,fontWeight:700,color:dlColor(dl2)}}>{dl2<0?`${Math.abs(dl2)}d atraso`:`${dl2}d`}</span>}
+                    {isDone?<span style={{fontSize:10,fontWeight:700,color:GRN}}>✓ Entregue</span>:dl2!==null&&<span style={{fontSize:10,fontWeight:700,color:dlColor(dl2)}}>{dl2<0?`${Math.abs(dl2)}d atraso`:`${dl2}d`}</span>}
                   </div>
                 );
               })}
@@ -2683,6 +2688,15 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     return null;
   }
 }
+
+// ─── Network metrics helper ───────────────────────────────
+function sumNetworkMetrics(item, field) {
+  const nm = item?.networkMetrics || {};
+  const netTotal = Object.values(nm).reduce((s, net) => s + (Number(net[field])||0), 0);
+  const flat = Number(item?.[field])||0;
+  return netTotal > 0 ? netTotal : flat;
+}
+
 
 // ─── Client Report Modal ──────────────────────────────────
 function ClientReport({ contract: c, posts, deliverables, rates, onClose }) {

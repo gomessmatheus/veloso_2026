@@ -3391,36 +3391,47 @@ const TX_TYPES = [
 
 const EXPENSE_CATS = {
   entrada:    ["Recebimento de Contrato","Rendimento Financeiro","Reembolso","Outros Ingressos"],
-  saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Outros"],
+  saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Utilidades (Luz, Água, Internet)","Outros"],
   dividendos: ["Distribuição de Lucros","Pro-labore","Outros Dividendos"],
   imposto:    ["ISS","PIS/COFINS","IRPJ","CSLL","Simples Nacional","Outros Impostos"],
   transferencia:["Entre Contas"],
 };
 
 const DRE_MAP = {
-  "Recebimento de Contrato":  "receita_bruta",
-  "Rendimento Financeiro":    "rec_financeira",
-  "Reembolso":                "outras_receitas",
-  "Outros Ingressos":         "outras_receitas",
-  "Produção de Conteúdo":     "csp",
-  "Equipamento":              "csp",
-  "Viagem":                   "desp_op",
-  "Alimentação":              "desp_op",
-  "Hospedagem":               "desp_op",
-  "Software / SaaS":          "desp_adm",
-  "Marketing":                "desp_adm",
-  "Pessoal / RH":             "desp_adm",
-  "Contabilidade":            "desp_adm",
-  "Outros":                   "desp_op",
-  "ISS":                      "deducoes",
-  "PIS/COFINS":               "deducoes",
-  "IRPJ":                     "ir_csll",
-  "CSLL":                     "ir_csll",
-  "Simples Nacional":         "deducoes",
-  "Outros Impostos":          "deducoes",
-  "Distribuição de Lucros":   "dividendos",
-  "Pro-labore":               "dividendos",
-  "Outros Dividendos":        "dividendos",
+  // Receitas
+  "Recebimento de Contrato":          "receita_bruta",
+  "Rendimento Financeiro":            "rec_financeira",
+  "Reembolso":                        "outras_receitas",
+  "Outros Ingressos":                 "outras_receitas",
+  // Custo dos Serviços Prestados
+  "Produção de Conteúdo":             "csp",
+  "Equipamento":                      "csp",
+  // Despesas Operacionais
+  "Viagem":                           "desp_op",
+  "Alimentação":                      "desp_op",
+  "Hospedagem":                       "desp_op",
+  "Marketing":                        "desp_op",
+  // Despesas Gerais e Administrativas
+  "Software / SaaS":                  "desp_adm",
+  "Pessoal / RH":                     "desp_adm",
+  "Contabilidade":                    "desp_adm",
+  "Móveis e Eletrodomésticos":        "desp_adm",
+  "Material de Escritório":           "desp_adm",
+  "Material de Limpeza":              "desp_adm",
+  "Utilidades (Luz, Água, Internet)": "desp_adm",
+  "Outros":                           "desp_adm",
+  // Impostos sobre receita (deduções)
+  "ISS":                              "deducoes",
+  "PIS/COFINS":                       "deducoes",
+  "Simples Nacional":                 "deducoes",
+  "Outros Impostos":                  "deducoes",
+  // IR e CSLL (após resultado operacional)
+  "IRPJ":                             "ir_csll",
+  "CSLL":                             "ir_csll",
+  // Distribuição
+  "Distribuição de Lucros":           "dividendos",
+  "Pro-labore":                       "dividendos",
+  "Outros Dividendos":                "dividendos",
 };
 
 function txColor(type) { return TX_TYPES.find(t=>t.id===type)?.color || "#6E6E6E"; }

@@ -3663,54 +3663,33 @@ function DREView({ transactions, year }) {
 }
 
 // ─── Caixa Dashboard ─────────────────────────────────────
-function CaixaDash({ transactions, accounts }) {
+function CaixaDash({ transactions, baseBalance, saldoTotal }) {
   const months = Array.from({length:12},(_,i)=>i);
   const currentYear = new Date().getFullYear();
   const MONTHS_SH2 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
   const monthData = months.map(m => {
     const key = `${currentYear}-${String(m+1).padStart(2,"0")}`;
-    const entradas  = transactions.filter(t=>t.date?.startsWith(key)&&t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-    const saidas    = transactions.filter(t=>t.date?.startsWith(key)&&(t.type==="saida"||t.type==="imposto")).reduce((s,t)=>s+(Number(t.amount)||0),0);
-    const dividendos= transactions.filter(t=>t.date?.startsWith(key)&&t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+    const entradas   = transactions.filter(t=>t.date?.startsWith(key)&&t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+    const saidas     = transactions.filter(t=>t.date?.startsWith(key)&&(t.type==="saida"||t.type==="imposto")).reduce((s,t)=>s+(Number(t.amount)||0),0);
+    const dividendos = transactions.filter(t=>t.date?.startsWith(key)&&t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
     return { month:MONTHS_SH2[m], entradas, saidas, dividendos, net:entradas-saidas-dividendos };
   });
 
   const maxVal = Math.max(...monthData.map(d=>Math.max(d.entradas,d.saidas)),1);
-  const totalBRL = accounts.reduce((s,a)=>s+(Number(a.balance)||0),0);
-
-  // Balance history per account (for timeline)
-  const allHistoryPoints = accounts.flatMap(a =>
-    (a.balanceHistory||[]).map(h=>({date:h.date, balance:h.balance, name:a.name, color:"#2563EB"}))
-  ).sort((a,b)=>a.date.localeCompare(b.date));
 
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
-      {/* Account balances */}
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10 }}>
-        {accounts.map(a=>{
-          const aBase = (() => { const oldest = (a.balanceHistory||[]).sort((x,y)=>x.date.localeCompare(y.date))[0]; return oldest?Number(oldest.balance)||0:Number(a.balance)||0; })();
-          const aEntradas = transactions.filter(t=>t.type==="entrada"&&(t.originId===a.id||t.destId===a.id)).reduce((s,t)=>s+(Number(t.amount)||0),0);
-          const aSaidas   = transactions.filter(t=>(t.type==="saida"||t.type==="imposto"||t.type==="dividendos")&&(t.originId===a.id||t.destId===a.id)).reduce((s,t)=>s+(Number(t.amount)||0),0);
-          const aBalance  = aBase + aEntradas - aSaidas;
-          return (
-            <div key={a.id} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${aBalance>=0?GRN:RED}` }}>
-              <div style={{ fontSize:10,fontWeight:700,color:TX2,marginBottom:4 }}>{a.name}</div>
-              <div style={{ fontSize:18,fontWeight:700,color:aBalance>=0?TX:RED }}>{fmtMoney(aBalance)}</div>
-              <div style={{ fontSize:10,color:TX3 }}>{a.bank}</div>
-            </div>
-          );
-        })}
-        <div style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${totalBRL>=0?TX:RED}` }}>
-          <div style={{ fontSize:10,fontWeight:700,color:TX2,marginBottom:4 }}>TOTAL CONSOLIDADO</div>
-          <div style={{ fontSize:18,fontWeight:700,color:totalBRL>=0?TX:RED }}>{fmtMoney(totalBRL)}</div>
-          <div style={{ fontSize:10,color:TX3,marginTop:4 }}>Base + lançamentos</div>
-        </div>
+      {/* Saldo card */}
+      <div style={{ ...G,padding:"16px 20px",borderLeft:`3px solid ${saldoTotal>=0?GRN:RED}` }}>
+        <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo em caixa</div>
+        <div style={{ fontSize:28,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{fmtMoney(saldoTotal)}</div>
+        <div style={{ fontSize:11,color:TX2,marginTop:4 }}>Base {fmtMoney(Number(baseBalance)||0)} + lançamentos</div>
       </div>
 
       {/* Bar chart */}
       <div style={{ ...G,padding:"18px 20px" }}>
-        <div style={{ fontSize:11,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs Saídas {currentYear}</div>
+        <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs Saídas {currentYear}</div>
         <div style={{ display:"flex",gap:12,fontSize:10,color:TX2,marginBottom:16 }}>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:GRN,display:"inline-block" }}/>Entradas</span>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:RED,display:"inline-block" }}/>Saídas</span>
@@ -3730,48 +3709,23 @@ function CaixaDash({ transactions, accounts }) {
         </div>
       </div>
 
-      {/* Balance history */}
-      {allHistoryPoints.length>1&&(
-        <div style={{ ...G,padding:"18px 20px" }}>
-          <div style={{ fontSize:11,fontWeight:700,color:TX,marginBottom:12 }}>Histórico de Saldo</div>
-          <div style={{ overflowX:"auto" }}>
-            <div style={{ border:`1px solid ${LN}`,borderRadius:8,overflow:"hidden",minWidth:400 }}>
-              <div style={{ display:"grid",gridTemplateColumns:"120px 1fr 1fr 1fr",padding:"6px 12px",background:B2,fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3 }}>
-                <div>Data</div><div>Conta</div><div>Saldo</div><div>Obs.</div>
-              </div>
-              {allHistoryPoints.slice(-20).reverse().map((h,i)=>(
-                <div key={i} style={{ display:"grid",gridTemplateColumns:"120px 1fr 1fr 1fr",padding:"8px 12px",borderTop:`1px solid ${LN}`,fontSize:11 }}>
-                  <div style={{ color:TX2 }}>{fmtDate(h.date)}</div>
-                  <div style={{ color:TX,fontWeight:500 }}>{h.name}</div>
-                  <div style={{ color:Number(h.balance)>=0?TX:RED,fontWeight:700 }}>{fmtMoney(Number(h.balance))}</div>
-                  <div style={{ color:TX3 }}>{h.note||"—"}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Category breakdown */}
       {transactions.length>0&&(
         <div style={{ ...G,padding:"18px 20px" }}>
-          <div style={{ fontSize:11,fontWeight:700,color:TX,marginBottom:12 }}>Saídas por Categoria</div>
+          <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:12 }}>Saídas por Categoria</div>
           {Object.entries(
             transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})
-          ).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([cat,val])=>{
-            const max = Math.max(...Object.values(transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})));
-            return (
-              <div key={cat} style={{ marginBottom:8 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3 }}>
-                  <span style={{ color:TX }}>{cat}</span>
-                  <span style={{ fontWeight:700,color:TX }}>{fmtMoney(val)}</span>
-                </div>
-                <div style={{ height:4,background:LN,borderRadius:2 }}>
-                  <div style={{ height:4,borderRadius:2,background:RED,width:`${val/max*100}%` }}/>
-                </div>
+          ).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([cat,val],idx,arr)=>(
+            <div key={cat} style={{ marginBottom:10 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4 }}>
+                <span style={{ color:TX }}>{cat}</span>
+                <span style={{ fontWeight:700,color:TX }}>{fmtMoney(val)}</span>
               </div>
-            );
-          })}
+              <div style={{ height:4,background:LN,borderRadius:2 }}>
+                <div style={{ height:4,borderRadius:2,background:RED,width:`${val/arr[0][1]*100}%` }}/>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

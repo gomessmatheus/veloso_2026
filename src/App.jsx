@@ -413,7 +413,6 @@ const NAV_ITEMS = [
   { id:"contratos",      label:"Contratos",        icon:FileText },
   { id:"financeiro",     label:"Financeiro",       icon:Banknote },
   { id:"caixa",          label:"Caixa",            icon:Landmark },
-  { id:"calendario",     label:"Calendário",       icon:Calendar },
 ];
 
 function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts }) {
@@ -2692,7 +2691,6 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
 
     if (view==="caixa")          return <Caixa contracts={contracts}/>;
     if (view==="financeiro")     return <Financeiro contracts={contracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC}/>;
-    if (view==="calendario")     return <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     return null;
   } catch(e) {
     setErr(e?.message || String(e));
@@ -2971,7 +2969,6 @@ function MobileNav({ view, setView }) {
     { id:"acompanhamento", label:"Produção",  icon:"prod" },
     { id:"contratos",      label:"Contratos", icon:"contracts" },
     { id:"financeiro",     label:"Financeiro",icon:"money" },
-    { id:"calendario",     label:"Agenda",    icon:"calendar" },
   ];
   return (
     <div style={{ position:"fixed", bottom:0, left:0, right:0, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"stretch", zIndex:100, boxShadow:"0 -1px 12px rgba(0,0,0,0.08)", paddingBottom:"env(safe-area-inset-bottom,0px)" }}>

@@ -3377,121 +3377,455 @@ function MonthDeliverables({ deliverables, contracts }) {
 }
 
 
-// ─── Edit Balance Button (password protected) ─────────────
+// ─── Caixa: constants & helpers ──────────────────────────
+const CAIXA_PASSWORD   = "ranked2026";
 const BALANCE_PASSWORD = "Theus123";
 
+const TX_TYPES = [
+  { id:"entrada",       label:"Entrada",        emoji:"↓", color:"#16A34A" },
+  { id:"saida",         label:"Saída",           emoji:"↑", color:"#C8102E" },
+  { id:"dividendos",    label:"Dividendos",      emoji:"💰", color:"#7C3AED" },
+  { id:"imposto",       label:"Imposto",         emoji:"🏛", color:"#EA580C" },
+  { id:"transferencia", label:"Transferência",   emoji:"⇄", color:"#2563EB" },
+];
+
+const EXPENSE_CATS = {
+  entrada:    ["Recebimento de Contrato","Rendimento Financeiro","Reembolso","Outros Ingressos"],
+  saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Outros"],
+  dividendos: ["Distribuição de Lucros","Pro-labore","Outros Dividendos"],
+  imposto:    ["ISS","PIS/COFINS","IRPJ","CSLL","Simples Nacional","Outros Impostos"],
+  transferencia:["Entre Contas"],
+};
+
+const DRE_MAP = {
+  "Recebimento de Contrato":  "receita_bruta",
+  "Rendimento Financeiro":    "rec_financeira",
+  "Reembolso":                "outras_receitas",
+  "Outros Ingressos":         "outras_receitas",
+  "Produção de Conteúdo":     "csp",
+  "Equipamento":              "csp",
+  "Viagem":                   "desp_op",
+  "Alimentação":              "desp_op",
+  "Hospedagem":               "desp_op",
+  "Software / SaaS":          "desp_adm",
+  "Marketing":                "desp_adm",
+  "Pessoal / RH":             "desp_adm",
+  "Contabilidade":            "desp_adm",
+  "Outros":                   "desp_op",
+  "ISS":                      "deducoes",
+  "PIS/COFINS":               "deducoes",
+  "IRPJ":                     "ir_csll",
+  "CSLL":                     "ir_csll",
+  "Simples Nacional":         "deducoes",
+  "Outros Impostos":          "deducoes",
+  "Distribuição de Lucros":   "dividendos",
+  "Pro-labore":               "dividendos",
+  "Outros Dividendos":        "dividendos",
+};
+
+function txColor(type) { return TX_TYPES.find(t=>t.id===type)?.color || "#6E6E6E"; }
+function txEmoji(type) { return TX_TYPES.find(t=>t.id===type)?.emoji || "·"; }
+
+// ─── Balance Password Button ───────────────────────────────
 function EditBalanceButton({ acc, accounts, index, saveAcc }) {
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
-  const [step, setStep] = useState("locked"); // locked | authed | editing
-  const [newBalance, setNewBalance] = useState(String(acc.balance||"0"));
+  const [step, setStep] = useState("locked");
+  const [newBalance, setNewBalance] = useState("");
+  const [newDate, setNewDate] = useState(new Date().toISOString().substr(0,10));
+  const [newNote, setNewNote] = useState("");
   const [err, setErr] = useState(false);
 
   const checkPw = () => {
-    if (pw === BALANCE_PASSWORD) { setStep("editing"); setErr(false); }
+    if (pw === BALANCE_PASSWORD) { setStep("editing"); setErr(false); setNewBalance(String(acc.balance||"0")); }
     else { setErr(true); setPw(""); }
   };
 
   const save = () => {
+    const entry = { date:newDate, balance:Number(newBalance)||0, note:newNote };
+    const history = [...(acc.balanceHistory||[]), entry].sort((a,b)=>a.date.localeCompare(b.date));
+    const latest = history[history.length-1];
     const updated = [...accounts];
-    updated[index] = {...acc, balance: newBalance};
+    updated[index] = {...acc, balance:latest.balance, balanceHistory:history};
     saveAcc(updated);
-    setOpen(false); setStep("locked"); setPw(""); setNewBalance(String(acc.balance));
+    setOpen(false); setStep("locked"); setPw(""); setNewBalance(""); setNewNote("");
   };
 
   if (!open) return (
-    <button onClick={()=>setOpen(true)}
-      style={{ width:"100%",padding:"7px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
-      🔒 Editar saldo
+    <button onClick={()=>setOpen(true)} style={{ width:"100%",padding:"7px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
+      🔒 Atualizar saldo
     </button>
   );
 
   return (
-    <div style={{ background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"12px" }}>
-      {step==="locked" && (<>
+    <div style={{ background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"12px",marginTop:8 }}>
+      {step==="locked" && <>
         <div style={{ fontSize:11,color:TX2,marginBottom:8,fontWeight:600 }}>Senha para editar saldo</div>
         <div style={{ display:"flex",gap:6 }}>
-          <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&checkPw()}
-            autoFocus placeholder="••••••••"
+          <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&checkPw()} autoFocus placeholder="••••••••"
             style={{ flex:1,padding:"7px 10px",fontSize:12,background:err?`${RED}08`:B1,border:`1px solid ${err?RED:LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
           <button onClick={checkPw} style={{ padding:"7px 12px",background:RED,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>OK</button>
           <button onClick={()=>{setOpen(false);setErr(false);setPw("");}} style={{ padding:"7px 10px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
         </div>
         {err&&<div style={{ fontSize:10,color:RED,marginTop:4 }}>Senha incorreta</div>}
-      </>)}
-      {step==="editing" && (<>
-        <div style={{ fontSize:11,color:TX2,marginBottom:8,fontWeight:600 }}>Novo saldo (R$)</div>
-        <div style={{ display:"flex",gap:6 }}>
-          <input type="number" value={newBalance} onChange={e=>setNewBalance(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}
-            autoFocus
-            style={{ flex:1,padding:"7px 10px",fontSize:13,fontWeight:700,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
-          <button onClick={save} style={{ padding:"7px 14px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>Salvar</button>
-          <button onClick={()=>{setOpen(false);setStep("locked");setPw("");}} style={{ padding:"7px 10px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
+      </>}
+      {step==="editing" && <>
+        <div style={{ fontSize:11,color:TX2,marginBottom:10,fontWeight:600 }}>Registrar novo saldo</div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
+          <div>
+            <div style={{ fontSize:9,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Saldo (R$)</div>
+            <input type="number" value={newBalance} onChange={e=>setNewBalance(e.target.value)} autoFocus
+              style={{ width:"100%",padding:"7px 10px",fontSize:13,fontWeight:700,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
+          </div>
+          <div>
+            <div style={{ fontSize:9,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Data</div>
+            <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)}
+              style={{ width:"100%",padding:"7px 10px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
+          </div>
         </div>
-      </>)}
+        <input value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Observação (opcional)"
+          style={{ width:"100%",padding:"7px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none",marginBottom:8 }}/>
+        <div style={{ display:"flex",gap:6 }}>
+          <button onClick={save} style={{ flex:1,padding:"7px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>✓ Salvar</button>
+          <button onClick={()=>{setOpen(false);setStep("locked");setPw("");}} style={{ padding:"7px 12px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>Cancelar</button>
+        </div>
+      </>}
     </div>
   );
 }
 
+// ─── Transaction Form Modal ───────────────────────────────
+function TransactionModal({ accounts, contracts, initial, onClose, onSave }) {
+  const isEdit = !!initial?.id;
+  const [f, setF] = useState(initial || {
+    type:"saida", date:new Date().toISOString().substr(0,10),
+    description:"", amount:"", category:"", originId:accounts[0]?.id||"",
+    destId:"", nfLink:"", nfFile:null, contractId:"", notes:""
+  });
+  const set = (k,v) => setF(x=>({...x,[k]:v}));
+  const cats = EXPENSE_CATS[f.type] || [];
 
-// ─── Caixa (Controle Financeiro Administrativo) ───────────
-const CAIXA_PASSWORD = "ranked2026"; // Altere conforme necessário
-
-const EXPENSE_CATS = [
-  "Produção de Conteúdo","Equipamento","Viagem","Alimentação",
-  "Hospedagem","Software / SaaS","Marketing","Pessoal / RH",
-  "Impostos / Contabilidade","Comissão Ranked","Outros",
-];
-
-function CaixaPasswordGate({ onUnlock }) {
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState(false);
-  const [show, setShow] = useState(false);
-
-  const check = () => {
-    if (pw === CAIXA_PASSWORD) { onUnlock(); }
-    else { setErr(true); setPw(""); setTimeout(()=>setErr(false),2000); }
+  const handleNFFile = (e) => {
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => set("nfFile", { name:file.name, type:file.type, data:ev.target.result, uploadedAt:new Date().toISOString() });
+    reader.readAsDataURL(file);
   };
 
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"60vh" }}>
-      <div style={{ ...G, padding:"40px 48px", maxWidth:380, width:"100%", textAlign:"center" }}>
-        <div style={{ fontSize:32, marginBottom:16 }}>🔐</div>
-        <div style={{ fontSize:16, fontWeight:700, color:TX, marginBottom:6 }}>Controle Financeiro</div>
-        <div style={{ fontSize:12, color:TX2, marginBottom:24 }}>Acesso restrito · Administradores Ranked</div>
-        <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-          <input
-            type={show?"text":"password"}
-            value={pw}
-            onChange={e=>{setPw(e.target.value);setErr(false);}}
-            onKeyDown={e=>e.key==="Enter"&&check()}
-            placeholder="Senha de acesso"
-            autoFocus
-            style={{ flex:1, padding:"10px 14px", fontSize:13, background:err?`${RED}08`:B2, border:`1px solid ${err?RED:LN}`, borderRadius:8, color:TX, fontFamily:"inherit", outline:"none", transition:TRANS }}
-          />
-          <button onClick={()=>setShow(s=>!s)} style={{ padding:"10px 12px", background:B2, border:`1px solid ${LN}`, borderRadius:8, cursor:"pointer", fontSize:13, color:TX2 }}>{show?"👁":"👁‍🗨"}</button>
+    <Modal title={isEdit?"Editar Lançamento":"Novo Lançamento"} onClose={onClose} width={580}
+      footer={<><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
+        <Btn onClick={()=>{if(!f.description||!f.amount)return alert("Preencha descrição e valor.");onSave({...f,id:f.id||uid()});}} variant="primary" size="sm">Salvar</Btn></>}>
+
+      <SRule>Tipo e Data</SRule>
+      <div style={{ display:"flex",gap:6,marginBottom:12,flexWrap:"wrap" }}>
+        {TX_TYPES.map(t=>(
+          <div key={t.id} onClick={()=>set("type",t.id)}
+            style={{ padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",borderRadius:99,transition:TRANS,border:`1.5px solid ${f.type===t.id?t.color:LN}`,background:f.type===t.id?t.color+"18":"none",color:f.type===t.id?t.color:TX2 }}>
+            {t.emoji} {t.label}
+          </div>
+        ))}
+      </div>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+        <Field label="Data"><Input type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
+        <Field label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="0,00"/></Field>
+      </div>
+
+      <SRule>Detalhes</SRule>
+      <Field label="Descrição" full><Input value={f.description} onChange={e=>set("description",e.target.value)} placeholder="ex: Passagem aérea Copa 2026"/></Field>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+        <Field label="Categoria">
+          <Select value={f.category} onChange={e=>set("category",e.target.value)}>
+            <option value="">Sem categoria</option>
+            {cats.map(c=><option key={c} value={c}>{c}</option>)}
+          </Select>
+        </Field>
+        <Field label="Vincular contrato">
+          <Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>
+            <option value="">Nenhum</option>
+            {contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
+          </Select>
+        </Field>
+        {f.type!=="dividendos" && <>
+          <Field label="Origem">
+            <Select value={f.originId} onChange={e=>set("originId",e.target.value)}>
+              <option value="">Externo</option>
+              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="Destino">
+            <Select value={f.destId} onChange={e=>set("destId",e.target.value)}>
+              <option value="">Externo</option>
+              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+          </Field>
+        </>}
+      </div>
+
+      <SRule>Nota Fiscal</SRule>
+      <Field label="Número / Link da NF"><Input value={f.nfLink||""} onChange={e=>set("nfLink",e.target.value)} placeholder="Número ou URL da nota"/></Field>
+      {f.nfFile ? (
+        <div style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:B2,borderRadius:8,border:`1px solid ${LN}`,marginTop:8 }}>
+          <span style={{ fontSize:20 }}>{f.nfFile.type?.includes("image")?"🖼":"📄"}</span>
+          <div style={{ flex:1,minWidth:0 }}>
+            <div style={{ fontSize:11,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{f.nfFile.name}</div>
+          </div>
+          <a href={f.nfFile.data} download={f.nfFile.name} target="_blank" rel="noreferrer"
+            style={{ padding:"3px 8px",fontSize:10,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:4,textDecoration:"none" }}>↓</a>
+          <button onClick={()=>set("nfFile",null)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:4,padding:"3px 7px",cursor:"pointer",color:TX2,fontSize:11 }}>×</button>
         </div>
-        {err && <div style={{ fontSize:11, color:RED, marginBottom:12 }}>Senha incorreta</div>}
-        <button onClick={check} style={{ width:"100%", padding:"11px", background:RED, border:"none", borderRadius:8, color:"white", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-          Acessar
-        </button>
+      ) : (
+        <label style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 14px",marginTop:8,background:B2,borderRadius:8,border:`1px dashed ${LN2}`,cursor:"pointer",transition:TRANS }}
+          onMouseEnter={e=>e.currentTarget.style.borderColor=BLU} onMouseLeave={e=>e.currentTarget.style.borderColor=LN2}>
+          <span>📎</span>
+          <span style={{ fontSize:11,color:TX2 }}>Anexar foto ou PDF da NF</span>
+          <input type="file" accept="image/*,.pdf" style={{ display:"none" }} onChange={handleNFFile}/>
+        </label>
+      )}
+
+      <SRule>Observações</SRule>
+      <Field label="Notas"><Input value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Informações adicionais"/></Field>
+    </Modal>
+  );
+}
+
+// ─── DRE Component ────────────────────────────────────────
+function DREView({ transactions, year }) {
+  const txYear = transactions.filter(t => t.date?.startsWith(String(year)));
+
+  const sum = (fn) => txYear.filter(fn).reduce((s,t)=>s+(Number(t.amount)||0),0);
+
+  const receita_bruta  = sum(t=>t.type==="entrada"&&DRE_MAP[t.category]==="receita_bruta");
+  const outras_receitas= sum(t=>t.type==="entrada"&&DRE_MAP[t.category]==="outras_receitas");
+  const rec_financeira = sum(t=>t.type==="entrada"&&DRE_MAP[t.category]==="rec_financeira");
+  const deducoes       = sum(t=>t.type==="imposto"&&DRE_MAP[t.category]==="deducoes");
+  const receita_liq    = receita_bruta - deducoes;
+  const csp            = sum(t=>t.type==="saida"&&DRE_MAP[t.category]==="csp");
+  const lucro_bruto    = receita_liq - csp;
+  const desp_op        = sum(t=>t.type==="saida"&&DRE_MAP[t.category]==="desp_op");
+  const desp_adm       = sum(t=>t.type==="saida"&&DRE_MAP[t.category]==="desp_adm");
+  const result_op      = lucro_bruto - desp_op - desp_adm + rec_financeira;
+  const ir_csll        = sum(t=>t.type==="imposto"&&DRE_MAP[t.category]==="ir_csll");
+  const lucro_liq      = result_op - ir_csll;
+  const dividendos     = sum(t=>t.type==="dividendos");
+  const lucro_retido   = lucro_liq - dividendos;
+
+  const Row = ({label, value, indent=0, bold=false, total=false, positive=null}) => {
+    const color = positive===null ? (bold||total?TX:TX2) : (value>=0?(positive?GRN:RED):(positive?RED:GRN));
+    return (
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:`${total?"10px":"6px"} ${indent*16}px`,borderTop:total?`1px solid ${LN}`:"none",borderBottom:total?`1px solid ${LN}`:"none",background:total?B2:"none" }}>
+        <span style={{ fontSize:total?13:12,fontWeight:bold||total?700:400,color:TX,paddingLeft:indent*8 }}>{label}</span>
+        <span style={{ fontSize:total?14:12,fontWeight:bold||total?700:400,color:value===0?TX3:color,fontVariantNumeric:"tabular-nums" }}>
+          {value<0?`(${fmtMoney(Math.abs(value))})`:fmtMoney(value)}
+        </span>
+      </div>
+    );
+  };
+
+  const Section = ({title}) => (
+    <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,padding:"14px 0 4px",borderBottom:`1px solid ${LN}` }}>{title}</div>
+  );
+
+  return (
+    <div style={{ ...G, padding:"20px 24px", maxWidth:700 }}>
+      <div style={{ fontSize:14,fontWeight:700,color:TX,marginBottom:4 }}>DRE — Demonstração do Resultado do Exercício</div>
+      <div style={{ fontSize:11,color:TX2,marginBottom:20 }}>Exercício {year} · Conforme Lei 6.404/76</div>
+
+      <Section title="Receitas"/>
+      <Row label="(+) Receita Operacional Bruta" value={receita_bruta} bold/>
+      <Row label="(-) Deduções e Impostos sobre Receita" value={-deducoes} indent={1}/>
+      <Row label="= Receita Líquida" value={receita_liq} total bold positive={true}/>
+
+      <Section title="Custos"/>
+      <Row label="(-) Custo dos Serviços Prestados (CSP)" value={-csp} indent={1}/>
+      <Row label="= Lucro Bruto" value={lucro_bruto} total bold positive={true}/>
+
+      <Section title="Despesas Operacionais"/>
+      <Row label="(-) Despesas com Operações" value={-desp_op} indent={1}/>
+      <Row label="(-) Despesas Gerais e Administrativas" value={-desp_adm} indent={1}/>
+      <Row label="(+) Receitas Financeiras" value={rec_financeira} indent={1}/>
+      <Row label="(+) Outras Receitas" value={outras_receitas} indent={1}/>
+      <Row label="= Resultado Operacional (EBIT)" value={result_op} total bold positive={true}/>
+
+      <Section title="Tributação"/>
+      <Row label="(-) IRPJ e CSLL" value={-ir_csll} indent={1}/>
+      <Row label="= Lucro Líquido do Exercício" value={lucro_liq} total bold positive={true}/>
+
+      <Section title="Distribuição"/>
+      <Row label="(-) Dividendos Distribuídos" value={-dividendos} indent={1}/>
+      <Row label="= Lucro Retido / Prejuízo Acumulado" value={lucro_retido} total bold positive={true}/>
+
+      <div style={{ marginTop:16,padding:"12px 14px",background:`${BLU}08`,border:`1px solid ${BLU}20`,borderRadius:8 }}>
+        <div style={{ fontSize:10,color:TX2,marginBottom:4 }}>⚠️ Esta DRE é gerada automaticamente com base nos lançamentos cadastrados. Consulte seu contador para fins legais.</div>
       </div>
     </div>
   );
 }
 
+// ─── Caixa Dashboard ─────────────────────────────────────
+function CaixaDash({ transactions, accounts }) {
+  const months = Array.from({length:12},(_,i)=>i);
+  const currentYear = new Date().getFullYear();
+  const MONTHS_SH2 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+  const monthData = months.map(m => {
+    const key = `${currentYear}-${String(m+1).padStart(2,"0")}`;
+    const entradas  = transactions.filter(t=>t.date?.startsWith(key)&&t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+    const saidas    = transactions.filter(t=>t.date?.startsWith(key)&&(t.type==="saida"||t.type==="imposto")).reduce((s,t)=>s+(Number(t.amount)||0),0);
+    const dividendos= transactions.filter(t=>t.date?.startsWith(key)&&t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+    return { month:MONTHS_SH2[m], entradas, saidas, dividendos, net:entradas-saidas-dividendos };
+  });
+
+  const maxVal = Math.max(...monthData.map(d=>Math.max(d.entradas,d.saidas)),1);
+  const totalBRL = accounts.reduce((s,a)=>s+(Number(a.balance)||0),0);
+
+  // Balance history per account (for timeline)
+  const allHistoryPoints = accounts.flatMap(a =>
+    (a.balanceHistory||[]).map(h=>({date:h.date, balance:h.balance, name:a.name, color:"#2563EB"}))
+  ).sort((a,b)=>a.date.localeCompare(b.date));
+
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+      {/* Account balances */}
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10 }}>
+        {accounts.map(a=>(
+          <div key={a.id} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${Number(a.balance)>=0?GRN:RED}` }}>
+            <div style={{ fontSize:10,fontWeight:700,color:TX2,marginBottom:4 }}>{a.name}</div>
+            <div style={{ fontSize:18,fontWeight:700,color:Number(a.balance)>=0?TX:RED }}>{fmtMoney(Number(a.balance))}</div>
+            <div style={{ fontSize:10,color:TX3 }}>{a.bank}</div>
+          </div>
+        ))}
+        <div style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${totalBRL>=0?TX:RED}` }}>
+          <div style={{ fontSize:10,fontWeight:700,color:TX2,marginBottom:4 }}>TOTAL CONSOLIDADO</div>
+          <div style={{ fontSize:18,fontWeight:700,color:totalBRL>=0?TX:RED }}>{fmtMoney(totalBRL)}</div>
+        </div>
+      </div>
+
+      {/* Bar chart */}
+      <div style={{ ...G,padding:"18px 20px" }}>
+        <div style={{ fontSize:11,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs Saídas {currentYear}</div>
+        <div style={{ display:"flex",gap:12,fontSize:10,color:TX2,marginBottom:16 }}>
+          <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:GRN,display:"inline-block" }}/>Entradas</span>
+          <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:RED,display:"inline-block" }}/>Saídas</span>
+          <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:"#7C3AED",display:"inline-block" }}/>Dividendos</span>
+        </div>
+        <div style={{ display:"flex",alignItems:"flex-end",gap:4,height:120 }}>
+          {monthData.map((d,i)=>(
+            <div key={i} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
+              <div style={{ width:"100%",display:"flex",gap:1,alignItems:"flex-end",height:100 }}>
+                <div style={{ flex:1,background:GRN,height:`${maxVal>0?d.entradas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.entradas>0?3:0 }}/>
+                <div style={{ flex:1,background:RED,height:`${maxVal>0?d.saidas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.saidas>0?3:0 }}/>
+                {d.dividendos>0&&<div style={{ flex:1,background:"#7C3AED",height:`${maxVal>0?d.dividendos/maxVal*100:0}%`,borderRadius:"3px 3px 0 0" }}/>}
+              </div>
+              <div style={{ fontSize:8,color:TX3,textAlign:"center" }}>{d.month}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Balance history */}
+      {allHistoryPoints.length>1&&(
+        <div style={{ ...G,padding:"18px 20px" }}>
+          <div style={{ fontSize:11,fontWeight:700,color:TX,marginBottom:12 }}>Histórico de Saldo</div>
+          <div style={{ overflowX:"auto" }}>
+            <div style={{ border:`1px solid ${LN}`,borderRadius:8,overflow:"hidden",minWidth:400 }}>
+              <div style={{ display:"grid",gridTemplateColumns:"120px 1fr 1fr 1fr",padding:"6px 12px",background:B2,fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3 }}>
+                <div>Data</div><div>Conta</div><div>Saldo</div><div>Obs.</div>
+              </div>
+              {allHistoryPoints.slice(-20).reverse().map((h,i)=>(
+                <div key={i} style={{ display:"grid",gridTemplateColumns:"120px 1fr 1fr 1fr",padding:"8px 12px",borderTop:`1px solid ${LN}`,fontSize:11 }}>
+                  <div style={{ color:TX2 }}>{fmtDate(h.date)}</div>
+                  <div style={{ color:TX,fontWeight:500 }}>{h.name}</div>
+                  <div style={{ color:Number(h.balance)>=0?TX:RED,fontWeight:700 }}>{fmtMoney(Number(h.balance))}</div>
+                  <div style={{ color:TX3 }}>{h.note||"—"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category breakdown */}
+      {transactions.length>0&&(
+        <div style={{ ...G,padding:"18px 20px" }}>
+          <div style={{ fontSize:11,fontWeight:700,color:TX,marginBottom:12 }}>Saídas por Categoria</div>
+          {Object.entries(
+            transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})
+          ).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([cat,val])=>{
+            const max = Math.max(...Object.values(transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})));
+            return (
+              <div key={cat} style={{ marginBottom:8 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3 }}>
+                  <span style={{ color:TX }}>{cat}</span>
+                  <span style={{ fontWeight:700,color:TX }}>{fmtMoney(val)}</span>
+                </div>
+                <div style={{ height:4,background:LN,borderRadius:2 }}>
+                  <div style={{ height:4,borderRadius:2,background:RED,width:`${val/max*100}%` }}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Caixa (Controle Financeiro Administrativo) ───────────
+function CaixaPasswordGate({ onUnlock }) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState(false);
+  const [show, setShow] = useState(false);
+  const check = () => {
+    if (pw === CAIXA_PASSWORD) { onUnlock(); }
+    else { setErr(true); setPw(""); setTimeout(()=>setErr(false),2000); }
+  };
+  return (
+    <div style={{ display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh" }}>
+      <div style={{ ...G,padding:"40px 48px",maxWidth:380,width:"100%",textAlign:"center" }}>
+        <div style={{ fontSize:32,marginBottom:16 }}>🔐</div>
+        <div style={{ fontSize:16,fontWeight:700,color:TX,marginBottom:6 }}>Controle Financeiro</div>
+        <div style={{ fontSize:12,color:TX2,marginBottom:24 }}>Acesso restrito · Administradores Ranked</div>
+        <div style={{ display:"flex",gap:8,marginBottom:16 }}>
+          <input type={show?"text":"password"} value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&check()} placeholder="Senha" autoFocus
+            style={{ flex:1,padding:"10px 14px",fontSize:13,background:err?`${RED}08`:B2,border:`1px solid ${err?RED:LN}`,borderRadius:8,color:TX,fontFamily:"inherit",outline:"none",transition:TRANS }}/>
+          <button onClick={()=>setShow(s=>!s)} style={{ padding:"10px 12px",background:B2,border:`1px solid ${LN}`,borderRadius:8,cursor:"pointer",fontSize:13,color:TX2 }}>{show?"👁":"🙈"}</button>
+        </div>
+        {err&&<div style={{ fontSize:11,color:RED,marginBottom:12 }}>Senha incorreta</div>}
+        <button onClick={check} style={{ width:"100%",padding:"11px",background:RED,border:"none",borderRadius:8,color:"white",fontSize:13,fontWeight:700,cursor:"pointer" }}>Acessar</button>
+      </div>
+    </div>
+  );
+}
+
+function NewAccountModal({ onClose, onSave }) {
+  const [f, setF] = useState({ name:"", bank:"", type:"corrente", balance:"" });
+  const set = (k,v) => setF(x=>({...x,[k]:v}));
+  return (
+    <Modal title="Nova Conta" onClose={onClose} width={420}
+      footer={<><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={()=>{if(!f.name)return alert("Informe o nome.");onSave(f);}} variant="primary" size="sm">Criar</Btn></>}>
+      <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+        <Field label="Nome da conta"><Input value={f.name} onChange={e=>set("name",e.target.value)} placeholder="ex: Conta PJ Matheus"/></Field>
+        <Field label="Banco"><Input value={f.bank} onChange={e=>set("bank",e.target.value)} placeholder="ex: Itaú, Bradesco, Inter"/></Field>
+        <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="corrente">Conta Corrente</option><option value="poupanca">Poupança</option><option value="investimento">Investimento</option></Select></Field>
+        <Field label="Saldo inicial (R$)"><Input type="number" value={f.balance} onChange={e=>set("balance",e.target.value)} placeholder="0,00"/></Field>
+      </div>
+    </Modal>
+  );
+}
+
 function Caixa({ contracts }) {
   const [unlocked, setUnlocked] = useState(false);
-  const [tab, setTab] = useState("lancamentos");
+  const [tab, setTab] = useState("dash");
   const [transactions, setTransactions] = useState(() => lsLoad("caixa_tx", []));
   const [accounts, setAccounts] = useState(() => lsLoad("caixa_accounts", [
-    { id:"c1", name:"Conta Principal", bank:"Bradesco", type:"corrente", balance:0, currency:"BRL" },
-    { id:"c2", name:"Conta PJ Lucas", bank:"Inter", type:"corrente", balance:0, currency:"BRL" },
+    { id:"acc1", name:"Conta Principal", bank:"Bradesco", type:"corrente", balance:0, balanceHistory:[] },
   ]));
-  const [showNewTx, setShowNewTx] = useState(false);
+  const [txModal, setTxModal] = useState(null); // null | {} | {existing tx}
   const [showNewAcc, setShowNewAcc] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterAcc, setFilterAcc] = useState("all");
+  const [dreYear, setDreYear] = useState(new Date().getFullYear());
   const toast = useToast();
 
   const saveTx = (list) => { setTransactions(list); lsSave("caixa_tx", list); };
@@ -3499,92 +3833,87 @@ function Caixa({ contracts }) {
 
   if (!unlocked) return <CaixaPasswordGate onUnlock={()=>setUnlocked(true)}/>;
 
-  const totalBRL = accounts.reduce((s,a) => s + (Number(a.balance)||0), 0);
   const txFiltered = transactions
     .filter(t => filterType==="all" || t.type===filterType)
     .filter(t => filterAcc==="all" || t.originId===filterAcc || t.destId===filterAcc)
     .sort((a,b) => b.date.localeCompare(a.date));
 
-  const totalEntradas = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const totalSaidas   = transactions.filter(t=>t.type==="saida").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const totalEntradas   = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const totalSaidas     = transactions.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const totalDividendos = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const totalBRL        = accounts.reduce((s,a)=>s+(Number(a.balance)||0),0);
 
   const TABS = [
+    { id:"dash",        label:"Dashboard" },
     { id:"lancamentos", label:"Lançamentos" },
     { id:"contas",      label:"Contas" },
+    { id:"dre",         label:"DRE" },
   ];
 
   return (
     <div style={{ padding:"24px 28px", maxWidth:1100 }}>
-      <div style={{ marginBottom:24 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
-          <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>Controle Financeiro</h1>
-          <span style={{ fontSize:10, padding:"3px 8px", borderRadius:99, background:`${RED}15`, color:RED, fontWeight:700 }}>ADMIN</span>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:4 }}>
+          <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
+          <span style={{ fontSize:10,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
         </div>
-        <p style={{ fontSize:13, color:TX2 }}>Lançamentos, saldos e movimentações de caixa</p>
+        <p style={{ fontSize:13,color:TX2 }}>Lançamentos, saldos, DRE e movimentações</p>
       </div>
 
       {/* KPIs */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:24 }}>
-        <div style={{ ...G, padding:"16px 18px", borderLeft:`3px solid ${TX}` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>Saldo total</div>
-          <div style={{ fontSize:22,fontWeight:700,color:totalBRL>=0?TX:RED }}>{fmtMoney(totalBRL)}</div>
-          <div style={{ fontSize:11,color:TX2 }}>{accounts.length} contas</div>
-        </div>
-        <div style={{ ...G, padding:"16px 18px", borderLeft:`3px solid ${GRN}` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>Entradas</div>
-          <div style={{ fontSize:22,fontWeight:700,color:GRN }}>{fmtMoney(totalEntradas)}</div>
-          <div style={{ fontSize:11,color:TX2 }}>{transactions.filter(t=>t.type==="entrada").length} lançamentos</div>
-        </div>
-        <div style={{ ...G, padding:"16px 18px", borderLeft:`3px solid ${RED}` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>Saídas</div>
-          <div style={{ fontSize:22,fontWeight:700,color:RED }}>{fmtMoney(totalSaidas)}</div>
-          <div style={{ fontSize:11,color:TX2 }}>{transactions.filter(t=>t.type==="saida").length} lançamentos</div>
-        </div>
+      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
+        {[
+          { label:"Saldo total",    value:fmtMoney(totalBRL),        color:totalBRL>=0?TX:RED },
+          { label:"Entradas",       value:fmtMoney(totalEntradas),   color:GRN },
+          { label:"Saídas",         value:fmtMoney(totalSaidas),     color:RED },
+          { label:"Dividendos",     value:fmtMoney(totalDividendos), color:"#7C3AED" },
+        ].map((k,i)=>(
+          <div key={i} style={{ ...G,padding:"14px 16px" }}>
+            <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>{k.label}</div>
+            <div style={{ fontSize:18,fontWeight:700,color:k.color }}>{k.value}</div>
+          </div>
+        ))}
       </div>
 
       {/* Tabs */}
-      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20 }}>
+      <div style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20 }}>
         {TABS.map(t=>(
           <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1 }}>
+            style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`,transition:TRANS,marginBottom:-1 }}>
             {t.label}
           </div>
         ))}
       </div>
 
+      {/* Dashboard */}
+      {tab==="dash" && <CaixaDash transactions={transactions} accounts={accounts}/>}
+
       {/* Lançamentos */}
       {tab==="lancamentos" && (
         <div>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
-            <select value={filterType} onChange={e=>setFilterType(e.target.value)}
-              style={{ padding:"6px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontFamily:"inherit",outline:"none" }}>
+          <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap" }}>
+            <select value={filterType} onChange={e=>setFilterType(e.target.value)} style={{ padding:"6px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontFamily:"inherit",outline:"none" }}>
               <option value="all">Todos os tipos</option>
-              <option value="entrada">Entradas</option>
-              <option value="saida">Saídas</option>
-              <option value="transferencia">Transferências</option>
+              {TX_TYPES.map(t=><option key={t.id} value={t.id}>{t.emoji} {t.label}</option>)}
             </select>
-            <select value={filterAcc} onChange={e=>setFilterAcc(e.target.value)}
-              style={{ padding:"6px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontFamily:"inherit",outline:"none" }}>
+            <select value={filterAcc} onChange={e=>setFilterAcc(e.target.value)} style={{ padding:"6px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontFamily:"inherit",outline:"none" }}>
               <option value="all">Todas as contas</option>
               {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
             <div style={{ flex:1 }}/>
-            <Btn onClick={()=>setShowNewTx(true)} variant="primary" size="sm" icon={Plus}>Novo lançamento</Btn>
+            <Btn onClick={()=>setTxModal({})} variant="primary" size="sm" icon={Plus}>Novo lançamento</Btn>
           </div>
-
-          {txFiltered.length===0 ? (
-            <div style={{ textAlign:"center", padding:"48px 0", color:TX3 }}>Nenhum lançamento. Clique em "Novo lançamento" para começar.</div>
-          ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {txFiltered.length===0
+            ? <div style={{ textAlign:"center",padding:"48px 0",color:TX3 }}>Nenhum lançamento.</div>
+            : <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
               {txFiltered.map(tx=>{
                 const originAcc = accounts.find(a=>a.id===tx.originId);
                 const destAcc   = accounts.find(a=>a.id===tx.destId);
-                const isEntrada = tx.type==="entrada";
-                const isSaida   = tx.type==="saida";
+                const tc = txColor(tx.type);
                 return (
-                  <div key={tx.id} style={{ ...G, padding:"12px 16px", display:"flex", alignItems:"center", gap:14 }}>
-                    <div style={{ width:36,height:36,borderRadius:8,background:isEntrada?`${GRN}15`:isSaida?`${RED}15`:`${BLU}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0 }}>
-                      {isEntrada?"↓":isSaida?"↑":"⇄"}
+                  <div key={tx.id} style={{ ...G,padding:"12px 16px",display:"flex",alignItems:"center",gap:14 }}>
+                    <div style={{ width:36,height:36,borderRadius:8,background:tc+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0 }}>
+                      {txEmoji(tx.type)}
                     </div>
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ fontWeight:600,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
@@ -3592,23 +3921,25 @@ function Caixa({ contracts }) {
                         <span>{fmtDate(tx.date)}</span>
                         {tx.category&&<span>· {tx.category}</span>}
                         {originAcc&&<span>· {originAcc.name}</span>}
-                        {destAcc&&isSaida&&<span>→ {destAcc.name}</span>}
-                        {tx.nfLink&&<a href={tx.nfLink} target="_blank" rel="noreferrer" style={{color:BLU}}>· 📄 NF</a>}
+                        {destAcc&&<span>→ {destAcc.name}</span>}
+                        {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU,cursor:"pointer"}}>· 📄 NF</span>}
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
                       </div>
                     </div>
                     <div style={{ textAlign:"right",flexShrink:0 }}>
-                      <div style={{ fontSize:15,fontWeight:700,color:isEntrada?GRN:isSaida?RED:BLU }}>
-                        {isEntrada?"+":isSaida?"-":""}{fmtMoney(tx.amount)}
+                      <div style={{ fontSize:15,fontWeight:700,color:tc }}>
+                        {tx.type==="entrada"?"+":tx.type==="transferencia"?"":"-"}{fmtMoney(tx.amount)}
                       </div>
                     </div>
-                    <button onClick={()=>{if(confirm("Excluir lançamento?")) saveTx(transactions.filter(t=>t.id!==tx.id));}}
-                      style={{ background:"none",border:"none",cursor:"pointer",color:TX3,fontSize:14,padding:"4px",flexShrink:0 }}>×</button>
+                    <div style={{ display:"flex",gap:4,flexShrink:0 }}>
+                      <button onClick={()=>setTxModal(tx)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"4px 8px",cursor:"pointer",color:TX2,fontSize:11 }}>✎</button>
+                      <button onClick={()=>{if(confirm("Excluir?")) saveTx(transactions.filter(t=>t.id!==tx.id));}} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"4px 8px",cursor:"pointer",color:RED,fontSize:13 }}>×</button>
+                    </div>
                   </div>
                 );
               })}
             </div>
-          )}
+          }
         </div>
       )}
 
@@ -3624,105 +3955,51 @@ function Caixa({ contracts }) {
                 <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12 }}>
                   <div>
                     <div style={{ fontWeight:700,fontSize:14,color:TX }}>{acc.name}</div>
-                    <div style={{ fontSize:11,color:TX2 }}>{acc.bank} · {acc.type==="corrente"?"Conta Corrente":acc.type==="poupanca"?"Poupança":"Investimento"}</div>
+                    <div style={{ fontSize:11,color:TX2 }}>{acc.bank} · {acc.type==="corrente"?"Corrente":acc.type==="poupanca"?"Poupança":"Investimento"}</div>
                   </div>
-                  <button onClick={()=>saveAcc(accounts.filter(a=>a.id!==acc.id))}
-                    style={{ background:"none",border:"none",cursor:"pointer",color:TX3,fontSize:13 }}>×</button>
+                  <button onClick={()=>saveAcc(accounts.filter(a=>a.id!==acc.id))} style={{ background:"none",border:"none",cursor:"pointer",color:TX3,fontSize:13 }}>×</button>
                 </div>
                 <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo atual</div>
-                <div style={{ fontSize:24,fontWeight:700,color:Number(acc.balance)>=0?TX:RED,marginBottom:10 }}>{fmtMoney(Number(acc.balance))}</div>
+                <div style={{ fontSize:26,fontWeight:700,color:Number(acc.balance)>=0?TX:RED,marginBottom:12 }}>{fmtMoney(Number(acc.balance))}</div>
                 <EditBalanceButton acc={acc} accounts={accounts} index={i} saveAcc={saveAcc}/>
+                {(acc.balanceHistory||[]).length>0&&(
+                  <div style={{ marginTop:10,fontSize:10,color:TX3 }}>
+                    Último registro: {fmtDate((acc.balanceHistory||[]).slice(-1)[0]?.date)}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Modal: Novo Lançamento */}
-      {showNewTx && <NewTransactionModal accounts={accounts} contracts={contracts} onClose={()=>setShowNewTx(false)}
-        onSave={(tx)=>{ saveTx([...transactions,{...tx,id:uid()}]); setShowNewTx(false); toast?.("Lançamento salvo","success"); }}/>}
+      {/* DRE */}
+      {tab==="dre" && (
+        <div>
+          <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
+            <span style={{ fontSize:12,color:TX2 }}>Exercício:</span>
+            {[new Date().getFullYear()-1, new Date().getFullYear()].map(y=>(
+              <div key={y} onClick={()=>setDreYear(y)}
+                style={{ padding:"5px 14px",fontSize:12,fontWeight:dreYear===y?700:400,cursor:"pointer",borderRadius:99,background:dreYear===y?TX:B2,color:dreYear===y?"white":TX2,border:`1px solid ${dreYear===y?TX:LN}`,transition:TRANS }}>
+                {y}
+              </div>
+            ))}
+          </div>
+          <DREView transactions={transactions} year={dreYear}/>
+        </div>
+      )}
 
-      {/* Modal: Nova Conta */}
-      {showNewAcc && <NewAccountModal onClose={()=>setShowNewAcc(false)}
-        onSave={(acc)=>{ saveAcc([...accounts,{...acc,id:uid()}]); setShowNewAcc(false); }}/>}
+      {txModal!==null && (
+        <TransactionModal accounts={accounts} contracts={contracts} initial={txModal.id?txModal:null}
+          onClose={()=>setTxModal(null)}
+          onSave={(tx)=>{
+            saveTx(txModal.id ? transactions.map(t=>t.id===tx.id?tx:t) : [...transactions,tx]);
+            setTxModal(null);
+            toast?.(`${txModal.id?"Lançamento atualizado":"Lançamento salvo"}`,"success");
+          }}/>
+      )}
+      {showNewAcc && <NewAccountModal onClose={()=>setShowNewAcc(false)} onSave={(acc)=>{ saveAcc([...accounts,{...acc,id:uid(),balanceHistory:[]}]); setShowNewAcc(false); }}/>}
     </div>
-  );
-}
-
-function NewTransactionModal({ accounts, contracts, onClose, onSave }) {
-  const [f, setF] = useState({ type:"saida", date:new Date().toISOString().substr(0,10), description:"", amount:"", category:"", originId:accounts[0]?.id||"", destId:"", nfLink:"", contractId:"", notes:"" });
-  const set = (k,v) => setF(x=>({...x,[k]:v}));
-  return (
-    <Modal title="Novo Lançamento" onClose={onClose} width={560}
-      footer={<><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={()=>{if(!f.description||!f.amount)return alert("Preencha descrição e valor.");onSave(f);}} variant="primary" size="sm">Salvar</Btn></>}>
-      <SRule>Tipo e Data</SRule>
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-        <Field label="Tipo">
-          <Select value={f.type} onChange={e=>set("type",e.target.value)}>
-            <option value="entrada">↓ Entrada</option>
-            <option value="saida">↑ Saída</option>
-            <option value="transferencia">⇄ Transferência</option>
-          </Select>
-        </Field>
-        <Field label="Data"><Input type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
-      </div>
-      <SRule>Detalhes</SRule>
-      <Field label="Descrição" full><Input value={f.description} onChange={e=>set("description",e.target.value)} placeholder="ex: Passagem aérea Copa 2026"/></Field>
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-        <Field label="Valor (R$)"><Input type="number" min="0" value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="0,00"/></Field>
-        <Field label="Categoria">
-          <Select value={f.category} onChange={e=>set("category",e.target.value)}>
-            <option value="">Sem categoria</option>
-            {EXPENSE_CATS.map(c=><option key={c} value={c}>{c}</option>)}
-          </Select>
-        </Field>
-        <Field label="Origem (conta)">
-          <Select value={f.originId} onChange={e=>set("originId",e.target.value)}>
-            <option value="">Externo</option>
-            {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-          </Select>
-        </Field>
-        <Field label="Destino (conta)">
-          <Select value={f.destId} onChange={e=>set("destId",e.target.value)}>
-            <option value="">Externo</option>
-            {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-          </Select>
-        </Field>
-      </div>
-      <SRule>Referências (opcional)</SRule>
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-        <Field label="Link / Nº da NF"><Input value={f.nfLink} onChange={e=>set("nfLink",e.target.value)} placeholder="https:// ou nº da nota"/></Field>
-        <Field label="Vincular contrato">
-          <Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>
-            <option value="">Nenhum</option>
-            {contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
-          </Select>
-        </Field>
-      </div>
-      <Field label="Observações"><Input value={f.notes} onChange={e=>set("notes",e.target.value)} placeholder="Informações adicionais"/></Field>
-    </Modal>
-  );
-}
-
-function NewAccountModal({ onClose, onSave }) {
-  const [f, setF] = useState({ name:"", bank:"", type:"corrente", balance:"" });
-  const set = (k,v) => setF(x=>({...x,[k]:v}));
-  return (
-    <Modal title="Nova Conta" onClose={onClose} width={420}
-      footer={<><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={()=>{if(!f.name)return alert("Informe o nome.");onSave(f);}} variant="primary" size="sm">Criar</Btn></>}>
-      <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
-        <Field label="Nome da conta"><Input value={f.name} onChange={e=>set("name",e.target.value)} placeholder="ex: Conta PJ Matheus"/></Field>
-        <Field label="Banco"><Input value={f.bank} onChange={e=>set("bank",e.target.value)} placeholder="ex: Itaú, Bradesco, Inter"/></Field>
-        <Field label="Tipo">
-          <Select value={f.type} onChange={e=>set("type",e.target.value)}>
-            <option value="corrente">Conta Corrente</option>
-            <option value="poupanca">Poupança</option>
-            <option value="investimento">Investimento</option>
-          </Select>
-        </Field>
-        <Field label="Saldo inicial (R$)"><Input type="number" value={f.balance} onChange={e=>set("balance",e.target.value)} placeholder="0,00"/></Field>
-      </div>
-    </Modal>
   );
 }
 

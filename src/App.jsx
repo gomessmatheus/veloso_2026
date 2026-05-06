@@ -2051,6 +2051,7 @@ Responda APENAS com o JSON.` }]
 
 // ─── Contratos list ────────────────────────────────────────
 function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates }) {
+  const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState(null);
   const selected = contracts.find(c => c.id === selectedId);
 
@@ -2059,7 +2060,6 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
     await saveC(contracts.filter(c => c.id !== id));
     if (saveDeliverables) await saveDeliverables(deliverables.filter(d => d.contractId !== id));
   };
-
 
   if (selected) return (
     <ContractDetail
@@ -2070,20 +2070,78 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
     />
   );
 
+  // ── Mobile card view ──
+  if (isMobile) return (
+    <div style={{ padding:"12px", display:"flex", flexDirection:"column", gap:8 }}>
+      {contracts.map(c => {
+        const total = contractTotal(c);
+        const dl = daysLeft(c.contractDeadline);
+        const dd = t => deliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&d.type===t).length;
+        const cp = posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + dd("reel") + dd("post");
+        const cs = posts.filter(p=>p.contractId===c.id&&p.type==="story"&&p.isPosted).length + dd("story");
+        const cr = posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")&&p.isPosted).length + dd("tiktok") + dd("repost");
+        const tot = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
+        const don = cp + cs + cr;
+        const pct = tot > 0 ? Math.round(don/tot*100) : 0;
+
+        return (
+          <div key={c.id} onClick={()=>setSelectedId(c.id)}
+            style={{ background:B1, border:`1px solid ${LN}`, borderRadius:12, overflow:"hidden", cursor:"pointer", transition:TRANS, boxShadow:"0 1px 3px rgba(0,0,0,0.05)" }}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=c.color}
+            onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>
+            {/* Color bar */}
+            <div style={{ height:3, background:c.color }}/>
+            <div style={{ padding:"12px 14px" }}>
+              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:8 }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:14, color:TX, lineHeight:1.2 }}>{c.company}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                    {c.currency!=="BRL"&&<span style={{ fontSize:9, padding:"1px 6px", borderRadius:99, background:`${BLU}15`, color:BLU, fontWeight:700 }}>{c.currency}</span>}
+                    {c.paymentType==="monthly"&&<span style={{ fontSize:9, padding:"1px 6px", borderRadius:99, background:`${TX2}15`, color:TX2, fontWeight:700 }}>M</span>}
+                    {c.hasTravel&&<span style={{ fontSize:11 }}>✈️</span>}
+                  </div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontWeight:700, fontSize:15, color:TX }}>{fmtMoney(total,c.currency)}</div>
+                  {c.contractDeadline&&<div style={{ fontSize:11, color:dlColor(dl), marginTop:2 }}>{fmtDate(c.contractDeadline)}</div>}
+                </div>
+              </div>
+              {/* Progress */}
+              {tot > 0 && (
+                <div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:TX2, marginBottom:4 }}>
+                    <span>Entregas</span>
+                    <span style={{ fontWeight:600, color:pct===100?GRN:TX }}>{don}/{tot} · {pct}%</span>
+                  </div>
+                  <div style={{ height:4, background:LN, borderRadius:2, overflow:"hidden" }}>
+                    <div style={{ height:4, borderRadius:2, background:pct===100?GRN:c.color, width:`${pct}%`, transition:"width .4s" }}/>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {contracts.length===0&&<div style={{padding:48,textAlign:"center",color:TX3}}>Nenhum contrato.</div>}
+    </div>
+  );
+
+  // ── Desktop table view ──
   return (
-    <div style={{ padding:window.innerWidth<768?12:24, maxWidth:1400 }}>
-      <div className="mob-scroll" style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+    <div style={{ padding:24, maxWidth:1400 }}>
+      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
         <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 70px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
-          {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links"].map((h,i)=>(
+          {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links",""].map((h,i)=>(
             <div key={i} style={{ padding:"0 12px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
           ))}
         </div>
         {contracts.map(c=>{
-          const done_del = d => deliverables.filter(x=>x.contractId===c.id&&x.stage==="done"&&x.type===d).length;
-          const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + done_del("reel") + done_del("post");
-          const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story"&&p.isPosted).length + done_del("story");
-          const cl=posts.filter(p=>p.contractId===c.id&&p.type==="link"&&p.isPosted).length + done_del("link");
-          const cr=posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")&&p.isPosted).length + done_del("tiktok") + done_del("repost");
+          const dd2 = t => deliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&d.type===t).length;
+          const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + dd2("reel") + dd2("post");
+          const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story"&&p.isPosted).length + dd2("story");
+          const cl=posts.filter(p=>p.contractId===c.id&&p.type==="link"&&p.isPosted).length + dd2("link");
+          const cr2=deliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&(d.type==="tiktok"||d.type==="repost")).length;
+          const cr=posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")&&p.isPosted).length + cr2;
           const total=contractTotal(c); const dl=daysLeft(c.contractDeadline);
           const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
           const don=cp+cs+cl+cr;
@@ -2128,152 +2186,6 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
     </div>
   );
 }
-
-// ─── Posts ────────────────────────────────────────────────
-function Posts({ contracts, posts, saveP, setModal, toast }) {
-  const [filter, setFilter] = useState("all");
-  const filtered = [...(filter==="all"?posts:posts.filter(p=>p.contractId===filter))].sort((a,b)=>new Date(b.publishDate||b.plannedDate||0)-new Date(a.publishDate||a.plannedDate||0));
-  const del = async id => { if(confirm("Excluir?")) await saveP(posts.filter(p=>p.id!==id)); };
-  const TYPE_BADGE={post:[AMB,"Reel"],story:[BLU,"Story"],link:[GRN,"Link"],repost:["#8B5CF6","Repost"],tiktok:[RED,"TikTok"]};
-  return (
-    <div style={{ padding:24, maxWidth:1400 }}>
-      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-        <div onClick={()=>setFilter("all")} style={{ padding:"4px 12px", fontSize:10, fontWeight:700, cursor:"pointer", borderRadius:99, background:filter==="all"?RED:"rgba(255,255,255,.05)", color:filter==="all"?"#fff":TX2, border:`1px solid ${filter==="all"?RED:LN}` }}>Todos ({posts.length})</div>
-        {contracts.map(c=>(
-          <div key={c.id} onClick={()=>setFilter(c.id)} style={{ padding:"4px 12px", fontSize:10, fontWeight:700, cursor:"pointer", borderRadius:99, background:filter===c.id?c.color+"22":"rgba(255,255,255,.05)", color:filter===c.id?c.color:TX2, border:`1px solid ${filter===c.id?c.color+"44":LN}`, display:"flex", alignItems:"center", gap:5 }}>
-            <div style={{ width:5, height:5, borderRadius:"50%", background:c.color }}/>{c.company.split("/")[0].trim()}
-          </div>
-        ))}
-      </div>
-      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 80px 100px 80px 80px 80px 70px 70px 70px 70px 80px 60px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>
-          {["Título","Contrato","Status","Tipo","Planejado","Views","Alcance","Curtidas","Coment.","Engaj.","Link",""].map((h,i)=>(
-            <div key={i} style={{ padding:"0 10px" }}>{h}</div>
-          ))}
-        </div>
-        {filtered.map(p=>{
-          const c=contracts.find(x=>x.id===p.contractId);
-          const eng=calcEngagement(p);
-          const [tcol,tlbl]=TYPE_BADGE[p.type]||[TX2,p.type];
-          return (
-            <div key={p.id} style={{ display:"grid", gridTemplateColumns:"1fr 80px 100px 80px 80px 80px 70px 70px 70px 70px 80px 60px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:11 }}
-              onMouseEnter={e=>{e.currentTarget.style.background=B2;}}
-              onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
-              <div style={{ padding:"10px", color:TX, fontWeight:500 }}>{p.title}</div>
-              <div style={{ padding:"0 10px" }}>{c&&<div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:5,height:5,borderRadius:"50%",background:c.color}}/><span style={{fontSize:10,color:TX2}}>{c.company.split("/")[0].slice(0,8)}</span></div>}</div>
-              <div style={{ padding:"0 10px" }}>
-                {p.isPosted?<Badge color={GRN}>✓ Pub.</Badge>:<Badge color={AMB}>Planejado</Badge>}
-              </div>
-              <div style={{ padding:"0 10px" }}><Badge color={tcol}>{tlbl}</Badge></div>
-              <div style={{ padding:"0 10px", color:TX2 }}>{fmtDate(p.plannedDate||p.publishDate)}</div>
-              <div style={{ padding:"0 10px", color:TX2, fontVariantNumeric:"tabular-nums" }}>{Number(p.views||0).toLocaleString("pt-BR")}</div>
-              <div style={{ padding:"0 10px", color:TX2, fontVariantNumeric:"tabular-nums" }}>{Number(p.reach||0).toLocaleString("pt-BR")}</div>
-              <div style={{ padding:"0 10px", color:TX2, fontVariantNumeric:"tabular-nums" }}>{Number(p.likes||0).toLocaleString("pt-BR")}</div>
-              <div style={{ padding:"0 10px", color:TX2, fontVariantNumeric:"tabular-nums" }}>{Number(p.comments||0).toLocaleString("pt-BR")}</div>
-              <div style={{ padding:"0 10px", fontWeight:700, color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3 }}>{eng!=null?eng.toFixed(1)+"%":"—"}</div>
-              <div style={{ padding:"0 10px" }}>{p.link?<a href={p.link} style={{color:RED,fontSize:10}} target="_blank" rel="noreferrer">↗</a>:<span style={{color:TX3}}>—</span>}</div>
-              <div style={{ padding:"0 8px", display:"flex", gap:2 }}>
-                <Btn onClick={()=>setModal({type:"post",data:p})} variant="ghost" size="sm">✎</Btn>
-                <Btn onClick={()=>del(p.id)} variant="ghost" size="sm" style={{color:RED}}>×</Btn>
-              </div>
-            </div>
-          );
-        })}
-        {filtered.length===0&&<div style={{padding:48,textAlign:"center",color:TX3}}>Nenhum post.</div>}
-      </div>
-    </div>
-  );
-}
-
-// ─── Calendar view ────────────────────────────────────────
-function CalendarView({ contracts, calEvents, calMonth, setCal, calFilter, setCalF }) {
-  const { y, m } = calMonth;
-  const today = startOfToday();
-  const [sel, setSel] = useState(today);
-  const firstDay = new Date(y, m, 1).getDay();
-  const daysInMo = new Date(y, m+1, 0).getDate();
-  const todayStr = today.toISOString().substr(0, 10);
-  const cells = [];
-  for(let i=0;i<firstDay;i++) cells.push(null);
-  for(let d=1;d<=daysInMo;d++) cells.push(d);
-  while(cells.length%7) cells.push(null);
-  const MONTHS_LONG=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  const prev=()=>setCal(p=>{const d=new Date(p.y,p.m-1,1);return{y:d.getFullYear(),m:d.getMonth()};});
-  const next=()=>setCal(p=>{const d=new Date(p.y,p.m+1,1);return{y:d.getFullYear(),m:d.getMonth()};});
-  const selStr = `${y}-${String(m+1).padStart(2,"0")}-${String(sel.getDate()).padStart(2,"0")}`;
-  const selEvs = calEvents[selStr]||[];
-  return (
-    <div>
-      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
-        <div style={{ fontSize:13, fontWeight:700, color:TX }}>{MONTHS_LONG[m]} {y}</div>
-        <Btn onClick={prev} variant="ghost" size="sm" icon={ChevronLeft}/>
-        <Btn onClick={()=>setCal({y:today.getFullYear(),m:today.getMonth()})} variant="ghost" size="sm">Hoje</Btn>
-        <Btn onClick={next} variant="ghost" size="sm" icon={ChevronRight}/>
-        <div style={{flex:1}}/>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          <div onClick={()=>setCalF("all")} style={{padding:"3px 10px",fontSize:9,fontWeight:700,cursor:"pointer",borderRadius:99,background:calFilter==="all"?B3:B2,color:calFilter==="all"?TX:TX2,border:`1px solid ${LN}`}}>Todos</div>
-          {contracts.slice(0,6).map(c=>(
-            <div key={c.id} onClick={()=>setCalF(c.id)} style={{padding:"3px 10px",fontSize:9,fontWeight:700,cursor:"pointer",borderRadius:99,background:calFilter===c.id?c.color+"22":B2,color:calFilter===c.id?c.color:TX2,border:`1px solid ${calFilter===c.id?c.color+"44":LN}`,display:"flex",alignItems:"center",gap:4}}>
-              <div style={{width:5,height:5,borderRadius:"50%",background:c.color}}/>{c.company.split("/")[0].slice(0,8)}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:B2 }}>
-          {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map(d=>(
-            <div key={d} style={{ padding:"8px 0", textAlign:"center", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{d}</div>
-          ))}
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:1, background:LN }}>
-          {cells.map((d,i)=>{
-            if(!d) return <div key={`e${i}`} style={{ minHeight:90, background:B0 }}/>;
-            const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-            const evs=calEvents[ds]||[];
-            const isT=ds===todayStr;
-            const isSel=ds===selStr;
-            return (
-              <div key={d} onClick={()=>setSel(new Date(y,m,d))}
-                style={{ minHeight:90, padding:5, background:isSel?B2:B0, cursor:"pointer", outline:isT?`2px solid ${RED}`:"none", outlineOffset:-2 }}
-                onMouseEnter={e=>!isSel&&(e.currentTarget.style.background=B1)}
-                onMouseLeave={e=>!isSel&&(e.currentTarget.style.background=B0)}>
-                <div style={{ fontSize:11, fontWeight:isT?700:400, color:isT?RED:TX, marginBottom:3 }}>{d}</div>
-                {evs.slice(0,3).map((ev,ei)=>(
-                  <div key={ei} style={{ fontSize:8, fontWeight:700, padding:"1px 4px", marginBottom:2, borderLeft:`2px solid ${ev.color}`, background:ev.dashed?"transparent":`${ev.color}18`, color:ev.color, borderLeftStyle:ev.dashed?"dashed":"solid", opacity:ev.dashed?.8:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", textTransform:"uppercase", letterSpacing:".03em" }}>{ev.label}</div>
-                ))}
-                {evs.length>3&&<div style={{fontSize:8,color:TX3}}>+{evs.length-3}</div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      {selEvs.length>0&&(
-        <div style={{ marginTop:12, background:B1, border:`1px solid ${LN}`, borderRadius:10, padding:14 }}>
-          <div style={{ fontSize:10, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>
-            {sel.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}
-          </div>
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {selEvs.map((ev,i)=>(
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", borderRadius:7, background:B2, borderLeft:`3px solid ${ev.color}` }}>
-                <div style={{ fontSize:12, fontWeight:500, color:TX, flex:1 }}>{ev.label}</div>
-                {ev.dashed&&<Badge color={TX2}>Fase</Badge>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Calendario({ contracts, calEvents, calMonth, setCal, calFilter, setCalF }) {
-  return (
-    <div style={{ padding:24, maxWidth:1400 }}>
-      <CalendarView contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
-    </div>
-  );
-}
-
 
 // ─── Contract Modal ───────────────────────────────────────
 function ContractModal({ modal, setModal, contracts, saveC }) {

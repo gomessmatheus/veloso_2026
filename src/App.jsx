@@ -9,7 +9,7 @@ import {
 } from "./db.js";
 import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSameDay, isSameMonth, isToday, parse, startOfToday, startOfWeek, add } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote } from "lucide-react";
+import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote, Landmark } from "lucide-react";
 
 // ─── Design tokens ────────────────────────────────────────
 const B0  = "#FEFEFE";           // background (oklch 0.9940 0 0)
@@ -412,6 +412,7 @@ const NAV_ITEMS = [
   { id:"acompanhamento", label:"Produção",         icon:KanbanSquare },
   { id:"contratos",      label:"Contratos",        icon:FileText },
   { id:"financeiro",     label:"Financeiro",       icon:Banknote },
+  { id:"caixa",          label:"Caixa",            icon:Landmark },
   { id:"calendario",     label:"Calendário",       icon:Calendar },
 ];
 
@@ -2689,6 +2690,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates}/>;
 
+    if (view==="caixa")          return <Caixa contracts={contracts}/>;
     if (view==="financeiro")     return <Financeiro contracts={contracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC}/>;
     if (view==="calendario")     return <Calendario contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     return null;
@@ -3371,6 +3373,302 @@ function MonthDeliverables({ deliverables, contracts }) {
           </div>
       }
     </div>
+  );
+}
+
+
+// ─── Caixa (Controle Financeiro Administrativo) ───────────
+const CAIXA_PASSWORD = "ranked2026"; // Altere conforme necessário
+
+const EXPENSE_CATS = [
+  "Produção de Conteúdo","Equipamento","Viagem","Alimentação",
+  "Hospedagem","Software / SaaS","Marketing","Pessoal / RH",
+  "Impostos / Contabilidade","Comissão Ranked","Outros",
+];
+
+function CaixaPasswordGate({ onUnlock }) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState(false);
+  const [show, setShow] = useState(false);
+
+  const check = () => {
+    if (pw === CAIXA_PASSWORD) { onUnlock(); }
+    else { setErr(true); setPw(""); setTimeout(()=>setErr(false),2000); }
+  };
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"60vh" }}>
+      <div style={{ ...G, padding:"40px 48px", maxWidth:380, width:"100%", textAlign:"center" }}>
+        <div style={{ fontSize:32, marginBottom:16 }}>🔐</div>
+        <div style={{ fontSize:16, fontWeight:700, color:TX, marginBottom:6 }}>Controle Financeiro</div>
+        <div style={{ fontSize:12, color:TX2, marginBottom:24 }}>Acesso restrito · Administradores Ranked</div>
+        <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+          <input
+            type={show?"text":"password"}
+            value={pw}
+            onChange={e=>{setPw(e.target.value);setErr(false);}}
+            onKeyDown={e=>e.key==="Enter"&&check()}
+            placeholder="Senha de acesso"
+            autoFocus
+            style={{ flex:1, padding:"10px 14px", fontSize:13, background:err?`${RED}08`:B2, border:`1px solid ${err?RED:LN}`, borderRadius:8, color:TX, fontFamily:"inherit", outline:"none", transition:TRANS }}
+          />
+          <button onClick={()=>setShow(s=>!s)} style={{ padding:"10px 12px", background:B2, border:`1px solid ${LN}`, borderRadius:8, cursor:"pointer", fontSize:13, color:TX2 }}>{show?"👁":"👁‍🗨"}</button>
+        </div>
+        {err && <div style={{ fontSize:11, color:RED, marginBottom:12 }}>Senha incorreta</div>}
+        <button onClick={check} style={{ width:"100%", padding:"11px", background:RED, border:"none", borderRadius:8, color:"white", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          Acessar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Caixa({ contracts }) {
+  const [unlocked, setUnlocked] = useState(false);
+  const [tab, setTab] = useState("lancamentos");
+  const [transactions, setTransactions] = useState(() => lsLoad("caixa_tx", []));
+  const [accounts, setAccounts] = useState(() => lsLoad("caixa_accounts", [
+    { id:"c1", name:"Conta Principal", bank:"Bradesco", type:"corrente", balance:0, currency:"BRL" },
+    { id:"c2", name:"Conta PJ Lucas", bank:"Inter", type:"corrente", balance:0, currency:"BRL" },
+  ]));
+  const [showNewTx, setShowNewTx] = useState(false);
+  const [showNewAcc, setShowNewAcc] = useState(false);
+  const [filterType, setFilterType] = useState("all");
+  const [filterAcc, setFilterAcc] = useState("all");
+  const toast = useToast();
+
+  const saveTx = (list) => { setTransactions(list); lsSave("caixa_tx", list); };
+  const saveAcc = (list) => { setAccounts(list); lsSave("caixa_accounts", list); };
+
+  if (!unlocked) return <CaixaPasswordGate onUnlock={()=>setUnlocked(true)}/>;
+
+  const totalBRL = accounts.reduce((s,a) => s + (Number(a.balance)||0), 0);
+  const txFiltered = transactions
+    .filter(t => filterType==="all" || t.type===filterType)
+    .filter(t => filterAcc==="all" || t.originId===filterAcc || t.destId===filterAcc)
+    .sort((a,b) => b.date.localeCompare(a.date));
+
+  const totalEntradas = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const totalSaidas   = transactions.filter(t=>t.type==="saida").reduce((s,t)=>s+(Number(t.amount)||0),0);
+
+  const TABS = [
+    { id:"lancamentos", label:"Lançamentos" },
+    { id:"contas",      label:"Contas" },
+  ];
+
+  return (
+    <div style={{ padding:"24px 28px", maxWidth:1100 }}>
+      <div style={{ marginBottom:24 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+          <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>Controle Financeiro</h1>
+          <span style={{ fontSize:10, padding:"3px 8px", borderRadius:99, background:`${RED}15`, color:RED, fontWeight:700 }}>ADMIN</span>
+        </div>
+        <p style={{ fontSize:13, color:TX2 }}>Lançamentos, saldos e movimentações de caixa</p>
+      </div>
+
+      {/* KPIs */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:24 }}>
+        <div style={{ ...G, padding:"16px 18px", borderLeft:`3px solid ${TX}` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>Saldo total</div>
+          <div style={{ fontSize:22,fontWeight:700,color:totalBRL>=0?TX:RED }}>{fmtMoney(totalBRL)}</div>
+          <div style={{ fontSize:11,color:TX2 }}>{accounts.length} contas</div>
+        </div>
+        <div style={{ ...G, padding:"16px 18px", borderLeft:`3px solid ${GRN}` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>Entradas</div>
+          <div style={{ fontSize:22,fontWeight:700,color:GRN }}>{fmtMoney(totalEntradas)}</div>
+          <div style={{ fontSize:11,color:TX2 }}>{transactions.filter(t=>t.type==="entrada").length} lançamentos</div>
+        </div>
+        <div style={{ ...G, padding:"16px 18px", borderLeft:`3px solid ${RED}` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>Saídas</div>
+          <div style={{ fontSize:22,fontWeight:700,color:RED }}>{fmtMoney(totalSaidas)}</div>
+          <div style={{ fontSize:11,color:TX2 }}>{transactions.filter(t=>t.type==="saida").length} lançamentos</div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20 }}>
+        {TABS.map(t=>(
+          <div key={t.id} onClick={()=>setTab(t.id)}
+            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1 }}>
+            {t.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Lançamentos */}
+      {tab==="lancamentos" && (
+        <div>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
+            <select value={filterType} onChange={e=>setFilterType(e.target.value)}
+              style={{ padding:"6px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontFamily:"inherit",outline:"none" }}>
+              <option value="all">Todos os tipos</option>
+              <option value="entrada">Entradas</option>
+              <option value="saida">Saídas</option>
+              <option value="transferencia">Transferências</option>
+            </select>
+            <select value={filterAcc} onChange={e=>setFilterAcc(e.target.value)}
+              style={{ padding:"6px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontFamily:"inherit",outline:"none" }}>
+              <option value="all">Todas as contas</option>
+              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <div style={{ flex:1 }}/>
+            <Btn onClick={()=>setShowNewTx(true)} variant="primary" size="sm" icon={Plus}>Novo lançamento</Btn>
+          </div>
+
+          {txFiltered.length===0 ? (
+            <div style={{ textAlign:"center", padding:"48px 0", color:TX3 }}>Nenhum lançamento. Clique em "Novo lançamento" para começar.</div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {txFiltered.map(tx=>{
+                const originAcc = accounts.find(a=>a.id===tx.originId);
+                const destAcc   = accounts.find(a=>a.id===tx.destId);
+                const isEntrada = tx.type==="entrada";
+                const isSaida   = tx.type==="saida";
+                return (
+                  <div key={tx.id} style={{ ...G, padding:"12px 16px", display:"flex", alignItems:"center", gap:14 }}>
+                    <div style={{ width:36,height:36,borderRadius:8,background:isEntrada?`${GRN}15`:isSaida?`${RED}15`:`${BLU}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0 }}>
+                      {isEntrada?"↓":isSaida?"↑":"⇄"}
+                    </div>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontWeight:600,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
+                      <div style={{ fontSize:11,color:TX2,display:"flex",gap:8,flexWrap:"wrap",marginTop:2 }}>
+                        <span>{fmtDate(tx.date)}</span>
+                        {tx.category&&<span>· {tx.category}</span>}
+                        {originAcc&&<span>· {originAcc.name}</span>}
+                        {destAcc&&isSaida&&<span>→ {destAcc.name}</span>}
+                        {tx.nfLink&&<a href={tx.nfLink} target="_blank" rel="noreferrer" style={{color:BLU}}>· 📄 NF</a>}
+                        {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right",flexShrink:0 }}>
+                      <div style={{ fontSize:15,fontWeight:700,color:isEntrada?GRN:isSaida?RED:BLU }}>
+                        {isEntrada?"+":isSaida?"-":""}{fmtMoney(tx.amount)}
+                      </div>
+                    </div>
+                    <button onClick={()=>{if(confirm("Excluir lançamento?")) saveTx(transactions.filter(t=>t.id!==tx.id));}}
+                      style={{ background:"none",border:"none",cursor:"pointer",color:TX3,fontSize:14,padding:"4px",flexShrink:0 }}>×</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Contas */}
+      {tab==="contas" && (
+        <div>
+          <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:16 }}>
+            <Btn onClick={()=>setShowNewAcc(true)} variant="primary" size="sm" icon={Plus}>Nova conta</Btn>
+          </div>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12 }}>
+            {accounts.map((acc,i)=>(
+              <div key={acc.id} style={{ ...G,padding:"18px 20px" }}>
+                <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12 }}>
+                  <div>
+                    <div style={{ fontWeight:700,fontSize:14,color:TX }}>{acc.name}</div>
+                    <div style={{ fontSize:11,color:TX2 }}>{acc.bank} · {acc.type==="corrente"?"Conta Corrente":acc.type==="poupanca"?"Poupança":"Investimento"}</div>
+                  </div>
+                  <button onClick={()=>saveAcc(accounts.filter(a=>a.id!==acc.id))}
+                    style={{ background:"none",border:"none",cursor:"pointer",color:TX3,fontSize:13 }}>×</button>
+                </div>
+                <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo atual</div>
+                <div style={{ fontSize:24,fontWeight:700,color:Number(acc.balance)>=0?TX:RED,marginBottom:10 }}>{fmtMoney(Number(acc.balance))}</div>
+                <input type="number" value={acc.balance} onChange={e=>{const updated=[...accounts];updated[i]={...acc,balance:e.target.value};saveAcc(updated);}}
+                  placeholder="0,00"
+                  style={{ width:"100%",padding:"8px 10px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
+                <div style={{ fontSize:9,color:TX3,marginTop:4 }}>Edite o saldo diretamente</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Novo Lançamento */}
+      {showNewTx && <NewTransactionModal accounts={accounts} contracts={contracts} onClose={()=>setShowNewTx(false)}
+        onSave={(tx)=>{ saveTx([...transactions,{...tx,id:uid()}]); setShowNewTx(false); toast?.("Lançamento salvo","success"); }}/>}
+
+      {/* Modal: Nova Conta */}
+      {showNewAcc && <NewAccountModal onClose={()=>setShowNewAcc(false)}
+        onSave={(acc)=>{ saveAcc([...accounts,{...acc,id:uid()}]); setShowNewAcc(false); }}/>}
+    </div>
+  );
+}
+
+function NewTransactionModal({ accounts, contracts, onClose, onSave }) {
+  const [f, setF] = useState({ type:"saida", date:new Date().toISOString().substr(0,10), description:"", amount:"", category:"", originId:accounts[0]?.id||"", destId:"", nfLink:"", contractId:"", notes:"" });
+  const set = (k,v) => setF(x=>({...x,[k]:v}));
+  return (
+    <Modal title="Novo Lançamento" onClose={onClose} width={560}
+      footer={<><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={()=>{if(!f.description||!f.amount)return alert("Preencha descrição e valor.");onSave(f);}} variant="primary" size="sm">Salvar</Btn></>}>
+      <SRule>Tipo e Data</SRule>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+        <Field label="Tipo">
+          <Select value={f.type} onChange={e=>set("type",e.target.value)}>
+            <option value="entrada">↓ Entrada</option>
+            <option value="saida">↑ Saída</option>
+            <option value="transferencia">⇄ Transferência</option>
+          </Select>
+        </Field>
+        <Field label="Data"><Input type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
+      </div>
+      <SRule>Detalhes</SRule>
+      <Field label="Descrição" full><Input value={f.description} onChange={e=>set("description",e.target.value)} placeholder="ex: Passagem aérea Copa 2026"/></Field>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+        <Field label="Valor (R$)"><Input type="number" min="0" value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="0,00"/></Field>
+        <Field label="Categoria">
+          <Select value={f.category} onChange={e=>set("category",e.target.value)}>
+            <option value="">Sem categoria</option>
+            {EXPENSE_CATS.map(c=><option key={c} value={c}>{c}</option>)}
+          </Select>
+        </Field>
+        <Field label="Origem (conta)">
+          <Select value={f.originId} onChange={e=>set("originId",e.target.value)}>
+            <option value="">Externo</option>
+            {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Destino (conta)">
+          <Select value={f.destId} onChange={e=>set("destId",e.target.value)}>
+            <option value="">Externo</option>
+            {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+          </Select>
+        </Field>
+      </div>
+      <SRule>Referências (opcional)</SRule>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+        <Field label="Link / Nº da NF"><Input value={f.nfLink} onChange={e=>set("nfLink",e.target.value)} placeholder="https:// ou nº da nota"/></Field>
+        <Field label="Vincular contrato">
+          <Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>
+            <option value="">Nenhum</option>
+            {contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
+          </Select>
+        </Field>
+      </div>
+      <Field label="Observações"><Input value={f.notes} onChange={e=>set("notes",e.target.value)} placeholder="Informações adicionais"/></Field>
+    </Modal>
+  );
+}
+
+function NewAccountModal({ onClose, onSave }) {
+  const [f, setF] = useState({ name:"", bank:"", type:"corrente", balance:"" });
+  const set = (k,v) => setF(x=>({...x,[k]:v}));
+  return (
+    <Modal title="Nova Conta" onClose={onClose} width={420}
+      footer={<><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={()=>{if(!f.name)return alert("Informe o nome.");onSave(f);}} variant="primary" size="sm">Criar</Btn></>}>
+      <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+        <Field label="Nome da conta"><Input value={f.name} onChange={e=>set("name",e.target.value)} placeholder="ex: Conta PJ Matheus"/></Field>
+        <Field label="Banco"><Input value={f.bank} onChange={e=>set("bank",e.target.value)} placeholder="ex: Itaú, Bradesco, Inter"/></Field>
+        <Field label="Tipo">
+          <Select value={f.type} onChange={e=>set("type",e.target.value)}>
+            <option value="corrente">Conta Corrente</option>
+            <option value="poupanca">Poupança</option>
+            <option value="investimento">Investimento</option>
+          </Select>
+        </Field>
+        <Field label="Saldo inicial (R$)"><Input type="number" value={f.balance} onChange={e=>set("balance",e.target.value)} placeholder="0,00"/></Field>
+      </div>
+    </Modal>
   );
 }
 

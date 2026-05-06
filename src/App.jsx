@@ -865,195 +865,124 @@ Responda APENAS com o JSON, sem markdown.`
         </div>
       )}
 
-      {/* KPIs - delivery focused */}
-      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(6,1fr)", gap:isMobile?10:12, marginBottom:20 }}>
+      {/* KPIs — 4 cards, produção only */}
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?10:12, marginBottom:20 }}>
         {[
-          { label:"Volume Total Ano", value:fmtMoney(stats.totalBRL), sub:`${contracts.length} contratos` },
           { label:"Entregáveis ativos", value:allDeliverables.filter(d=>d.stage!=="done").length, sub:`${allDeliverables.filter(d=>d.stage==="done").length} concluídos` },
-          { label:"Posts publicados", value:`${stats.dp}/${stats.tp}`, sub:`${stats.ds}/${stats.ts} stories` },
-          { label:"Atrasados", value:lateDeliverables.length, sub:"no pipeline", accent:lateDeliverables.length>0?RED:GRN },
-          { label:"Engajamento", value:stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—", sub:"média das publis", accent:stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2 },
-          { label:"Comissão Ranked (a pagar)", value:fmtMoney(stats.commPendBRL), sub:"pendente", accent:stats.commPendBRL>0?AMB:GRN },
+          { label:"Posts publicados",   value:`${stats.dp}/${stats.tp}`, sub:`${stats.ds}/${stats.ts} stories` },
+          { label:"Atrasados",          value:lateDeliverables.length, sub:"no pipeline", accent:lateDeliverables.length>0?RED:GRN },
+          { label:"Engajamento",        value:stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—", sub:"média das publis", accent:stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2 },
         ].map((k,i) => <DashKpi key={i} label={k.label} value={k.value} sub={k.sub} accent={k.accent} small={isMobile}/>)}
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:isMobile?16:20 }}>
-        {/* Left: Urgency + Pipeline */}
-        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-          {/* Alerts */}
+      {/* Capacidade de Absorção */}
+      <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div>
-            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Ações & Urgências</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              {urgency.map(u => <AlertCard key={u.key} type={u.type} title={u.title} sub={u.sub} value={u.value} action={u.action} onAction={u.onAction}/>)}
-            </div>
+            <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:2 }}>🧠 Capacidade de Absorção</div>
+            <div style={{ fontSize:11, color:TX2 }}>Quantos conteúdos cabem com segurança nos próximos 3 meses</div>
           </div>
-
-          {/* Upcoming deliverables */}
-          {upcomingDeliverables.length > 0 && (
-            <div style={{ ...G, padding:"16px 18px" }}>
-              <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
-                <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Próximas Postagens</div>
-                <button onClick={()=>navigateTo("acompanhamento")} style={{ fontSize:10,color:TX2,background:"none",border:"none",cursor:"pointer",transition:TRANS }} onMouseEnter={e=>e.currentTarget.style.color=TX} onMouseLeave={e=>e.currentTarget.style.color=TX2}>Gerenciar →</button>
-              </div>
-              {upcomingDeliverables.map((d,i) => {
-                const c = contracts.find(x=>x.id===d.contractId);
-                const dl = daysLeft(d.plannedPostDate);
-                const isLate = lateDeliverables.some(l=>l.id===d.id);
-                const currentStage = STAGES.find(s=>s.id===(d.stage||"briefing"));
-                return (
-                  <div key={d.id} onClick={()=>navigateTo("acompanhamento")}
-                    style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<upcomingDeliverables.length-1?`1px solid ${LN}`:"none",cursor:"pointer" }}>
-                    {c && <div style={{ width:7,height:7,borderRadius:"50%",background:c.color,flexShrink:0 }}/>}
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:12,fontWeight:500,color:isLate?RED:TX }}>{d.title}</div>
-                      <div style={{ fontSize:10,color:TX2,marginTop:2 }}>{currentStage?.label} → postagem {fmtDate(d.plannedPostDate)}</div>
-                    </div>
-                    <div style={{ fontSize:11,fontWeight:700,color:dlColor(dl) }}>{dl!=null?(dl===0?"Hoje":`${dl}d`):""}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <Btn onClick={analyzeCapacity} variant="primary" size="sm" disabled={capLoading} icon={capLoading?null:Zap}>
+            {capLoading ? "Analisando…" : capAnalysis ? "Reanalisar" : "Analisar"}
+          </Btn>
         </div>
-
-        {/* Right: Payments + Delivery progress */}
-        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-          {/* Delivery progress per contract */}
-          <div style={{ ...G, padding:"16px 18px" }}>
-            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
-              <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Entregas por Contrato</div>
-              <button onClick={()=>navigateTo("contratos")} style={{ fontSize:10,color:TX2,background:"none",border:"none",cursor:"pointer",transition:TRANS }} onMouseEnter={e=>e.currentTarget.style.color=TX} onMouseLeave={e=>e.currentTarget.style.color=TX2}>Ver todos →</button>
-            </div>
-            {contracts.filter(c=>c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts>0).slice(0,7).map(c => {
-              const dd2 = t => allDeliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&d.type===t).length;
-              const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + dd2("reel") + dd2("post");
-              const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
-              const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
-              const cr2=allDeliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&(d.type==="tiktok"||d.type==="repost")).length;
-              const don=cp+cs+cr2;
-              const dl=daysLeft(c.contractDeadline);
-              const pct=tot?Math.min(100,don/tot*100):0;
+        {capAnalysis?.error && <div style={{ fontSize:11, color:RED, marginTop:10 }}>{capAnalysis.error}</div>}
+        {capAnalysis && !capAnalysis.error && (<>
+          {capAnalysis.overview && <p style={{ fontSize:12, color:TX2, lineHeight:1.6, marginTop:12, marginBottom:14, fontStyle:"italic", borderLeft:`3px solid ${BLU}`, paddingLeft:12 }}>{capAnalysis.overview}</p>}
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)", gap:10 }}>
+            {(capAnalysis.months||[]).map((m,i) => {
+              const SC = { ok:GRN, attention:AMB, full:RED, critical:RED };
+              const SL = { ok:"✓ Disponível", attention:"⚠ Atenção", full:"● Cheio", critical:"🔴 Crítico" };
+              const sc = SC[m.status]||TX2;
+              const rawM = capAnalysis.rawMonths?.find(r=>r.month===m.month);
               return (
-                <div key={c.id} style={{ marginBottom:12 }}>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:6 }}>
-                      <div style={{ width:6,height:6,borderRadius:"50%",background:c.color }}/>
-                      <span style={{ fontSize:12,fontWeight:500,color:TX }}>{c.company}</span>
-                    </div>
-                    <div style={{ display:"flex",gap:10,alignItems:"center" }}>
-                      <span style={{ fontSize:11,color:TX2 }}>{don}/{tot}</span>
-                      {dl!=null&&<span style={{ fontSize:10,fontWeight:700,color:dlColor(dl) }}>{dl}d</span>}
-                    </div>
+                <div key={i} style={{ background:`${sc}08`, border:`1px solid ${sc}25`, borderRadius:10, padding:"12px 14px" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:TX }}>{m.month}</div>
+                    <span style={{ fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:99, background:`${sc}15`, color:sc }}>{SL[m.status]||m.status}</span>
                   </div>
-                  <div style={{ height:5,background:LN,borderRadius:3 }}>
-                    <div style={{ height:5,borderRadius:3,background:pct===100?GRN:c.color,width:`${pct}%`,transition:"width 0.6s ease" }}/>
+                  <div style={{ height:5, background:"rgba(0,0,0,.08)", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
+                    <div style={{ height:5, borderRadius:3, background:sc, width:`${Math.min(100, m.safeCapacity>0?(m.scheduled/m.safeCapacity*100):100)}%` }}/>
                   </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:TX2, marginBottom:4 }}>
+                    <span>{m.scheduled} agendados</span>
+                    <span style={{ fontWeight:700, color:sc }}>{m.availableSlots>0?`+${m.availableSlots} slots livres`:"sem espaço"}</span>
+                  </div>
+                  {rawM?.travelDays>0&&<div style={{ fontSize:10,color:"#7C3AED" }}>✈️ {rawM.travelDays}d viagem</div>}
+                  <p style={{ fontSize:10, color:TX2, lineHeight:1.4, margin:"4px 0 0" }}>{m.recommendation}</p>
                 </div>
               );
             })}
           </div>
-
-          {/* Upcoming payments */}
-          <div style={{ ...G, padding:"16px 18px" }}>
-            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Pagamentos · 30 dias</div>
-            {upcomingPayments.length===0
-              ? <div style={{ fontSize:12,color:TX3,fontStyle:"italic",textAlign:"center",padding:"12px 0" }}>Nenhum nos próximos 30 dias</div>
-              : upcomingPayments.slice(0,4).map((p,i) => (
-                <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background:B2,marginBottom:6,transition:TRANS }}
-                  onMouseEnter={e=>e.currentTarget.style.background=B3} onMouseLeave={e=>e.currentTarget.style.background=B2}>
-                  <div style={{ width:6,height:6,borderRadius:"50%",background:p.color,flexShrink:0 }}/>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12,fontWeight:500,color:TX }}>{p.company}</div>
-                    <div style={{ fontSize:10,color:TX2 }}>{fmtDate(p.date)}</div>
-                  </div>
-                  <div style={{ fontSize:12,fontWeight:700,color:TX }}>{fmtMoney(p.value,p.currency)}</div>
-                  <div style={{ fontSize:10,fontWeight:700,color:dlColor(daysLeft(p.date)) }}>{daysLeft(p.date)}d</div>
-                </div>
-              ))
-            }
-          </div>
-        </div>
+        </>)}
       </div>
-      {/* Capacity Analysis */}
-      <div style={{ marginTop:24, ...G, padding:"18px 20px" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:capAnalysis?16:0 }}>
-          <div>
-            <div style={{ fontSize:11, fontWeight:700, color:TX, marginBottom:2 }}>🧠 Capacidade de Absorção</div>
-            <div style={{ fontSize:11, color:TX2 }}>Quantos conteúdos cabem com segurança nos próximos meses</div>
+
+      {/* Ações & Urgências — horizontal row */}
+      {urgency.length > 0 && urgency[0].key !== "ok" && (
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:10, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>Ações & Urgências</div>
+          <div style={{ display:"flex", gap:10, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
+            {urgency.map(u => {
+              const bg = u.type==="error"?`${RED}08`:u.type==="warning"?`${AMB}08`:u.type==="success"?`${GRN}08`:`${BLU}08`;
+              const bc = u.type==="error"?`${RED}25`:u.type==="warning"?`${AMB}25`:u.type==="success"?`${GRN}25`:`${BLU}25`;
+              const tc = u.type==="error"?RED:u.type==="warning"?AMB:u.type==="success"?GRN:BLU;
+              return (
+                <div key={u.key} style={{ background:bg, border:`1px solid ${bc}`, borderRadius:10, padding:"12px 14px", minWidth:220, flexShrink:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                    <span style={{ fontSize:13 }}>{u.type==="error"?"🔴":u.type==="warning"?"🟡":u.type==="success"?"✅":"🔵"}</span>
+                    <span style={{ fontSize:12, fontWeight:700, color:tc }}>{u.title}</span>
+                  </div>
+                  {u.sub&&<p style={{ fontSize:11, color:TX2, marginBottom:u.action?8:0, lineHeight:1.4 }}>{u.sub}</p>}
+                  {u.action&&<button onClick={u.onAction} style={{ fontSize:11, fontWeight:700, color:tc, background:"none", border:`1px solid ${bc}`, borderRadius:5, padding:"4px 10px", cursor:"pointer" }}>{u.action} →</button>}
+                </div>
+              );
+            })}
           </div>
-          <Btn onClick={analyzeCapacity} variant="primary" size="sm" disabled={capLoading} icon={capLoading?null:Zap}>
-            {capLoading ? "Analisando…" : capAnalysis ? "Reanalisar" : "Analisar capacidade"}
-          </Btn>
         </div>
+      )}
 
-        {capAnalysis?.error && (
-          <div style={{ fontSize:11, color:RED, marginTop:12 }}>Erro: {capAnalysis.error}</div>
-        )}
-
-        {capAnalysis && !capAnalysis.error && (
-          <>
-            {capAnalysis.overview && (
-              <p style={{ fontSize:12, color:TX2, lineHeight:1.6, marginBottom:16, fontStyle:"italic", borderLeft:`3px solid ${BLU}`, paddingLeft:12 }}>{capAnalysis.overview}</p>
-            )}
-
-            {/* Month grid */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:16 }} className="mob-col2">
-              {(capAnalysis.months||[]).map((m,i) => {
-                const STATUS_COLOR = { ok:GRN, attention:AMB, full:RED, critical:RED };
-                const STATUS_LABEL = { ok:"✓ Disponível", attention:"⚠ Atenção", full:"● Cheio", critical:"🔴 Crítico" };
-                const STATUS_BG    = { ok:`${GRN}08`, attention:`${AMB}08`, full:`${RED}08`, critical:`${RED}12` };
-                const sc = STATUS_COLOR[m.status] || TX2;
-                const rawM = capAnalysis.rawMonths?.find(r=>r.month===m.month);
-                return (
-                  <div key={i} style={{ background:STATUS_BG[m.status]||B2, border:`1px solid ${sc}30`, borderRadius:10, padding:"14px 16px" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:TX }}>{m.month}</div>
-                      <span style={{ fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:99, background:`${sc}15`, color:sc }}>{STATUS_LABEL[m.status]||m.status}</span>
-                    </div>
-
-                    {/* Capacity bar */}
-                    <div style={{ marginBottom:10 }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:TX2, marginBottom:4 }}>
-                        <span>{m.scheduled} agendados</span>
-                        <span style={{ fontWeight:700, color:sc }}>{m.availableSlots > 0 ? `+${m.availableSlots} slots` : "sem espaço"}</span>
-                      </div>
-                      <div style={{ height:6, background:"rgba(0,0,0,.08)", borderRadius:3, overflow:"hidden" }}>
-                        <div style={{ height:6, borderRadius:3, background:sc, width:`${Math.min(100, m.safeCapacity>0?(m.scheduled/m.safeCapacity*100):100)}%`, transition:"width .5s" }}/>
-                      </div>
-                      <div style={{ fontSize:9, color:TX3, marginTop:3 }}>cap. segura: {m.safeCapacity} conteúdos</div>
-                    </div>
-
-                    {rawM?.travelDays>0 && (
-                      <div style={{ fontSize:10, color:"#7C3AED", marginBottom:6 }}>✈️ {rawM.travelDays} dias de viagem</div>
-                    )}
-                    {m.riskFactors?.length>0 && (
-                      <div style={{ fontSize:10, color:AMB, marginBottom:6 }}>⚠ {m.riskFactors[0]}</div>
-                    )}
-                    <p style={{ fontSize:11, color:TX2, lineHeight:1.5, margin:0 }}>{m.recommendation}</p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Global risks + suggestions */}
-            {(capAnalysis.globalRisks?.length>0 || capAnalysis.suggestions?.length>0) && (
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }} className="mob-col1">
-                {capAnalysis.globalRisks?.length>0 && (
-                  <div style={{ background:`${RED}06`, border:`1px solid ${RED}20`, borderRadius:8, padding:"12px 14px" }}>
-                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:RED, marginBottom:8 }}>⚠ Riscos Globais</div>
-                    {capAnalysis.globalRisks.map((r,i)=><div key={i} style={{fontSize:11,color:TX,padding:"3px 0",borderBottom:i<capAnalysis.globalRisks.length-1?`1px solid ${LN}`:"none"}}>{r}</div>)}
-                  </div>
-                )}
-                {capAnalysis.suggestions?.length>0 && (
-                  <div style={{ background:`${GRN}06`, border:`1px solid ${GRN}20`, borderRadius:8, padding:"12px 14px" }}>
-                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:GRN, marginBottom:8 }}>→ Sugestões</div>
-                    {capAnalysis.suggestions.map((s,i)=><div key={i} style={{fontSize:11,color:TX,padding:"3px 0",borderBottom:i<capAnalysis.suggestions.length-1?`1px solid ${LN}`:"none"}}>{s}</div>)}
-                  </div>
-                )}
+      {/* Próximas Postagens */}
+      <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+          <div style={{ fontSize:10, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2 }}>Próximas Postagens</div>
+          <button onClick={()=>navigateTo("acompanhamento")} style={{ fontSize:11, color:TX2, background:"none", border:"none", cursor:"pointer" }}>Gerenciar →</button>
+        </div>
+        {upcomingDeliverables.length === 0 && <div style={{ fontSize:12, color:TX3, textAlign:"center", padding:"12px 0" }}>Nenhuma postagem no pipeline.</div>}
+        {upcomingDeliverables.slice(0,6).map((d,i) => {
+          const c = contracts.find(x=>x.id===d.contractId);
+          const stage = STAGES.find(s=>s.id===d.stage);
+          const dl = d.plannedPostDate ? daysLeft(d.plannedPostDate) : null;
+          const isLate = dl !== null && dl < 0;
+          return (
+            <div key={d.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<upcomingDeliverables.slice(0,6).length-1?`1px solid ${LN}`:"none" }}>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:c?.color||TX3, flexShrink:0 }}/>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12, fontWeight:500, color:isLate?RED:TX, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{d.title}</div>
+                <div style={{ fontSize:10, color:TX2 }}>{stage?.label}{d.plannedPostDate?` — postagem ${fmtDate(d.plannedPostDate)}`:""}</div>
               </div>
-            )}
-          </>
-        )}
+              {dl!==null&&<div style={{ fontSize:11, fontWeight:700, color:dlColor(dl), flexShrink:0 }}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Pagamentos — 30 dias */}
+      <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
+        <div style={{ fontSize:10, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:12 }}>Pagamentos · 30 dias</div>
+        {upcomingPayments.length === 0
+          ? <div style={{ fontSize:12, color:TX3, textAlign:"center", padding:"12px 0" }}>Nenhum nos próximos 30 dias.</div>
+          : upcomingPayments.map((p,i) => (
+            <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<upcomingPayments.length-1?`1px solid ${LN}`:"none" }}>
+              <div style={{ width:6, height:6, borderRadius:"50%", background:p.color||TX3, flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, fontWeight:500, color:TX }}>{p.company}</div>
+                <div style={{ fontSize:10, color:TX2 }}>{p.label} · {fmtDate(p.date)}</div>
+              </div>
+              <div style={{ fontSize:13, fontWeight:700, color:TX }}>{fmtMoney(p.value,p.currency)}</div>
+              <div style={{ fontSize:11, fontWeight:700, color:dlColor(daysLeft(p.date)), flexShrink:0, minWidth:40, textAlign:"right" }}>{daysLeft(p.date)===0?"Hoje":`${daysLeft(p.date)}d`}</div>
+            </div>
+          ))
+        }
       </div>
     </div>
   );

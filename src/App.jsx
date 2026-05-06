@@ -3688,16 +3688,23 @@ function CaixaDash({ transactions, accounts }) {
     <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
       {/* Account balances */}
       <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10 }}>
-        {accounts.map(a=>(
-          <div key={a.id} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${Number(a.balance)>=0?GRN:RED}` }}>
-            <div style={{ fontSize:10,fontWeight:700,color:TX2,marginBottom:4 }}>{a.name}</div>
-            <div style={{ fontSize:18,fontWeight:700,color:Number(a.balance)>=0?TX:RED }}>{fmtMoney(Number(a.balance))}</div>
-            <div style={{ fontSize:10,color:TX3 }}>{a.bank}</div>
-          </div>
-        ))}
+        {accounts.map(a=>{
+          const aBase = (() => { const oldest = (a.balanceHistory||[]).sort((x,y)=>x.date.localeCompare(y.date))[0]; return oldest?Number(oldest.balance)||0:Number(a.balance)||0; })();
+          const aEntradas = transactions.filter(t=>t.type==="entrada"&&(t.originId===a.id||t.destId===a.id)).reduce((s,t)=>s+(Number(t.amount)||0),0);
+          const aSaidas   = transactions.filter(t=>(t.type==="saida"||t.type==="imposto"||t.type==="dividendos")&&(t.originId===a.id||t.destId===a.id)).reduce((s,t)=>s+(Number(t.amount)||0),0);
+          const aBalance  = aBase + aEntradas - aSaidas;
+          return (
+            <div key={a.id} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${aBalance>=0?GRN:RED}` }}>
+              <div style={{ fontSize:10,fontWeight:700,color:TX2,marginBottom:4 }}>{a.name}</div>
+              <div style={{ fontSize:18,fontWeight:700,color:aBalance>=0?TX:RED }}>{fmtMoney(aBalance)}</div>
+              <div style={{ fontSize:10,color:TX3 }}>{a.bank}</div>
+            </div>
+          );
+        })}
         <div style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${totalBRL>=0?TX:RED}` }}>
           <div style={{ fontSize:10,fontWeight:700,color:TX2,marginBottom:4 }}>TOTAL CONSOLIDADO</div>
           <div style={{ fontSize:18,fontWeight:700,color:totalBRL>=0?TX:RED }}>{fmtMoney(totalBRL)}</div>
+          <div style={{ fontSize:10,color:TX3,marginTop:4 }}>Base + lançamentos</div>
         </div>
       </div>
 
@@ -3841,7 +3848,12 @@ function Caixa({ contracts }) {
   const totalEntradas   = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
   const totalSaidas     = transactions.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
   const totalDividendos = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const totalBRL        = accounts.reduce((s,a)=>s+(Number(a.balance)||0),0);
+  // Saldo calculado: saldo base (mais antigo registrado) + fluxo de lançamentos
+  const baseBalance = accounts.reduce((s,a) => {
+    const oldest = (a.balanceHistory||[]).sort((x,y)=>x.date.localeCompare(y.date))[0];
+    return s + (oldest ? Number(oldest.balance)||0 : Number(a.balance)||0);
+  }, 0);
+  const totalBRL = baseBalance + totalEntradas - totalSaidas - totalDividendos;
 
   const TABS = [
     { id:"dash",        label:"Dashboard" },
@@ -3960,7 +3972,16 @@ function Caixa({ contracts }) {
                   <button onClick={()=>saveAcc(accounts.filter(a=>a.id!==acc.id))} style={{ background:"none",border:"none",cursor:"pointer",color:TX3,fontSize:13 }}>×</button>
                 </div>
                 <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo atual</div>
-                <div style={{ fontSize:26,fontWeight:700,color:Number(acc.balance)>=0?TX:RED,marginBottom:12 }}>{fmtMoney(Number(acc.balance))}</div>
+                {(() => {
+                  const base = (()=>{const o=(acc.balanceHistory||[]).sort((x,y)=>x.date.localeCompare(y.date))[0];return o?Number(o.balance)||0:Number(acc.balance)||0;})();
+                  const ent  = transactions.filter(t=>t.type==="entrada"&&(t.originId===acc.id||t.destId===acc.id)).reduce((s,t)=>s+(Number(t.amount)||0),0);
+                  const sai  = transactions.filter(t=>(t.type==="saida"||t.type==="imposto"||t.type==="dividendos")&&(t.originId===acc.id||t.destId===acc.id)).reduce((s,t)=>s+(Number(t.amount)||0),0);
+                  const computed = base + ent - sai;
+                  return (<>
+                    <div style={{ fontSize:26,fontWeight:700,color:computed>=0?TX:RED,marginBottom:4 }}>{fmtMoney(computed)}</div>
+                    {(ent>0||sai>0)&&<div style={{ fontSize:10,color:TX2,marginBottom:10 }}>Base {fmtMoney(base)} {ent>0?`+${fmtMoney(ent)} ent.`:""} {sai>0?`−${fmtMoney(sai)} saí.`:""}</div>}
+                  </>);
+                })()}
                 <EditBalanceButton acc={acc} accounts={accounts} index={i} saveAcc={saveAcc}/>
                 {(acc.balanceHistory||[]).length>0&&(
                   <div style={{ marginTop:10,fontSize:10,color:TX3 }}>

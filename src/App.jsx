@@ -3377,6 +3377,63 @@ function MonthDeliverables({ deliverables, contracts }) {
 }
 
 
+// ─── Edit Balance Button (password protected) ─────────────
+const BALANCE_PASSWORD = "Theus123";
+
+function EditBalanceButton({ acc, accounts, index, saveAcc }) {
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState("");
+  const [step, setStep] = useState("locked"); // locked | authed | editing
+  const [newBalance, setNewBalance] = useState(String(acc.balance||"0"));
+  const [err, setErr] = useState(false);
+
+  const checkPw = () => {
+    if (pw === BALANCE_PASSWORD) { setStep("editing"); setErr(false); }
+    else { setErr(true); setPw(""); }
+  };
+
+  const save = () => {
+    const updated = [...accounts];
+    updated[index] = {...acc, balance: newBalance};
+    saveAcc(updated);
+    setOpen(false); setStep("locked"); setPw(""); setNewBalance(String(acc.balance));
+  };
+
+  if (!open) return (
+    <button onClick={()=>setOpen(true)}
+      style={{ width:"100%",padding:"7px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
+      🔒 Editar saldo
+    </button>
+  );
+
+  return (
+    <div style={{ background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"12px" }}>
+      {step==="locked" && (<>
+        <div style={{ fontSize:11,color:TX2,marginBottom:8,fontWeight:600 }}>Senha para editar saldo</div>
+        <div style={{ display:"flex",gap:6 }}>
+          <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&checkPw()}
+            autoFocus placeholder="••••••••"
+            style={{ flex:1,padding:"7px 10px",fontSize:12,background:err?`${RED}08`:B1,border:`1px solid ${err?RED:LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
+          <button onClick={checkPw} style={{ padding:"7px 12px",background:RED,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>OK</button>
+          <button onClick={()=>{setOpen(false);setErr(false);setPw("");}} style={{ padding:"7px 10px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
+        </div>
+        {err&&<div style={{ fontSize:10,color:RED,marginTop:4 }}>Senha incorreta</div>}
+      </>)}
+      {step==="editing" && (<>
+        <div style={{ fontSize:11,color:TX2,marginBottom:8,fontWeight:600 }}>Novo saldo (R$)</div>
+        <div style={{ display:"flex",gap:6 }}>
+          <input type="number" value={newBalance} onChange={e=>setNewBalance(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}
+            autoFocus
+            style={{ flex:1,padding:"7px 10px",fontSize:13,fontWeight:700,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
+          <button onClick={save} style={{ padding:"7px 14px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>Salvar</button>
+          <button onClick={()=>{setOpen(false);setStep("locked");setPw("");}} style={{ padding:"7px 10px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
+        </div>
+      </>)}
+    </div>
+  );
+}
+
+
 // ─── Caixa (Controle Financeiro Administrativo) ───────────
 const CAIXA_PASSWORD = "ranked2026"; // Altere conforme necessário
 
@@ -3574,10 +3631,7 @@ function Caixa({ contracts }) {
                 </div>
                 <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo atual</div>
                 <div style={{ fontSize:24,fontWeight:700,color:Number(acc.balance)>=0?TX:RED,marginBottom:10 }}>{fmtMoney(Number(acc.balance))}</div>
-                <input type="number" value={acc.balance} onChange={e=>{const updated=[...accounts];updated[i]={...acc,balance:e.target.value};saveAcc(updated);}}
-                  placeholder="0,00"
-                  style={{ width:"100%",padding:"8px 10px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
-                <div style={{ fontSize:9,color:TX3,marginTop:4 }}>Edite o saldo diretamente</div>
+                <EditBalanceButton acc={acc} accounts={accounts} index={i} saveAcc={saveAcc}/>
               </div>
             ))}
           </div>

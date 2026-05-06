@@ -1676,7 +1676,15 @@ function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, sa
   const commPending = commEntries.filter(e => !e.isPaid).reduce((s,e) => s + e.amount, 0);
 
   const avgEng = (() => {
-    const engs = cPosts.map(p => calcEngagement(p)).filter(e => e != null);
+    // Include both posts and deliverables with networkMetrics
+    const items = [...cPosts, ...cDeliverables];
+    const engs = items.map(item => {
+      const reach = sumNetworkMetrics(item, "reach");
+      const likes = sumNetworkMetrics(item, "likes");
+      const comments = sumNetworkMetrics(item, "comments");
+      if (reach > 0) return (likes + comments) / reach * 100;
+      return calcEngagement(item);
+    }).filter(e => e != null && e > 0);
     return engs.length ? engs.reduce((s,v) => s+v, 0) / engs.length : null;
   })();
 

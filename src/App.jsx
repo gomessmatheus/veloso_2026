@@ -923,10 +923,12 @@ Responda APENAS com o JSON, sem markdown.`
               <button onClick={()=>navigateTo("contratos")} style={{ fontSize:10,color:TX2,background:"none",border:"none",cursor:"pointer",transition:TRANS }} onMouseEnter={e=>e.currentTarget.style.color=TX} onMouseLeave={e=>e.currentTarget.style.color=TX2}>Ver todos →</button>
             </div>
             {contracts.filter(c=>c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts>0).slice(0,7).map(c => {
-              const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")).length;
+              const dd2 = t => allDeliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&d.type===t).length;
+              const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + dd2("reel") + dd2("post");
               const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
               const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
-              const don=cp+cs;
+              const cr2=allDeliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&(d.type==="tiktok"||d.type==="repost")).length;
+              const don=cp+cs+cr2;
               const dl=daysLeft(c.contractDeadline);
               const pct=tot?Math.min(100,don/tot*100):0;
               return (
@@ -1542,189 +1544,71 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
 function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
   const isEdit = !!item;
-  const [f, setF] = useState(item || {
-    contractId: contracts[0]?.id || "", title: "", type: "reel",
-    plannedPostDate: "", stage: "briefing",
-    responsible: {}, stageDateOverrides: {}, notes: "",
-  });
+  const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: "", stage: "briefing", responsible: {}, stageDateOverrides: {}, notes: "", networks: [], networkMetrics: {} });
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
-  const setResp = (stageId, v) => setF(x => ({ ...x, responsible: { ...(x.responsible||{}), [stageId]: v } }));
-  const setDateOverride = (stageId, v) => setF(x => ({ ...x, stageDateOverrides: { ...(x.stageDateOverrides||{}), [stageId]: v } }));
-
-  const stageDates = f.plannedPostDate ? calcStageDates(f.plannedPostDate) : {};
-
-  const handleSave = () => {
-    if (!f.title?.trim()) { alert("Preencha o título."); return; }
-    if (!f.contractId) { alert("Selecione o contrato."); return; }
-    onSave(f);
+  const [openNet, setOpenNet] = useState(null);
+  const NETS = ["Instagram","TikTok","YouTube","Facebook","X / Twitter","Kwai"];
+  const NET_EMOJI = {"Instagram":"📸","TikTok":"🎵","YouTube":"▶️","Facebook":"👥","X / Twitter":"𝕏","Kwai":"🎬"};
+  const toggleNetwork = net => {
+    const cur = f.networks || [];
+    if (cur.includes(net)) { const nm={...(f.networkMetrics||{})}; delete nm[net]; setF(x=>({...x,networks:cur.filter(n=>n!==net),networkMetrics:nm})); }
+    else { set("networks", [...cur, net]); }
   };
-
+  const setMetric = (net,field,val) => setF(x=>({...x,networkMetrics:{...(x.networkMetrics||{}),[net]:{...(x.networkMetrics?.[net]||{}),[field]:val}}}));
+  const getMetric = (net,field) => f.networkMetrics?.[net]?.[field] || "";
+  const stageDates = f.plannedPostDate ? calcStageDates(f.plannedPostDate) : {};
+  const handleSave = () => { if (!f.title?.trim()) { alert("Preencha o título."); return; } if (!f.contractId) { alert("Selecione o contrato."); return; } onSave(f); };
   return (
-    <Modal title={isEdit ? "Editar Entregável" : "Novo Entregável"} onClose={onClose} width={700}
-      footer={<>
-        {onDelete && <Btn onClick={() => onDelete(item.id)} variant="danger" size="sm">Excluir</Btn>}
-        <div style={{ flex: 1 }} />
-        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
-        <Btn onClick={handleSave} variant="primary" size="sm">{isEdit ? "Salvar" : "Criar"}</Btn>
-      </>}>
-
+    <Modal title={isEdit?"Editar Entregável":"Novo Entregável"} onClose={onClose} width={680}
+      footer={<>{onDelete&&<Btn onClick={()=>onDelete(item.id)} variant="danger" size="sm">Excluir</Btn>}<div style={{flex:1}}/><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={handleSave} variant="primary" size="sm">{isEdit?"Salvar":"Criar"}</Btn></>}>
       <SRule>Identificação</SRule>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Contrato / Marca">
-          <Select value={f.contractId} onChange={e => set("contractId", e.target.value)}>
-            {contracts.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
-          </Select>
-        </Field>
-        <Field label="Tipo">
-          <Select value={f.type} onChange={e => set("type", e.target.value)}>
-            <option value="reel">Reel / Post Feed</option>
-            <option value="story">Story (combo)</option>
-            <option value="tiktok">TikTok</option>
-            <option value="link">Link Comunidade</option>
-          </Select>
-        </Field>
-        <Field label="Título" full>
-          <Input value={f.title} onChange={e => set("title", e.target.value)} placeholder="ex: Reel Amazon Copa #1" />
-        </Field>
-        <Field label="Etapa atual">
-          <Select value={f.stage || "briefing"} onChange={e => set("stage", e.target.value)}>
-            {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </Select>
-        </Field>
-        <Field label="Data de Postagem (D)">
-          <Input type="date" value={f.plannedPostDate} onChange={e => set("plannedPostDate", e.target.value)} />
-        </Field>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <Field label="Contrato"><Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>{contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}</Select></Field>
+        <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="reel">Reel / Post Feed</option><option value="story">Story</option><option value="tiktok">TikTok</option><option value="link">Link Comunidade</option></Select></Field>
+        <Field label="Título" full><Input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="ex: Reel Amazon Copa #1"/></Field>
+        <Field label="Etapa"><Select value={f.stage||"briefing"} onChange={e=>set("stage",e.target.value)}>{STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</Select></Field>
+        <Field label="Data Postagem (D)"><Input type="date" value={f.plannedPostDate} onChange={e=>set("plannedPostDate",e.target.value)}/></Field>
       </div>
-
-      {f.plannedPostDate && (
-        <>
-          <SRule>Cronograma calculado automaticamente</SRule>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 4 }}>
-            {STAGES.filter(s => s.id !== "done").map(s => {
-              const auto = stageDates[s.id];
-              const override = f.stageDateOverrides?.[s.id];
-              const dl = daysLeft(override || auto);
-              return (
-                <div key={s.id} style={{ background: B2, border: `1px solid ${LN}`, borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: TX2, marginBottom: 6 }}>{s.label}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: dl !== null && dl < 0 ? RED : TX, marginBottom: 4 }}>
-                    {fmtDate(override || auto)}
-                  </div>
-                  {dl !== null && (
-                    <div style={{ fontSize: 10, color: dl < 0 ? RED : dl <= 1 ? AMB : TX3, marginBottom: 6 }}>
-                      {dl < 0 ? `${Math.abs(dl)}d atrás` : dl === 0 ? "Hoje" : `${dl}d`}
-                    </div>
-                  )}
-                  <input type="date" value={override || ""} placeholder="sobrescrever"
-                    onChange={e => setDateOverride(s.id, e.target.value)}
-                    title="Sobrescrever data"
-                    style={{ width: "100%", padding: "3px 6px", fontSize: 10, background: B1, border: `1px solid ${LN}`, borderRadius: 4, color: TX3, fontFamily: "inherit", outline: "none" }} />
-                  <input value={f.responsible?.[s.id] || ""} placeholder="Responsável"
-                    onChange={e => setResp(s.id, e.target.value)}
-                    style={{ width: "100%", padding: "3px 6px", fontSize: 10, background: B1, border: `1px solid ${LN}`, borderRadius: 4, color: TX, fontFamily: "inherit", outline: "none", marginTop: 4 }} />
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ fontSize: 10, color: TX3, fontStyle: "italic" }}>Datas calculadas a partir de D (postagem). Clique em qualquer data para sobrescrever manualmente.</div>
-        </>
-      )}
-
-      <SRule>Briefing & Notas</SRule>
-      <Field label="Observações / Briefing resumido">
-        <Textarea value={f.notes || ""} onChange={e => set("notes", e.target.value)} rows={4} placeholder="Resumo do briefing, links de referência, pontos obrigatórios da marca…" />
-      </Field>
-
-      {(f.stage === "postagem" || f.stage === "done") && (
-        <>
-          <SRule>Publicação</SRule>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            <Field label="Link do post">
-              <Input value={f.postLink || ""} onChange={e => set("postLink", e.target.value)} placeholder="https://instagram.com/p/..."/>
-            </Field>
-            <Field label="Data de publicação">
-              <Input type="date" value={f.publishedAt || ""} onChange={e => set("publishedAt", e.target.value)}/>
-            </Field>
-            <Field label="Views">
-              <Input type="number" min="0" value={f.views || ""} onChange={e => set("views", e.target.value)} placeholder="0"/>
-            </Field>
-            <Field label="Alcance">
-              <Input type="number" min="0" value={f.reach || ""} onChange={e => set("reach", e.target.value)} placeholder="0"/>
-            </Field>
-            <Field label="Curtidas">
-              <Input type="number" min="0" value={f.likes || ""} onChange={e => set("likes", e.target.value)} placeholder="0"/>
-            </Field>
-            <Field label="Comentários">
-              <Input type="number" min="0" value={f.comments || ""} onChange={e => set("comments", e.target.value)} placeholder="0"/>
-            </Field>
-          </div>
-          {Number(f.reach) > 0 && (
-            <div style={{ marginTop:8, padding:"10px 14px", background:`${GRN}10`, border:`1px solid ${GRN}30`, borderRadius:8, display:"flex", justifyContent:"space-between" }}>
-              <span style={{ fontSize:12, color:TX2 }}>Engajamento calculado</span>
-              <span style={{ fontSize:14, fontWeight:700, color:GRN }}>
-                {(((Number(f.likes)||0)+(Number(f.comments)||0))/Number(f.reach)*100).toFixed(2)}%
-              </span>
+      {f.plannedPostDate&&(<><SRule>Cronograma automático</SRule>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+          {STAGES.filter(s=>s.id!=="done").map(s=>{const auto=stageDates[s.id];const override=f.stageDateOverrides?.[s.id];const dl=daysLeft(override||auto);return(<div key={s.id} style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"10px 12px"}}>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:5}}>{s.label}</div>
+            <div style={{fontSize:12,fontWeight:600,color:dl!==null&&dl<0?RED:TX,marginBottom:4}}>{fmtDate(override||auto)}</div>
+            {dl!==null&&<div style={{fontSize:10,color:dl<0?RED:dl<=1?AMB:TX3,marginBottom:5}}>{dl<0?`${Math.abs(dl)}d atrás`:dl===0?"Hoje":`${dl}d`}</div>}
+            <input type="date" value={f.stageDateOverrides?.[s.id]||""} onChange={e=>setF(x=>({...x,stageDateOverrides:{...(x.stageDateOverrides||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX3,fontFamily:"inherit",outline:"none"}}/>
+            <input value={f.responsible?.[s.id]||""} placeholder="Responsável" onChange={e=>setF(x=>({...x,responsible:{...(x.responsible||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",outline:"none",marginTop:4}}/>
+          </div>);})}</div></>)}
+      <SRule>Redes Sociais & Métricas</SRule>
+      <div style={{fontSize:11,color:TX2,marginBottom:10}}>Selecione onde foi publicado. Clique na rede para ver/editar métricas.</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+        {NETS.map(net=>{const sel=(f.networks||[]).includes(net);return(<div key={net} onClick={()=>toggleNetwork(net)} style={{padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:99,transition:TRANS,display:"flex",alignItems:"center",gap:5,background:sel?`${RED}18`:B2,border:`1.5px solid ${sel?RED:LN}`,color:sel?RED:TX2}}>{NET_EMOJI[net]} {net}</div>);})}
+      </div>
+      {(f.networks||[]).map(net=>{
+        const reach=Number(getMetric(net,"reach")||0);
+        const eng=reach>0?((Number(getMetric(net,"likes")||0)+Number(getMetric(net,"comments")||0))/reach*100).toFixed(1):null;
+        return(<div key={net} style={{marginBottom:8,border:`1px solid ${LN}`,borderRadius:8,overflow:"hidden"}}>
+          <div onClick={()=>setOpenNet(openNet===net?null:net)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",cursor:"pointer",background:B2,transition:TRANS}} onMouseEnter={e=>e.currentTarget.style.background=B3} onMouseLeave={e=>e.currentTarget.style.background=B2}>
+            <span style={{fontSize:12,fontWeight:600,color:TX}}>{NET_EMOJI[net]} {net}</span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {reach>0&&<span style={{fontSize:10,color:TX2}}>{reach.toLocaleString("pt-BR")} alcance</span>}
+              {eng&&<span style={{fontSize:10,fontWeight:700,color:GRN}}>{eng}% eng.</span>}
+              <span style={{fontSize:11,color:TX2}}>{openNet===net?"▲":"▼"}</span>
             </div>
-          )}
-        </>
-      )}
+          </div>
+          {openNet===net&&(<div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            {[["views","Views"],["reach","Alcance"],["likes","Curtidas"],["comments","Comentários"],["shares","Shares"],["saves","Saves"]].map(([k,l])=>(<Field key={k} label={l}><Input type="number" min="0" value={getMetric(net,k)} onChange={e=>setMetric(net,k,e.target.value)} placeholder="0"/></Field>))}
+          </div>)}
+        </div>);
+      })}
+      {(f.stage==="postagem"||f.stage==="done")&&(<><SRule>Publicação</SRule>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Field label="Link"><Input value={f.postLink||""} onChange={e=>set("postLink",e.target.value)} placeholder="https://instagram.com/p/..."/></Field>
+          <Field label="Data publicação"><Input type="date" value={f.publishedAt||""} onChange={e=>set("publishedAt",e.target.value)}/></Field>
+        </div>
+      </>)}
+      <SRule>Notas</SRule>
+      <Field label="Briefing / Observações"><Textarea value={f.notes||""} onChange={e=>set("notes",e.target.value)} rows={3} placeholder="Resumo do briefing, links, pontos obrigatórios…"/></Field>
     </Modal>
-  );
-}
-
-// ─── Commission status inline ─────────────────────────────
-function CommStatusInline({ contract: c, toggleCommPaid, rates }) {
-  const entries = getCommEntries(c);
-  const [open, setOpen] = useState(false);
-  const total   = entries.reduce((s,e) => s + e.amount, 0);
-  const paid    = entries.filter(e => e.isPaid).reduce((s,e) => s + e.amount, 0);
-  const pending = total - paid;
-  const allPaid = entries.length > 0 && entries.every(e => e.isPaid);
-
-  if (entries.length === 0) return <span style={{fontSize:10,color:TX3}}>—</span>;
-
-  return (
-    <div style={{position:"relative"}}>
-      <div onClick={e=>{e.stopPropagation();setOpen(o=>!o);}}
-        style={{cursor:"pointer",display:"flex",flexDirection:"column",gap:2}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}>
-          <div style={{width:7,height:7,borderRadius:"50%",background:allPaid?GRN:pending>0?AMB:GRN,flexShrink:0}}/>
-          <span style={{fontSize:10,fontWeight:700,color:allPaid?GRN:AMB}}>
-            {allPaid?"✓ Pago":"Pendente"}
-          </span>
-        </div>
-        <div style={{fontSize:9,color:TX3}}>{fmtMoney(pending,c.currency)} pend.</div>
-      </div>
-      {open && (
-        <div onClick={e=>e.stopPropagation()}
-          style={{position:"absolute",top:"100%",right:0,zIndex:100,background:B1,border:`1px solid ${LN2}`,borderRadius:8,padding:10,minWidth:220,boxShadow:"0 8px 24px rgba(0,0,0,0.12)"}}>
-          <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:8}}>Comissão Ranked</div>
-          {entries.map((e,i) => (
-            <div key={e.key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:i<entries.length-1?`1px solid ${LN}`:"none"}}>
-              <div>
-                <div style={{fontSize:11,fontWeight:600,color:TX}}>{e.label}</div>
-                {e.date&&<div style={{fontSize:9,color:TX2}}>{fmtDate(e.date)}</div>}
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:11,fontWeight:700,color:RED}}>{fmtMoney(e.amount,c.currency)}</span>
-                <div onClick={()=>toggleCommPaid(c.id,e.key)}
-                  style={{padding:"3px 8px",fontSize:9,fontWeight:700,letterSpacing:".04em",cursor:"pointer",borderRadius:4,
-                    background:e.isPaid?`${GRN}18`:"rgba(0,0,0,.04)",
-                    border:`1px solid ${e.isPaid?GRN+"55":LN2}`,
-                    color:e.isPaid?GRN:TX2,transition:TRANS}}>
-                  {e.isPaid?"✓ Pago":"Marcar pago"}
-                </div>
-              </div>
-            </div>
-          ))}
-          <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${LN}`,display:"flex",justifyContent:"space-between"}}>
-            <span style={{fontSize:10,color:TX2}}>Total pago</span>
-            <span style={{fontSize:11,fontWeight:700,color:GRN}}>{fmtMoney(paid,c.currency)}</span>
-          </div>
-          <button onClick={()=>setOpen(false)} style={{marginTop:6,width:"100%",padding:"5px",fontSize:10,background:"none",border:`1px solid ${LN}`,borderRadius:5,cursor:"pointer",color:TX2}}>Fechar</button>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -2266,10 +2150,11 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
           ))}
         </div>
         {contracts.map(c=>{
-          const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")).length;
-          const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story").length;
-          const cl=posts.filter(p=>p.contractId===c.id&&p.type==="link").length;
-          const cr=posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")).length;
+          const done_del = d => deliverables.filter(x=>x.contractId===c.id&&x.stage==="done"&&x.type===d).length;
+          const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + done_del("reel") + done_del("post");
+          const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story"&&p.isPosted).length + done_del("story");
+          const cl=posts.filter(p=>p.contractId===c.id&&p.type==="link"&&p.isPosted).length + done_del("link");
+          const cr=posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")&&p.isPosted).length + done_del("tiktok") + done_del("repost");
           const total=contractTotal(c); const dl=daysLeft(c.contractDeadline);
           const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
           const don=cp+cs+cl+cr;

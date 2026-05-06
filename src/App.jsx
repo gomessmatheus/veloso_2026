@@ -483,6 +483,19 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
   const title = NAV_ITEMS.find(i=>i.id===view)?.label || view;
   const statusColor = { loading:AMB, ok:GRN, error:RED }[syncStatus]||GRN;
   const statusLabel = { loading:"Sincronizando", ok:"Ao Vivo", error:"Offline" }[syncStatus]||"Ao Vivo";
+  if (isMobile) return (
+    <div style={{ height:50, borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", paddingLeft:16, paddingRight:16, gap:8, background:B1, flexShrink:0, position:"sticky", top:0, zIndex:50 }}>
+      <div style={{ fontWeight:800, fontSize:12, letterSpacing:".15em", textTransform:"uppercase", color:TX, flex:1 }}>
+        ENTRE<span style={{color:RED}}>GAS</span>
+      </div>
+      <div style={{ width:6, height:6, borderRadius:"50%", background:syncStatus==="synced"||syncStatus==="ok"?GRN:syncStatus==="syncing"||syncStatus==="loading"?AMB:RED, flexShrink:0 }}/>
+      <button onClick={onNewContract}
+        style={{ background:RED, border:"none", borderRadius:8, padding:"8px 16px", color:"white", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+        + Novo
+      </button>
+    </div>
+  );
+
   return (
     <div style={{ height:48, background:B0, borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", padding:"0 20px", gap:12, flexShrink:0, position:"sticky", top:0, zIndex:50 }}>
       <div style={{ fontSize:13, fontWeight:700, color:TX, letterSpacing:"-.01em" }}>{title}</div>
@@ -578,14 +591,14 @@ function DashKpi({ label, value, sub, accent }) {
   return (
     <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       style={{ ...(hov?GHV:G), padding:"16px 18px", transition:TRANS }}>
-      <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>{label}</div>
-      <div style={{ fontSize:20,fontWeight:700,color:accent||TX,lineHeight:1 }}>{value}</div>
+      <div style={{ fontSize:small?8:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:small?4:8 }}>{label}</div>
+      <div style={{ fontSize:small?16:20,fontWeight:700,color:accent||TX,lineHeight:1 }}>{value}</div>
       {sub && <div style={{ fontSize:11,color:TX2,marginTop:4 }}>{sub}</div>}
     </div>
   );
 }
 
-function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo }) {
+function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo, isMobile }) {
   const today    = new Date();
   const todayStr = today.toISOString().substr(0, 10);
   const in7Str   = new Date(today.getTime() + 7 * 864e5).toISOString().substr(0, 10);
@@ -806,11 +819,11 @@ Responda APENAS com o JSON, sem markdown.`
   };
 
   return (
-    <div style={{ padding:24, maxWidth:1400 }}>
+    <div style={{ padding:isMobile?"14px 12px":24, maxWidth:1400 }}>
       {/* Header */}
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24 }}>
         <div>
-          <h1 style={{ fontSize:20, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{greeting}, Matheus 👋</h1>
+          <h1 style={{ fontSize:isMobile?18:20, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{greeting}, Matheus 👋</h1>
           <p style={{ fontSize:12, color:TX2, marginTop:4 }}>{today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · Copa 2026</p>
         </div>
         <Btn onClick={runAI} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
@@ -864,7 +877,7 @@ Responda APENAS com o JSON, sem markdown.`
       )}
 
       {/* KPIs - delivery focused */}
-      <div className="mob-col2" style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:12, marginBottom:20 }}>
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(6,1fr)", gap:isMobile?10:12, marginBottom:20 }}>
         {[
           { label:"Volume Total Ano", value:fmtMoney(stats.totalBRL), sub:`${contracts.length} contratos` },
           { label:"Entregáveis ativos", value:allDeliverables.filter(d=>d.stage!=="done").length, sub:`${allDeliverables.filter(d=>d.stage==="done").length} concluídos` },
@@ -872,10 +885,10 @@ Responda APENAS com o JSON, sem markdown.`
           { label:"Atrasados", value:lateDeliverables.length, sub:"no pipeline", accent:lateDeliverables.length>0?RED:GRN },
           { label:"Engajamento", value:stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—", sub:"média das publis", accent:stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2 },
           { label:"Comissão Ranked", value:fmtMoney(stats.commPendBRL), sub:"pendente", accent:stats.commPendBRL>0?AMB:GRN },
-        ].map((k,i) => <DashKpi key={i} label={k.label} value={k.value} sub={k.sub} accent={k.accent}/>)}
+        ].map((k,i) => <DashKpi key={i} label={k.label} value={k.value} sub={k.sub} accent={k.accent} small={isMobile}/>)}
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:isMobile?16:20 }}>
         {/* Left: Urgency + Pipeline */}
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           {/* Alerts */}
@@ -2645,7 +2658,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     </div>
   );
   try {
-    if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>;
+    if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView} isMobile={isMobile}/>;
     if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates}/>;
 
@@ -2903,7 +2916,7 @@ function MobileNav({ view, setView, onNew }) {
     { id:"calendario",     label:"Agenda",    emoji:"📅" },
   ];
   return (
-    <div style={{ position:"fixed", bottom:0, left:0, right:0, height:60, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"center", zIndex:100, boxShadow:"0 -2px 12px rgba(0,0,0,0.08)" }}>
+    <div style={{ position:"fixed", bottom:0, left:0, right:0, height:68, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"center", zIndex:100, boxShadow:"0 -2px 16px rgba(0,0,0,0.1)", paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
       {NAV_MOB.map(item => {
         const active = view === item.id;
         return (
@@ -3113,7 +3126,7 @@ a{color:${RED}}
             onNewPost={()=>setModal({type:"post",data:null})}
             onNewTask={()=>setTriggerNewTask(true)}
             syncStatus={syncStatus} isMobile={isMobile}/>
-          <div style={{ flex:1, overflowY:"auto", paddingBottom:window.innerWidth<768?60:0 }}>
+          <div style={{ flex:1, overflowY:"auto", paddingBottom:isMobile?84:0 }}>
             <ViewRenderer view={view} contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates}
               saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid}
               toggleNF={toggleNF} setModal={setModal} setView={setView}

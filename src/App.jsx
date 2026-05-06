@@ -374,7 +374,7 @@ function LoginPage() {
       {/* Logo */}
       <div style={{ marginBottom:40, textAlign:"center", position:"relative" }}>
         <div style={{ fontSize:13, fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:TX }}>
-          COPA<span style={{color:RED}}>2026</span>·OPS
+          ENTRE<span style={{color:RED}}>GAS</span>
         </div>
         <div style={{ fontSize:12, color:TX2, marginTop:6, letterSpacing:".04em" }}>Gestão de contratos e entregas · Ranked</div>
       </div>
@@ -399,7 +399,7 @@ function LoginPage() {
         </form>
 
         <div style={{ marginTop:20, paddingTop:20, borderTop:`1px solid ${LN}`, fontSize:10, color:TX3, textAlign:"center" }}>
-          Copa do Mundo 2026 · Lucas Veloso @veloso.lucas_
+          Lucas Veloso @veloso.lucas_
         </div>
       </div>
     </div>
@@ -422,7 +422,7 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
       {/* Logo */}
       <div style={{ padding:"20px 16px", borderBottom:`1px solid ${LN}` }}>
         <div style={{ fontSize:11, fontWeight:700, letterSpacing:".18em", textTransform:"uppercase", color:TX }}>
-          COPA<span style={{color:RED}}>2026</span>·OPS
+          ENTRE<span style={{color:RED}}>GAS</span>
         </div>
         <div style={{ fontSize:10, color:TX3, marginTop:3, letterSpacing:".03em" }}>Ranked</div>
       </div>
@@ -696,7 +696,7 @@ function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, 
           max_tokens:1000,
           messages:[{
             role:"user",
-            content:`Você é o assistente operacional do influenciador Lucas Veloso (@veloso.lucas_) para a Copa do Mundo 2026. A Ranked é a agência gestora.
+            content:`Você é o assistente operacional do influenciador Lucas Veloso (@veloso.lucas_) para a Copa 2026. A Ranked é a agência gestora.
 
 Analise esses dados e retorne um JSON com: 
 { "risks": ["risco 1", "risco 2", "risco 3"], "priorities": ["prioridade 1", "prioridade 2", "prioridade 3"], "insight": "uma frase direta sobre o momento atual", "score": número de 0-100 indicando saúde geral do projeto }
@@ -811,7 +811,7 @@ Responda APENAS com o JSON, sem markdown.`
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24 }}>
         <div>
           <h1 style={{ fontSize:20, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{greeting}, Matheus 👋</h1>
-          <p style={{ fontSize:12, color:TX2, marginTop:4 }}>{today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · Copa do Mundo 2026</p>
+          <p style={{ fontSize:12, color:TX2, marginTop:4 }}>{today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · Copa 2026</p>
         </div>
         <Btn onClick={runAI} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
           {aiLoading ? "Analisando…" : "Análise IA"}
@@ -2938,7 +2938,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         )}
 
         <div style={{fontSize:10,color:TX3,textAlign:"center",paddingTop:12,borderTop:`1px solid ${LN}`}}>
-          Relatório gerado por COPA2026·OPS · @veloso.lucas_ · Ranked Produções
+          Relatório gerado por ENTREGAS · @veloso.lucas_ · Ranked Produções
         </div>
       </div>
     </Modal>
@@ -3192,7 +3192,7 @@ export default function App() {
   if (user===undefined) {
     return (
       <div style={{ minHeight:"100vh", background:"#F7F6EF", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Plus Jakarta Sans,system-ui,sans-serif" }}>
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:TX3 }}>COPA<span style={{color:RED}}>2026</span>·OPS</div>
+        <div style={{ fontSize:13, fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:TX3 }}>ENTREGAS</div>
       </div>
     );
   }

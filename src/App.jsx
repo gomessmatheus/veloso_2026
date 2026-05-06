@@ -598,7 +598,8 @@ function DashKpi({ label, value, sub, accent }) {
   );
 }
 
-function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo, isMobile }) {
+function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo }) {
+  const isMobile = useIsMobile();
   const today    = new Date();
   const todayStr = today.toISOString().substr(0, 10);
   const in7Str   = new Date(today.getTime() + 7 * 864e5).toISOString().substr(0, 10);
@@ -2658,7 +2659,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     </div>
   );
   try {
-    if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView} isMobile={isMobile}/>;
+    if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>;
     if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates}/>;
 
@@ -2907,24 +2908,35 @@ function UserInviteModal({ onClose }) {
 
 
 // ─── Mobile Bottom Nav ────────────────────────────────────
-function MobileNav({ view, setView, onNew }) {
+function NavIcon({ type, active }) {
+  const c = active ? RED : "#ABABAB";
+  const s = { width:22, height:22, display:"block" };
+  if (type==="home")      return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+  if (type==="prod")      return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
+  if (type==="contracts") return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
+  if (type==="posts")     return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>;
+  if (type==="calendar")  return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+  return null;
+}
+
+function MobileNav({ view, setView }) {
   const NAV_MOB = [
-    { id:"dashboard",      label:"Home",      emoji:"🏠" },
-    { id:"acompanhamento", label:"Produção",  emoji:"📋" },
-    { id:"contratos",      label:"Contratos", emoji:"📄" },
-    { id:"posts",          label:"Posts",     emoji:"📱" },
-    { id:"calendario",     label:"Agenda",    emoji:"📅" },
+    { id:"dashboard",      label:"Home",      icon:"home" },
+    { id:"acompanhamento", label:"Produção",  icon:"prod" },
+    { id:"contratos",      label:"Contratos", icon:"contracts" },
+    { id:"posts",          label:"Posts",     icon:"posts" },
+    { id:"calendario",     label:"Agenda",    icon:"calendar" },
   ];
   return (
-    <div style={{ position:"fixed", bottom:0, left:0, right:0, height:68, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"center", zIndex:100, boxShadow:"0 -2px 16px rgba(0,0,0,0.1)", paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
+    <div style={{ position:"fixed", bottom:0, left:0, right:0, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"stretch", zIndex:100, boxShadow:"0 -1px 12px rgba(0,0,0,0.08)", paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
       {NAV_MOB.map(item => {
         const active = view === item.id;
         return (
           <div key={item.id} onClick={()=>setView(item.id)}
-            style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2, cursor:"pointer", padding:"8px 0" }}>
-            <span style={{ fontSize:20, lineHeight:1 }}>{item.emoji}</span>
-            <span style={{ fontSize:9, fontWeight:active?700:400, color:active?RED:TX3, letterSpacing:".02em" }}>{item.label}</span>
-            {active && <div style={{ position:"absolute", bottom:0, width:24, height:2, background:RED, borderRadius:1 }}/>}
+            style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, cursor:"pointer", padding:"10px 0 8px", position:"relative",
+              borderTop: active ? `2px solid ${RED}` : "2px solid transparent" }}>
+            <NavIcon type={item.icon} active={active}/>
+            <span style={{ fontSize:9, fontWeight:active?700:400, color:active?RED:"#ABABAB", letterSpacing:".02em" }}>{item.label}</span>
           </div>
         );
       })}

@@ -3495,10 +3495,10 @@ function EditBalanceButton({ acc, accounts, index, saveAcc }) {
 }
 
 // ─── Transaction Form Modal ───────────────────────────────
-function TransactionModal({ accounts, contracts, initial, onClose, onSave }) {
+function TransactionModal({ accounts, contracts, initial, onClose, onSave, defaultDate }) {
   const isEdit = !!initial?.id;
   const [f, setF] = useState(initial || {
-    type:"saida", date:new Date().toISOString().substr(0,10),
+    type:"saida", date:defaultDate||new Date().toISOString().substr(0,10),
     description:"", amount:"", category:"", originId:accounts[0]?.id||"",
     destId:"", nfLink:"", nfFile:null, contractId:"", notes:""
   });
@@ -3825,40 +3825,51 @@ function Caixa({ contracts }) {
   const [unlocked, setUnlocked] = useState(false);
   const [tab, setTab] = useState("dash");
   const [transactions, setTransactions] = useState(() => lsLoad("caixa_tx", []));
-  const [accounts, setAccounts] = useState(() => lsLoad("caixa_accounts", [
-    { id:"acc1", name:"Conta Principal", bank:"Bradesco", type:"corrente", balance:0, balanceHistory:[] },
-  ]));
-  const [txModal, setTxModal] = useState(null); // null | {} | {existing tx}
-  const [showNewAcc, setShowNewAcc] = useState(false);
-  const [filterType, setFilterType] = useState("all");
-  const [filterAcc, setFilterAcc] = useState("all");
+  const [baseBalance, setBaseBalance] = useState(() => lsLoad("caixa_base", 0));
+  const [baseDate, setBaseDate]       = useState(() => lsLoad("caixa_base_date", ""));
+  const [txModal, setTxModal] = useState(null);
   const [dreYear, setDreYear] = useState(new Date().getFullYear());
+  const [monthOffset, setMonthOffset] = useState(0);
   const toast = useToast();
 
-  const saveTx = (list) => { setTransactions(list); lsSave("caixa_tx", list); };
-  const saveAcc = (list) => { setAccounts(list); lsSave("caixa_accounts", list); };
+  const saveTx  = (list) => { setTransactions(list); lsSave("caixa_tx", list); };
+
+  const updateBase = (val, date) => {
+    setBaseBalance(Number(val)||0);
+    setBaseDate(date);
+    lsSave("caixa_base", Number(val)||0);
+    lsSave("caixa_base_date", date);
+  };
 
   if (!unlocked) return <CaixaPasswordGate onUnlock={()=>setUnlocked(true)}/>;
 
-  const txFiltered = transactions
-    .filter(t => filterType==="all" || t.type===filterType)
-    .filter(t => filterAcc==="all" || t.originId===filterAcc || t.destId===filterAcc)
-    .sort((a,b) => b.date.localeCompare(a.date));
-
+  // ── Computed saldo ──────────────────────────────────────
   const totalEntradas   = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
   const totalSaidas     = transactions.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
   const totalDividendos = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  // Saldo calculado: saldo base (mais antigo registrado) + fluxo de lançamentos
-  const baseBalance = accounts.reduce((s,a) => {
-    const oldest = (a.balanceHistory||[]).sort((x,y)=>x.date.localeCompare(y.date))[0];
-    return s + (oldest ? Number(oldest.balance)||0 : Number(a.balance)||0);
-  }, 0);
-  const totalBRL = baseBalance + totalEntradas - totalSaidas - totalDividendos;
+  const saldoTotal      = (Number(baseBalance)||0) + totalEntradas - totalSaidas - totalDividendos;
+
+  // ── Month navigation ────────────────────────────────────
+  const now = new Date();
+  const viewDate  = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const viewYear  = viewDate.getFullYear();
+  const viewMonth = viewDate.getMonth();
+  const monthKey  = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}`;
+  const MONTHS_LONG2 = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const monthLabel = `${MONTHS_LONG2[viewMonth]} ${viewYear}`;
+
+  const monthTx = transactions
+    .filter(t => t.date?.startsWith(monthKey))
+    .sort((a,b) => b.date.localeCompare(a.date));
+
+  const monthEntradas   = monthTx.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const monthSaidas     = monthTx.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const monthDividendos = monthTx.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const monthNet        = monthEntradas - monthSaidas - monthDividendos;
 
   const TABS = [
     { id:"dash",        label:"Dashboard" },
     { id:"lancamentos", label:"Lançamentos" },
-    { id:"contas",      label:"Contas" },
     { id:"dre",         label:"DRE" },
   ];
 
@@ -3869,26 +3880,35 @@ function Caixa({ contracts }) {
           <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
           <span style={{ fontSize:10,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
         </div>
-        <p style={{ fontSize:13,color:TX2 }}>Lançamentos, saldos, DRE e movimentações</p>
+        <p style={{ fontSize:13,color:TX2 }}>Lançamentos, saldo e DRE</p>
       </div>
 
       {/* KPIs */}
       <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
-        {[
-          { label:"Saldo total",    value:fmtMoney(totalBRL),        color:totalBRL>=0?TX:RED },
-          { label:"Entradas",       value:fmtMoney(totalEntradas),   color:GRN },
-          { label:"Saídas",         value:fmtMoney(totalSaidas),     color:RED },
-          { label:"Dividendos",     value:fmtMoney(totalDividendos), color:"#7C3AED" },
-        ].map((k,i)=>(
-          <div key={i} style={{ ...G,padding:"14px 16px" }}>
-            <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>{k.label}</div>
-            <div style={{ fontSize:18,fontWeight:700,color:k.color }}>{k.value}</div>
-          </div>
-        ))}
+        <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${saldoTotal>=0?TX:RED}` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo Total</div>
+          <div style={{ fontSize:22,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{fmtMoney(saldoTotal)}</div>
+          <div style={{ fontSize:10,color:TX3,marginTop:2 }}>base + lançamentos</div>
+        </div>
+        <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${GRN}` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Entradas totais</div>
+          <div style={{ fontSize:22,fontWeight:700,color:GRN }}>{fmtMoney(totalEntradas)}</div>
+        </div>
+        <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${RED}` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saídas totais</div>
+          <div style={{ fontSize:22,fontWeight:700,color:RED }}>{fmtMoney(totalSaidas)}</div>
+        </div>
+        <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid #7C3AED` }}>
+          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Dividendos totais</div>
+          <div style={{ fontSize:22,fontWeight:700,color:"#7C3AED" }}>{fmtMoney(totalDividendos)}</div>
+        </div>
       </div>
 
+      {/* Saldo base config */}
+      <SaldoBaseEditor baseBalance={baseBalance} baseDate={baseDate} onSave={updateBase}/>
+
       {/* Tabs */}
-      <div style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20 }}>
+      <div style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20,marginTop:16 }}>
         {TABS.map(t=>(
           <div key={t.id} onClick={()=>setTab(t.id)}
             style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`,transition:TRANS,marginBottom:-1 }}>
@@ -3898,29 +3918,38 @@ function Caixa({ contracts }) {
       </div>
 
       {/* Dashboard */}
-      {tab==="dash" && <CaixaDash transactions={transactions} accounts={accounts}/>}
+      {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal}/>}
 
-      {/* Lançamentos */}
+      {/* Lançamentos por mês */}
       {tab==="lancamentos" && (
         <div>
-          <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap" }}>
-            <select value={filterType} onChange={e=>setFilterType(e.target.value)} style={{ padding:"6px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontFamily:"inherit",outline:"none" }}>
-              <option value="all">Todos os tipos</option>
-              {TX_TYPES.map(t=><option key={t.id} value={t.id}>{t.emoji} {t.label}</option>)}
-            </select>
-            <select value={filterAcc} onChange={e=>setFilterAcc(e.target.value)} style={{ padding:"6px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontFamily:"inherit",outline:"none" }}>
-              <option value="all">Todas as contas</option>
-              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            <div style={{ flex:1 }}/>
-            <Btn onClick={()=>setTxModal({})} variant="primary" size="sm" icon={Plus}>Novo lançamento</Btn>
+          {/* Month nav */}
+          <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
+            <button onClick={()=>setMonthOffset(o=>o-1)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,width:32,height:32,cursor:"pointer",color:TX2,fontSize:16 }}>‹</button>
+            <div style={{ flex:1,textAlign:"center" }}>
+              <div style={{ fontWeight:700,fontSize:15,color:TX }}>{monthLabel}</div>
+              <div style={{ fontSize:11,color:TX2 }}>
+                <span style={{ color:GRN }}>+{fmtMoney(monthEntradas)}</span>
+                {" · "}
+                <span style={{ color:RED }}>−{fmtMoney(monthSaidas)}</span>
+                {monthDividendos>0&&<><span style={{ color:TX2 }}> · </span><span style={{ color:"#7C3AED" }}>div {fmtMoney(monthDividendos)}</span></>}
+                {" · "}
+                <span style={{ fontWeight:700, color:monthNet>=0?GRN:RED }}>{monthNet>=0?"+":""}{fmtMoney(monthNet)}</span>
+              </div>
+            </div>
+            <button onClick={()=>setMonthOffset(o=>o+1)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,width:32,height:32,cursor:"pointer",color:TX2,fontSize:16 }}>›</button>
+            <button onClick={()=>setMonthOffset(0)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,padding:"0 12px",height:32,cursor:"pointer",color:TX2,fontSize:11,fontWeight:600 }}>Hoje</button>
+            <Btn onClick={()=>setTxModal({})} variant="primary" size="sm" icon={Plus}>Lançamento</Btn>
           </div>
-          {txFiltered.length===0
-            ? <div style={{ textAlign:"center",padding:"48px 0",color:TX3 }}>Nenhum lançamento.</div>
-            : <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
-              {txFiltered.map(tx=>{
-                const originAcc = accounts.find(a=>a.id===tx.originId);
-                const destAcc   = accounts.find(a=>a.id===tx.destId);
+
+          {monthTx.length===0 ? (
+            <div style={{ textAlign:"center",padding:"48px 0",color:TX3 }}>
+              Nenhum lançamento em {monthLabel}.
+              <br/><button onClick={()=>setTxModal({})} style={{ marginTop:12,padding:"8px 16px",background:RED,border:"none",borderRadius:8,color:"white",fontSize:12,fontWeight:700,cursor:"pointer" }}>+ Adicionar</button>
+            </div>
+          ) : (
+            <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+              {monthTx.map(tx=>{
                 const tc = txColor(tx.type);
                 return (
                   <div key={tx.id} style={{ ...G,padding:"12px 16px",display:"flex",alignItems:"center",gap:14 }}>
@@ -3929,18 +3958,17 @@ function Caixa({ contracts }) {
                     </div>
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ fontWeight:600,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
-                      <div style={{ fontSize:11,color:TX2,display:"flex",gap:8,flexWrap:"wrap",marginTop:2 }}>
+                      <div style={{ fontSize:11,color:TX2,display:"flex",gap:8,marginTop:2,flexWrap:"wrap" }}>
                         <span>{fmtDate(tx.date)}</span>
                         {tx.category&&<span>· {tx.category}</span>}
-                        {originAcc&&<span>· {originAcc.name}</span>}
-                        {destAcc&&<span>→ {destAcc.name}</span>}
-                        {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU,cursor:"pointer"}}>· 📄 NF</span>}
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
+                        {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· 📄 NF</span>}
                       </div>
+                      {tx.notes&&<div style={{ fontSize:10,color:TX3,marginTop:2 }}>{tx.notes}</div>}
                     </div>
                     <div style={{ textAlign:"right",flexShrink:0 }}>
                       <div style={{ fontSize:15,fontWeight:700,color:tc }}>
-                        {tx.type==="entrada"?"+":tx.type==="transferencia"?"":"-"}{fmtMoney(tx.amount)}
+                        {tx.type==="entrada"?"+":tx.type==="transferencia"?"":"−"}{fmtMoney(tx.amount)}
                       </div>
                     </div>
                     <div style={{ display:"flex",gap:4,flexShrink:0 }}>
@@ -3951,46 +3979,7 @@ function Caixa({ contracts }) {
                 );
               })}
             </div>
-          }
-        </div>
-      )}
-
-      {/* Contas */}
-      {tab==="contas" && (
-        <div>
-          <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:16 }}>
-            <Btn onClick={()=>setShowNewAcc(true)} variant="primary" size="sm" icon={Plus}>Nova conta</Btn>
-          </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12 }}>
-            {accounts.map((acc,i)=>(
-              <div key={acc.id} style={{ ...G,padding:"18px 20px" }}>
-                <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:12 }}>
-                  <div>
-                    <div style={{ fontWeight:700,fontSize:14,color:TX }}>{acc.name}</div>
-                    <div style={{ fontSize:11,color:TX2 }}>{acc.bank} · {acc.type==="corrente"?"Corrente":acc.type==="poupanca"?"Poupança":"Investimento"}</div>
-                  </div>
-                  <button onClick={()=>saveAcc(accounts.filter(a=>a.id!==acc.id))} style={{ background:"none",border:"none",cursor:"pointer",color:TX3,fontSize:13 }}>×</button>
-                </div>
-                <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo atual</div>
-                {(() => {
-                  const base = (()=>{const o=(acc.balanceHistory||[]).sort((x,y)=>x.date.localeCompare(y.date))[0];return o?Number(o.balance)||0:Number(acc.balance)||0;})();
-                  const ent  = transactions.filter(t=>t.type==="entrada"&&(t.originId===acc.id||t.destId===acc.id)).reduce((s,t)=>s+(Number(t.amount)||0),0);
-                  const sai  = transactions.filter(t=>(t.type==="saida"||t.type==="imposto"||t.type==="dividendos")&&(t.originId===acc.id||t.destId===acc.id)).reduce((s,t)=>s+(Number(t.amount)||0),0);
-                  const computed = base + ent - sai;
-                  return (<>
-                    <div style={{ fontSize:26,fontWeight:700,color:computed>=0?TX:RED,marginBottom:4 }}>{fmtMoney(computed)}</div>
-                    {(ent>0||sai>0)&&<div style={{ fontSize:10,color:TX2,marginBottom:10 }}>Base {fmtMoney(base)} {ent>0?`+${fmtMoney(ent)} ent.`:""} {sai>0?`−${fmtMoney(sai)} saí.`:""}</div>}
-                  </>);
-                })()}
-                <EditBalanceButton acc={acc} accounts={accounts} index={i} saveAcc={saveAcc}/>
-                {(acc.balanceHistory||[]).length>0&&(
-                  <div style={{ marginTop:10,fontSize:10,color:TX3 }}>
-                    Último registro: {fmtDate((acc.balanceHistory||[]).slice(-1)[0]?.date)}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       )}
 
@@ -4011,15 +4000,64 @@ function Caixa({ contracts }) {
       )}
 
       {txModal!==null && (
-        <TransactionModal accounts={accounts} contracts={contracts} initial={txModal.id?txModal:null}
+        <TransactionModal accounts={[]} contracts={contracts} initial={txModal.id?txModal:null}
+          defaultDate={`${monthKey}-01`}
           onClose={()=>setTxModal(null)}
           onSave={(tx)=>{
             saveTx(txModal.id ? transactions.map(t=>t.id===tx.id?tx:t) : [...transactions,tx]);
             setTxModal(null);
-            toast?.(`${txModal.id?"Lançamento atualizado":"Lançamento salvo"}`,"success");
+            toast?.(`${txModal.id?"Atualizado":"Salvo"}`,"success");
           }}/>
       )}
-      {showNewAcc && <NewAccountModal onClose={()=>setShowNewAcc(false)} onSave={(acc)=>{ saveAcc([...accounts,{...acc,id:uid(),balanceHistory:[]}]); setShowNewAcc(false); }}/>}
+    </div>
+  );
+}
+
+// ─── Saldo Base Editor ────────────────────────────────────
+function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [pw, setPw] = useState("");
+  const [step, setStep] = useState("locked");
+  const [val, setVal] = useState(String(baseBalance||"0"));
+  const [date, setDate] = useState(baseDate||new Date().toISOString().substr(0,10));
+  const [err, setErr] = useState(false);
+
+  const check = () => {
+    if (pw === BALANCE_PASSWORD) { setStep("editing"); setVal(String(baseBalance||"0")); setErr(false); }
+    else { setErr(true); setPw(""); }
+  };
+  const save = () => { onSave(val, date); setEditing(false); setStep("locked"); setPw(""); };
+
+  return (
+    <div style={{ ...G,padding:"12px 18px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap" }}>
+      <div style={{ flex:1 }}>
+        <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Saldo Base (ponto de partida)</div>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:16,fontWeight:700,color:TX }}>{fmtMoney(Number(baseBalance)||0)}</span>
+          {baseDate&&<span style={{ fontSize:11,color:TX2 }}>em {fmtDate(baseDate)}</span>}
+          {!baseDate&&<span style={{ fontSize:11,color:TX3 }}>não definido</span>}
+        </div>
+      </div>
+      {!editing ? (
+        <button onClick={()=>{setEditing(true);setStep("locked");}} style={{ padding:"6px 14px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",gap:6 }}>🔒 Alterar saldo base</button>
+      ) : step==="locked" ? (
+        <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+          <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&check()} autoFocus placeholder="Senha"
+            style={{ padding:"6px 10px",fontSize:12,background:err?`${RED}08`:B2,border:`1px solid ${err?RED:LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none",width:120 }}/>
+          <button onClick={check} style={{ padding:"6px 12px",background:RED,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>OK</button>
+          <button onClick={()=>{setEditing(false);setErr(false);setPw("");}} style={{ padding:"6px 8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
+          {err&&<span style={{ fontSize:10,color:RED }}>Incorreta</span>}
+        </div>
+      ) : (
+        <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
+          <input type="number" value={val} onChange={e=>setVal(e.target.value)} autoFocus placeholder="0,00"
+            style={{ padding:"6px 10px",fontSize:13,fontWeight:700,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none",width:120 }}/>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+            style={{ padding:"6px 10px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
+          <button onClick={save} style={{ padding:"6px 14px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>Salvar</button>
+          <button onClick={()=>{setEditing(false);setStep("locked");setPw("");}} style={{ padding:"6px 8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
+        </div>
+      )}
     </div>
   );
 }

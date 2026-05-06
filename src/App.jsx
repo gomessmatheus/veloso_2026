@@ -586,11 +586,11 @@ function StatTile({ label, value, sub, trend }) {
   );
 }
 
-function DashKpi({ label, value, sub, accent }) {
+function DashKpi({ label, value, sub, accent, small=false }) {
   const [hov, setHov] = useState(false);
   return (
     <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{ ...(hov?GHV:G), padding:"16px 18px", transition:TRANS }}>
+      style={{ ...(hov?GHV:G), padding:small?"12px 14px":"16px 18px", transition:TRANS }}>
       <div style={{ fontSize:small?8:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:small?4:8 }}>{label}</div>
       <div style={{ fontSize:small?16:20,fontWeight:700,color:accent||TX,lineHeight:1 }}>{value}</div>
       {sub && <div style={{ fontSize:11,color:TX2,marginTop:4 }}>{sub}</div>}

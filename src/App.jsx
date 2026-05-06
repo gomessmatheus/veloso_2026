@@ -3391,7 +3391,7 @@ const TX_TYPES = [
 
 const EXPENSE_CATS = {
   entrada:    ["Recebimento de Contrato","Rendimento Financeiro","Reembolso","Outros Ingressos"],
-  saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Outros"],
+  saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Outros"],
   dividendos: ["Distribuição de Lucros","Pro-labore","Outros Dividendos"],
   imposto:    ["ISS","PIS/COFINS","IRPJ","CSLL","Simples Nacional","Outros Impostos"],
   transferencia:["Entre Contas"],
@@ -3546,20 +3546,7 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
             {contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
           </Select>
         </Field>
-        {f.type!=="dividendos" && <>
-          <Field label="Origem">
-            <Select value={f.originId} onChange={e=>set("originId",e.target.value)}>
-              <option value="">Externo</option>
-              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-            </Select>
-          </Field>
-          <Field label="Destino">
-            <Select value={f.destId} onChange={e=>set("destId",e.target.value)}>
-              <option value="">Externo</option>
-              {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-            </Select>
-          </Field>
-        </>}
+
       </div>
 
       <SRule>Nota Fiscal</SRule>
@@ -3784,6 +3771,8 @@ function Caixa({ contracts }) {
   const [txModal, setTxModal] = useState(null);
   const [dreYear, setDreYear] = useState(new Date().getFullYear());
   const [monthOffset, setMonthOffset] = useState(0);
+  const [search, setSearch] = useState("");
+  const [filterType2, setFilterType2] = useState("all");
   const toast = useToast();
 
   const saveTx  = (list) => { setTransactions(list); lsSave("caixa_tx", list); };
@@ -3814,6 +3803,8 @@ function Caixa({ contracts }) {
 
   const monthTx = transactions
     .filter(t => t.date?.startsWith(monthKey))
+    .filter(t => filterType2==="all" || t.type===filterType2)
+    .filter(t => !search || t.description?.toLowerCase().includes(search.toLowerCase()) || t.category?.toLowerCase().includes(search.toLowerCase()) || t.notes?.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b) => b.date.localeCompare(a.date));
 
   const monthEntradas   = monthTx.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
@@ -3877,6 +3868,19 @@ function Caixa({ contracts }) {
       {/* Lançamentos por mês */}
       {tab==="lancamentos" && (
         <div>
+          {/* Filters */}
+          <div style={{ display:"flex",gap:8,marginBottom:12,flexWrap:"wrap" }}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar descrição, categoria..."
+              style={{ flex:1,minWidth:180,padding:"7px 12px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontFamily:"inherit",outline:"none" }}/>
+            <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
+              {[{id:"all",label:"Todos"},{id:"entrada",label:"↓ Entradas"},{id:"saida",label:"↑ Saídas"},{id:"dividendos",label:"💰 Dividendos"},{id:"imposto",label:"🏛 Impostos"},{id:"transferencia",label:"⇄ Trans."}].map(f=>(
+                <div key={f.id} onClick={()=>setFilterType2(f.id)}
+                  style={{ padding:"6px 12px",fontSize:11,fontWeight:filterType2===f.id?700:400,cursor:"pointer",borderRadius:99,border:`1px solid ${filterType2===f.id?TX:LN}`,background:filterType2===f.id?TX:"none",color:filterType2===f.id?"white":TX2,transition:TRANS,whiteSpace:"nowrap" }}>
+                  {f.label}
+                </div>
+              ))}
+            </div>
+          </div>
           {/* Month nav */}
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
             <button onClick={()=>setMonthOffset(o=>o-1)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,width:32,height:32,cursor:"pointer",color:TX2,fontSize:16 }}>‹</button>

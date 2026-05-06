@@ -3388,7 +3388,7 @@ const TX_TYPES = [
 
 const EXPENSE_CATS = {
   entrada:    ["Recebimento de Contrato","Receita Meta (Facebook/Instagram)","Receita YouTube","Receita TikTok","Receita Kwai","Rendimento Financeiro","Reembolso","Outros Ingressos"],
-  saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Aluguel / Condomínio","Utilidades (Luz, Água, Internet)","Outros"],
+  saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Aluguel / Condomínio","Utilidades (Luz, Água, Internet)","Transporte / Estacionamento","Combustível","Uber / Táxi / App","Outros"],
   dividendos: ["Distribuição de Lucros","Pro-labore","Outros Dividendos"],
   imposto:    ["ISS","PIS/COFINS","IRPJ","CSLL","Simples Nacional","Outros Impostos"],
   transferencia:["Entre Contas"],
@@ -3420,6 +3420,9 @@ const DRE_MAP = {
   "Material de Escritório":           "desp_adm",
   "Material de Limpeza":              "desp_adm",
   "Aluguel / Condomínio":             "desp_adm",
+  "Transporte / Estacionamento":       "desp_op",
+  "Combustível":                        "desp_op",
+  "Uber / Táxi / App":                 "desp_op",
   "Utilidades (Luz, Água, Internet)": "desp_adm",
   "Outros":                           "desp_adm",
   // Impostos sobre receita (deduções)

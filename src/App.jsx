@@ -3721,6 +3721,80 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
         <div style={{ fontSize:11,color:TX2,marginTop:4 }}>Base {fmtMoney(Number(baseBalance)||0)} + lançamentos</div>
       </div>
 
+      {/* Decision KPIs */}
+      {(() => {
+        const months = Array.from({length:12},(_,i)=>i);
+        const currentYear = new Date().getFullYear();
+        const monthlyData = months.map(m => {
+          const key = `${currentYear}-${String(m+1).padStart(2,"0")}`;
+          const ent = transactions.filter(t=>t.date?.startsWith(key)&&t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+          const sai = transactions.filter(t=>t.date?.startsWith(key)&&(t.type==="saida"||t.type==="imposto")).reduce((s,t)=>s+(Number(t.amount)||0),0);
+          return { ent, sai };
+        }).filter(m => m.ent>0||m.sai>0);
+
+        const totalEnt = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const totalSai = transactions.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const totalDiv = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const lucroLiq = totalEnt - totalSai - totalDiv;
+
+        const avgMonthlySai = monthlyData.length > 0 ? monthlyData.reduce((s,m)=>s+m.sai,0)/monthlyData.length : 0;
+        const liquidez = avgMonthlySai > 0 ? saldoTotal / avgMonthlySai : null;
+        const margemLucro = totalEnt > 0 ? (lucroLiq / totalEnt * 100) : null;
+        const roi = totalSai > 0 ? ((totalEnt - totalSai) / totalSai * 100) : null;
+        const burnRate = avgMonthlySai;
+
+        const kpiColor = (val, good, warn) => val >= good ? GRN : val >= warn ? AMB : RED;
+        const fmt1 = v => v.toFixed(1);
+
+        return (
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
+            {/* Liquidez */}
+            <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${liquidez===null?LN:kpiColor(liquidez,3,1.5)}` }}>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Liquidez</div>
+              <div style={{ fontSize:22,fontWeight:700,color:liquidez===null?TX3:kpiColor(liquidez,3,1.5) }}>
+                {liquidez===null?"—":`${fmt1(liquidez)}x`}
+              </div>
+              <div style={{ fontSize:10,color:TX2,marginTop:3 }}>meses de runway</div>
+              <div style={{ fontSize:9,color:TX3,marginTop:4 }}>
+                {liquidez===null?"sem dados":liquidez>=3?"✓ Saudável":liquidez>=1.5?"⚠ Atenção":"🔴 Crítico"}
+              </div>
+            </div>
+
+            {/* Margem de Lucro */}
+            <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${margemLucro===null?LN:kpiColor(margemLucro,30,10)}` }}>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Margem Líquida</div>
+              <div style={{ fontSize:22,fontWeight:700,color:margemLucro===null?TX3:kpiColor(margemLucro,30,10) }}>
+                {margemLucro===null?"—":`${fmt1(margemLucro)}%`}
+              </div>
+              <div style={{ fontSize:10,color:TX2,marginTop:3 }}>lucro ÷ receita</div>
+              <div style={{ fontSize:9,color:TX3,marginTop:4 }}>
+                {margemLucro===null?"sem dados":margemLucro>=30?"✓ Excelente":margemLucro>=10?"⚠ Regular":"🔴 Baixa"}
+              </div>
+            </div>
+
+            {/* ROI Operacional */}
+            <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${roi===null?LN:kpiColor(roi,50,20)}` }}>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>ROI Operacional</div>
+              <div style={{ fontSize:22,fontWeight:700,color:roi===null?TX3:kpiColor(roi,50,20) }}>
+                {roi===null?"—":`${fmt1(roi)}%`}
+              </div>
+              <div style={{ fontSize:10,color:TX2,marginTop:3 }}>retorno sobre custos</div>
+              <div style={{ fontSize:9,color:TX3,marginTop:4 }}>
+                {roi===null?"sem dados":roi>=50?"✓ Excelente":roi>=20?"⚠ Regular":"🔴 Baixo"}
+              </div>
+            </div>
+
+            {/* Burn Rate */}
+            <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${BLU}` }}>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Burn Rate</div>
+              <div style={{ fontSize:22,fontWeight:700,color:TX }}>{fmtMoney(burnRate)}</div>
+              <div style={{ fontSize:10,color:TX2,marginTop:3 }}>saídas/mês (média)</div>
+              <div style={{ fontSize:9,color:TX3,marginTop:4 }}>base {monthlyData.length} meses</div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Bar chart */}
       <div style={{ ...G,padding:"18px 20px" }}>
         <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs Saídas {currentYear}</div>
@@ -3839,6 +3913,125 @@ function NewAccountModal({ onClose, onSave }) {
     </Modal>
   );
 }
+
+// ─── Indicadores Financeiros ──────────────────────────────
+function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contracts }) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const txYear = transactions.filter(t => t.date?.startsWith(String(year)));
+
+  const receita    = txYear.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const despesas   = txYear.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const dividendos = txYear.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const lucroLiq   = receita - despesas - dividendos;
+  const ebitda     = receita - despesas; // sem dividendos (não operacional)
+
+  // Custos fixos vs variáveis (fixos = adm+aluguel+util+rh, variáveis = produção+viagem+marketing)
+  const fixedCats = ["Pessoal / RH","Aluguel / Condomínio","Utilidades (Luz, Água, Internet)","Software / SaaS","Contabilidade","Material de Escritório","Material de Limpeza","Móveis e Eletrodomésticos"];
+  const custoFixo = txYear.filter(t=>(t.type==="saida"||t.type==="imposto")&&fixedCats.includes(t.category)).reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const custoVar  = despesas - custoFixo;
+
+  // Months with data
+  const monthsWithData = new Set(txYear.map(t=>t.date?.substr(0,7))).size || 1;
+  const despesaMensal = despesas / monthsWithData;
+
+  // Indicators
+  const liquidez       = despesaMensal > 0 ? saldoTotal / despesaMensal : null;
+  const margemLucro    = receita > 0 ? (lucroLiq / receita * 100) : null;
+  const margemBruta    = receita > 0 ? ((receita - despesas) / receita * 100) : null;
+  const margemEBITDA   = receita > 0 ? (ebitda / receita * 100) : null;
+  const roi            = despesas > 0 ? (lucroLiq / despesas * 100) : null;
+  const ticketMedio    = contracts.length > 0 ? (contracts.reduce((s,c)=>s+(Number(c.contractValue)||Number(c.monthlyValue)||0),0) / contracts.length) : null;
+  const pontoEquil     = receita > 0 && (1 - custoVar/receita) > 0 ? custoFixo / (1 - custoVar/receita) : null;
+
+  // Prazo médio de recebimento (from contracts with payment dates)
+  const pmr = (() => {
+    const diffs = contracts.filter(c=>c.contractDeadline&&c.contractStart).map(c=>{
+      const s = new Date(c.contractStart), e = new Date(c.contractDeadline);
+      return Math.round((e-s)/(1000*60*60*24));
+    }).filter(d=>d>0&&d<365);
+    return diffs.length ? Math.round(diffs.reduce((s,d)=>s+d,0)/diffs.length) : null;
+  })();
+
+  const fmt2 = v => v != null ? v.toFixed(1) : "—";
+  const fmtDias = v => v != null ? `${Math.round(v)} dias` : "—";
+
+  const indicators = [
+    {
+      group: "Rentabilidade",
+      items: [
+        { label:"Margem de Lucro Líquida", value:margemLucro!=null?`${fmt2(margemLucro)}%`:"—", desc:"Lucro líquido / Receita", color:margemLucro!=null?(margemLucro>20?GRN:margemLucro>5?AMB:RED):TX2, good:margemLucro!=null&&margemLucro>20 },
+        { label:"Margem Bruta", value:margemBruta!=null?`${fmt2(margemBruta)}%`:"—", desc:"(Receita − Despesas) / Receita", color:margemBruta!=null?(margemBruta>30?GRN:margemBruta>10?AMB:RED):TX2, good:margemBruta!=null&&margemBruta>30 },
+        { label:"EBITDA", value:fmtMoney(ebitda), desc:"Resultado antes de impostos e dividendos", color:ebitda>=0?GRN:RED, good:ebitda>0 },
+        { label:"Margem EBITDA", value:margemEBITDA!=null?`${fmt2(margemEBITDA)}%`:"—", desc:"EBITDA / Receita", color:margemEBITDA!=null?(margemEBITDA>25?GRN:margemEBITDA>10?AMB:RED):TX2, good:margemEBITDA!=null&&margemEBITDA>25 },
+        { label:"ROI", value:roi!=null?`${fmt2(roi)}%`:"—", desc:"Lucro Líquido / Total Investido", color:roi!=null?(roi>0?GRN:RED):TX2, good:roi!=null&&roi>0 },
+      ]
+    },
+    {
+      group: "Liquidez & Caixa",
+      items: [
+        { label:"Liquidez (meses)", value:liquidez!=null?`${liquidez.toFixed(1)}x`:"—", desc:"Saldo atual cobre quantos meses de despesas", color:liquidez!=null?(liquidez>3?GRN:liquidez>1?AMB:RED):TX2, good:liquidez!=null&&liquidez>3 },
+        { label:"Saldo em Caixa", value:fmtMoney(saldoTotal), desc:"Base inicial + lançamentos acumulados", color:saldoTotal>=0?TX:RED, good:saldoTotal>0 },
+        { label:"Despesa Mensal Média", value:fmtMoney(despesaMensal), desc:`Média de ${monthsWithData} meses com dados`, color:TX2, good:null },
+      ]
+    },
+    {
+      group: "Operacional",
+      items: [
+        { label:"Ticket Médio Contratos", value:ticketMedio!=null?fmtMoney(ticketMedio):"—", desc:"Valor médio por contrato ativo", color:TX, good:null },
+        { label:"Ponto de Equilíbrio", value:pontoEquil!=null?fmtMoney(pontoEquil):"—", desc:"Receita mínima para cobrir todos os custos", color:receita>0&&pontoEquil!=null?(receita>=pontoEquil?GRN:RED):TX2, good:receita>0&&pontoEquil!=null&&receita>=pontoEquil },
+        { label:"Prazo Médio Recebimento", value:fmtDias(pmr), desc:"Média dos prazos de contratos", color:pmr!=null?(pmr<60?GRN:pmr<90?AMB:RED):TX2, good:pmr!=null&&pmr<60 },
+        { label:"Prazo Médio Estoque", value:"N/A", desc:"Não aplicável — empresa de serviços", color:TX3, good:null },
+      ]
+    },
+    {
+      group: "Receita",
+      items: [
+        { label:"Receita Total", value:fmtMoney(receita), desc:`Todas as entradas de ${year}`, color:GRN, good:null },
+        { label:"Despesas Totais", value:fmtMoney(despesas), desc:`Saídas + impostos de ${year}`, color:RED, good:null },
+        { label:"Dividendos Distribuídos", value:fmtMoney(dividendos), desc:`Distribuição de lucros de ${year}`, color:"#7C3AED", good:null },
+        { label:"Custo Fixo Total", value:fmtMoney(custoFixo), desc:"RH, aluguel, utilidades, adm", color:TX2, good:null },
+      ]
+    }
+  ];
+
+  return (
+    <div>
+      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:24 }}>
+        <span style={{ fontSize:12,color:TX2 }}>Exercício:</span>
+        {[new Date().getFullYear()-1, new Date().getFullYear()].map(y=>(
+          <div key={y} onClick={()=>setYear(y)}
+            style={{ padding:"5px 14px",fontSize:12,fontWeight:year===y?700:400,cursor:"pointer",borderRadius:99,background:year===y?TX:B2,color:year===y?"white":TX2,border:`1px solid ${year===y?TX:LN}`,transition:TRANS }}>
+            {y}
+          </div>
+        ))}
+      </div>
+
+      {indicators.map(group=>(
+        <div key={group.group} style={{ marginBottom:24 }}>
+          <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${LN}` }}>{group.group}</div>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10 }}>
+            {group.items.map((ind,i)=>(
+              <div key={i} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${ind.color}` }}>
+                <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:4 }}>
+                  <div style={{ fontSize:10,fontWeight:700,color:TX2,lineHeight:1.3,flex:1 }}>{ind.label}</div>
+                  {ind.good===true&&<span style={{ fontSize:10,color:GRN,flexShrink:0,marginLeft:6 }}>✓</span>}
+                  {ind.good===false&&<span style={{ fontSize:10,color:RED,flexShrink:0,marginLeft:6 }}>⚠</span>}
+                </div>
+                <div style={{ fontSize:20,fontWeight:700,color:ind.color,lineHeight:1,marginBottom:4 }}>{ind.value}</div>
+                <div style={{ fontSize:10,color:TX3,lineHeight:1.4 }}>{ind.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ padding:"12px 16px",background:`${BLU}06`,border:`1px solid ${BLU}18`,borderRadius:8,fontSize:11,color:TX2 }}>
+        ⚠️ Indicadores calculados com base nos lançamentos cadastrados no sistema. Para ROE e Endividamento, que requerem dados de balanço patrimonial, consulte seu contador.
+      </div>
+    </div>
+  );
+}
+
 
 // ─── Contador Export Modal ────────────────────────────────
 function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose }) {
@@ -4071,6 +4264,7 @@ function Caixa({ contracts }) {
     { id:"dash",        label:"Dashboard" },
     { id:"lancamentos", label:"Lançamentos" },
     { id:"dre",         label:"DRE" },
+    { id:"indicadores", label:"Indicadores" },
   ];
 
   return (
@@ -4200,6 +4394,8 @@ function Caixa({ contracts }) {
           )}
         </div>
       )}
+
+      {tab==="indicadores" && <IndicadoresFinanceiros transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} contracts={contracts}/>}
 
       {/* DRE */}
       {tab==="dre" && (

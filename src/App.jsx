@@ -3029,7 +3029,7 @@ export default function App() {
     });
     posts.forEach(p=>{const c=contracts.find(x=>x.id===p.contractId);if(!c)return;if(calFilter!=="all"&&calFilter!==c.id)return;add(p.isPosted?(p.publishDate||p.plannedDate):p.plannedDate,{label:(p.isPosted?"✓ ":"📅 ")+p.title,color:c.color});});
     // Pipeline deliverables on calendar (by plannedPostDate)
-    const pipeDeliverables = lsLoad("copa6_deliverables",[]);
+    const pipeDeliverables = deliverables || [];
     pipeDeliverables.forEach(d=>{
       if(!d||!d.plannedPostDate||d.stage==="done") return;
       const c=contracts.find(x=>x.id===d.contractId);
@@ -3064,14 +3064,14 @@ export default function App() {
           const isMarked = sortedDates.some(td=>td.date===cur);
           if(!isMarked) add(cur, { label:`━ ${c.company} (viagem)`, color:BLU, dashed:true, isTravelPeriod:true });
           // Check conflict: any deliverable posting during travel period
-          const hasPipeConflict = (lsLoad("copa6_deliverables",[])||[]).some(d=>d.plannedPostDate===cur&&d.contractId!==c.id);
+          const hasPipeConflict = (deliverables||[]).some(d=>d.plannedPostDate===cur&&d.contractId!==c.id);
           if(hasPipeConflict) add(cur, { label:`⚠️ Conflito com viagem`, color:AMB, isConflict:true });
           cur = addDays(cur, 1);
         }
       }
     });
     return ev;
-  },[contracts,posts,calFilter]);
+  },[contracts,posts,deliverables,calFilter]);
 
   // Loading
   if (user===undefined) {

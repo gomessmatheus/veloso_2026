@@ -1,6 +1,6 @@
 /**
  * db.js — Firebase Firestore
- * Collections: contracts, posts, deliverables, settings, presence
+ * Collections: contracts, posts, deliverables, caixa_tx, settings, presence
  */
 import {
   collection, doc, getDocs, getDoc,
@@ -52,6 +52,17 @@ export async function loadDeliverables() {
 }
 export async function syncDeliverables(deliverables, previousIds) {
   await syncCollection('deliverables', deliverables, previousIds, d => ({ contractId: d.contractId, stage: d.stage }))
+}
+
+// ─── Caixa Transactions ───────────────────────────────────
+export async function loadCaixaTx() {
+  try {
+    const snap = await getDocs(collection(db, 'caixa_tx'))
+    return snap.docs.map(d => d.data().data).filter(Boolean)
+  } catch { return [] }
+}
+export async function syncCaixaTx(items, previousIds = []) {
+  await syncCollection('caixa_tx', items, previousIds, () => ({}))
 }
 
 // ─── Settings ─────────────────────────────────────────────

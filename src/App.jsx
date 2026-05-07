@@ -291,163 +291,154 @@ function Textarea({ value, onChange, placeholder, rows=3, style:st }) {
 }
 
 // ─── Rich Text Editor ─────────────────────────────────────
-function RichTextEditor({ value, onChange, placeholder, minHeight = 420 }) {
-  const editorRef = useRef(null);
-  const [formats, setFormats] = useState({});
-  const [selColor, setSelColor] = useState("#000000");
+function exportRoteiro(html, title) {
+  const plain = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  const w = window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
+<title>Roteiro — ${title||"Entregável"}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.9;color:#111;max-width:720px;margin:0 auto;padding:48px 40px}
+  h1{font-size:22px;font-weight:700;margin-bottom:32px;padding-bottom:12px;border-bottom:2px solid #C8102E;letter-spacing:-.01em}
+  .roteiro{font-size:15px;line-height:1.9}
+  .footer{margin-top:48px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#999;display:flex;justify-content:space-between}
+  @media print{body{padding:24px}button{display:none!important}}
+</style></head><body>
+<h1>✍️ ${title||"Roteiro"}</h1>
+<button onclick="window.print()" style="position:fixed;top:16px;right:16px;padding:8px 20px;background:#C8102E;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>
+<button onclick="navigator.clipboard.writeText(document.querySelector('.roteiro').innerText)" style="position:fixed;top:16px;right:140px;padding:8px 20px;background:#f5f5f5;color:#333;border:1px solid #ddd;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">📋 Copiar texto</button>
+<div class="roteiro">${html||"<em>Roteiro em branco.</em>"}</div>
+<div class="footer">
+  <span>ENTREGAS · @veloso.lucas_ · Ranked</span>
+  <span>${new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"})}</span>
+</div>
+</body></html>`);
+  w.document.close();
+}
+
+function RichTextEditor({ value, onChange, title, minHeight = 440 }) {
+  const editorRef  = useRef(null);
+  const [fmt, setFmt]     = useState({});
+  const [showColors, setShowColors] = useState(false);
   const isComposing = useRef(false);
 
-  // Set initial content once
   useEffect(() => {
-    if (editorRef.current) {
-      editorRef.current.innerHTML = value || "";
-    }
+    if (editorRef.current) editorRef.current.innerHTML = value || "";
   // eslint-disable-next-line
   }, []);
 
   const exec = (cmd, val = null) => {
     editorRef.current?.focus();
     document.execCommand(cmd, false, val);
-    updateFormats();
+    syncFormats();
   };
-
-  const updateFormats = () => {
-    setFormats({
-      bold:          document.queryCommandState("bold"),
-      italic:        document.queryCommandState("italic"),
-      underline:     document.queryCommandState("underline"),
-      strikeThrough: document.queryCommandState("strikeThrough"),
-    });
-  };
-
+  const syncFormats = () => setFmt({
+    bold: document.queryCommandState("bold"),
+    italic: document.queryCommandState("italic"),
+    underline: document.queryCommandState("underline"),
+    strike: document.queryCommandState("strikeThrough"),
+  });
   const handleInput = () => {
-    if (!isComposing.current) {
-      onChange(editorRef.current?.innerHTML || "");
-      updateFormats();
-    }
+    if (!isComposing.current) { onChange(editorRef.current?.innerHTML || ""); syncFormats(); }
   };
-
   const insertSection = (label) => {
     editorRef.current?.focus();
-    const html = `<div style="font-weight:700;color:#C8102E;font-size:13px;margin:18px 0 6px;letter-spacing:.04em">[${label}]</div><p><br></p>`;
-    document.execCommand("insertHTML", false, html);
+    document.execCommand("insertHTML", false,
+      `<p style="font-weight:700;color:#C8102E;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:20px 0 4px">${label}</p><p><br></p>`
+    );
     onChange(editorRef.current?.innerHTML || "");
   };
 
-  const charCount = (value || "").replace(/<[^>]*>/g, "").length;
+  const SECTIONS   = ["Abertura","Campinho","Bloco Publi","Desenvolvimento","CTA","Encerramento"];
+  const COLORS     = ["#000000","#C8102E","#2563EB","#16A34A","#D97706","#7C3AED","#9CA3AF"];
+  const HIGHLIGHTS = ["#FEF08A","#BBF7D0","#BFDBFE","#FCA5A5","#DDD6FE","#ffffff"];
 
-  const SECTIONS = ["Abertura","Campinho","Bloco Publi","Desenvolvimento","CTA","Encerramento"];
-  const COLORS   = ["#000000","#C8102E","#2563EB","#16A34A","#D97706","#7C3AED","#6E6E6E","#FFFFFF"];
-  const HIGHLIGHTS = [
-    { bg:"transparent", label:"Sem marca" },
-    { bg:"#FEF08A", label:"Amarelo" },
-    { bg:"#BBF7D0", label:"Verde" },
-    { bg:"#BFDBFE", label:"Azul" },
-    { bg:"#FCA5A5", label:"Vermelho" },
-    { bg:"#DDD6FE", label:"Roxo" },
-  ];
-  const SIZES = [{ v:"1",l:"XS" },{ v:"2",l:"S" },{ v:"3",l:"M" },{ v:"4",l:"L" },{ v:"5",l:"XL" },{ v:"6",l:"XXL" }];
+  const Div = (props) => <div style={{width:1,height:18,background:LN,margin:"0 3px"}} {...props}/>;
 
-  const ToolBtn = ({ cmd, children, active, onDown, title, style:st }) => (
-    <button title={title} onMouseDown={e=>{e.preventDefault();onDown?onDown():exec(cmd);}}
-      style={{ minWidth:28,height:28,borderRadius:5,border:`1px solid ${active?RED:LN}`,background:active?`${RED}12`:B1,color:active?RED:TX,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 6px",fontFamily:"inherit",...st }}>
+  const Tb = ({cmd,children,active,onDown,title:ttl,w=28,fs=13,fw=600}) => (
+    <button title={ttl} onMouseDown={e=>{e.preventDefault();onDown?onDown():exec(cmd);}}
+      style={{width:w,height:26,border:"none",background:active?`${RED}14`:"transparent",color:active?RED:TX2,borderRadius:4,cursor:"pointer",fontSize:fs,fontWeight:fw,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}>
       {children}
     </button>
   );
 
+  const charCount = (value||"").replace(/<[^>]*>/g,"").trim().length;
+
   return (
-    <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", borderTop:`3px solid ${RED}` }}>
-      {/* ── Toolbar ── */}
-      <div style={{ background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 10px", display:"flex", flexWrap:"wrap", gap:4, alignItems:"center" }}>
+    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
 
-        {/* Format buttons */}
-        <ToolBtn cmd="bold"          active={formats.bold}          title="Negrito (Ctrl+B)"    style={{fontWeight:700}}>B</ToolBtn>
-        <ToolBtn cmd="italic"        active={formats.italic}        title="Itálico (Ctrl+I)"    style={{fontStyle:"italic"}}>I</ToolBtn>
-        <ToolBtn cmd="underline"     active={formats.underline}     title="Sublinhado (Ctrl+U)" style={{textDecoration:"underline"}}>U</ToolBtn>
-        <ToolBtn cmd="strikeThrough" active={formats.strikeThrough} title="Riscado">
-          <span style={{textDecoration:"line-through"}}>S</span>
-        </ToolBtn>
-
-        <div style={{width:1,height:20,background:LN,margin:"0 2px"}}/>
-
-        {/* Font size */}
-        <select defaultValue="3" title="Tamanho"
-          onMouseDown={e=>e.stopPropagation()}
+      {/* ── slim toolbar ── */}
+      <div style={{display:"flex",alignItems:"center",gap:2,padding:"6px 12px",borderBottom:`1px solid ${LN}`,background:B1,flexWrap:"wrap"}}>
+        <Tb cmd="bold"          active={fmt.bold}    ttl="Negrito · Ctrl+B" fw={700} fs={13}>B</Tb>
+        <Tb cmd="italic"        active={fmt.italic}  ttl="Itálico · Ctrl+I" fw={400} fs={13}><em>I</em></Tb>
+        <Tb cmd="underline"     active={fmt.underline} ttl="Sublinhado · Ctrl+U"><span style={{textDecoration:"underline",fontSize:12}}>U</span></Tb>
+        <Tb cmd="strikeThrough" active={fmt.strike}  ttl="Riscado"><span style={{textDecoration:"line-through",fontSize:12}}>S</span></Tb>
+        <Div/>
+        <select defaultValue="3" title="Tamanho da fonte" onMouseDown={e=>e.stopPropagation()}
           onChange={e=>{exec("fontSize",e.target.value);editorRef.current?.focus();}}
-          style={{height:28,padding:"0 6px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:5,color:TX,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
-          {SIZES.map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
+          style={{height:26,padding:"0 5px",fontSize:11,background:"transparent",border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
+          <option value="2">Pequeno</option>
+          <option value="3">Normal</option>
+          <option value="4">Grande</option>
+          <option value="5">Título</option>
         </select>
+        <Div/>
+        {/* text color swatches */}
+        {COLORS.map(c=>(
+          <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);}}
+            title={`Cor ${c}`}
+            style={{width:14,height:14,borderRadius:3,background:c,border:`1px solid ${LN2}`,cursor:"pointer",flexShrink:0}}/>
+        ))}
+        <Div/>
+        {/* highlight swatches */}
+        {HIGHLIGHTS.map((c,i)=>(
+          <div key={i} onMouseDown={e=>{e.preventDefault();exec("backColor",c);}}
+            title="Marcador"
+            style={{width:14,height:14,borderRadius:3,background:c===HIGHLIGHTS[HIGHLIGHTS.length-1]?"repeating-conic-gradient(#ddd 0% 25%,#fff 0% 50%) 0 0/8px 8px":c,border:`1px solid ${LN2}`,cursor:"pointer",flexShrink:0}}/>
+        ))}
+        <Div/>
+        <Tb ttl="Limpar formatação" onDown={()=>{exec("removeFormat");exec("backColor","#FFFFFF");}}
+          fs={10} fw={600}><span style={{letterSpacing:"-.02em"}}>✕A</span></Tb>
 
-        <div style={{width:1,height:20,background:LN,margin:"0 2px"}}/>
+        <span style={{marginLeft:"auto",fontSize:9,color:TX3,flexShrink:0}}>{charCount} car.</span>
 
-        {/* Text color */}
-        <div style={{display:"flex",alignItems:"center",gap:3}} title="Cor do texto">
-          <span style={{fontSize:10,fontWeight:700,color:TX2,marginRight:2}}>A</span>
-          {COLORS.map(c=>(
-            <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);setSelColor(c);}}
-              style={{width:18,height:18,borderRadius:3,background:c,border:`2px solid ${selColor===c?RED:LN2}`,cursor:"pointer",flexShrink:0,outline:c==="#FFFFFF"?`1px solid ${LN}`:"none"}}/>
-          ))}
-        </div>
-
-        <div style={{width:1,height:20,background:LN,margin:"0 2px"}}/>
-
-        {/* Highlight */}
-        <div style={{display:"flex",alignItems:"center",gap:3}} title="Marcador">
-          <span style={{fontSize:12,color:TX2,marginRight:2}}>🖊</span>
-          {HIGHLIGHTS.map((h,i)=>(
-            <div key={i} onMouseDown={e=>{e.preventDefault();exec("backColor",h.bg==="transparent"?"#FFFFFF":h.bg);}} title={h.label}
-              style={{
-                width:18,height:18,borderRadius:3,border:`1px solid ${LN2}`,cursor:"pointer",flexShrink:0,
-                background: h.bg==="transparent"
-                  ? "repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 8px 8px"
-                  : h.bg
-              }}/>
-          ))}
-        </div>
-
-        <div style={{width:1,height:20,background:LN,margin:"0 2px"}}/>
-
-        {/* Clear format */}
-        <ToolBtn title="Limpar formatação" onDown={()=>{exec("removeFormat");exec("backColor","#FFFFFF");}}>
-          <span style={{fontSize:11}}>✕A</span>
-        </ToolBtn>
-
-        {/* Char count */}
-        <span style={{marginLeft:"auto",fontSize:10,color:TX3,flexShrink:0}}>{charCount} car.</span>
+        {/* Export button */}
+        <button onMouseDown={e=>{e.preventDefault();exportRoteiro(value,title);}}
+          title="Exportar roteiro" 
+          style={{marginLeft:8,padding:"3px 10px",height:26,fontSize:10,fontWeight:700,background:`${RED}10`,border:`1px solid ${RED}30`,borderRadius:5,color:RED,cursor:"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+          ↗ Exportar
+        </button>
       </div>
 
-      {/* ── Section buttons ── */}
-      <div style={{background:`${RED}06`,borderBottom:`1px solid ${LN}`,padding:"6px 10px",display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-        <span style={{fontSize:9,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:".1em",marginRight:4}}>Seções</span>
+      {/* ── section chips ── */}
+      <div style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderBottom:`1px solid ${LN}`,background:B2,flexWrap:"wrap"}}>
+        <span style={{fontSize:9,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:".1em",marginRight:4}}>+ Seção</span>
         {SECTIONS.map(s=>(
           <button key={s} onMouseDown={e=>{e.preventDefault();insertSection(s);}}
-            style={{fontSize:10,padding:"3px 10px",background:B1,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:RED,fontWeight:700,transition:TRANS}}
-            onMouseEnter={e=>{e.currentTarget.style.background=`${RED}10`;e.currentTarget.style.borderColor=RED;}}
-            onMouseLeave={e=>{e.currentTarget.style.background=B1;e.currentTarget.style.borderColor=LN;}}>
-            + {s}
+            style={{fontSize:10,padding:"2px 9px",background:B1,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:TX2,fontWeight:600,transition:"all .12s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=RED;e.currentTarget.style.color=RED;e.currentTarget.style.background=`${RED}08`;}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=LN;e.currentTarget.style.color=TX2;e.currentTarget.style.background=B1;}}>
+            {s}
           </button>
         ))}
       </div>
 
-      {/* ── Editable area ── */}
+      {/* ── writing area ── */}
       <div
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
-        onKeyUp={updateFormats}
-        onMouseUp={updateFormats}
+        onKeyUp={syncFormats}
+        onMouseUp={syncFormats}
         onCompositionStart={()=>{isComposing.current=true;}}
         onCompositionEnd={()=>{isComposing.current=false;handleInput();}}
         style={{
-          minHeight, padding:"20px 24px", outline:"none",
+          flex:1, minHeight, padding:"24px 28px", outline:"none",
           fontSize:14, lineHeight:1.9, color:TX, background:"#FEFEFE",
-          fontFamily:"inherit", wordBreak:"break-word",
+          fontFamily:"inherit", wordBreak:"break-word", overflowY:"auto",
         }}
       />
-      <style>{`
-        [contenteditable][data-ph]:empty::before{content:attr(data-ph);color:#ABABAB;pointer-events:none;display:block}
-      `}</style>
     </div>
   );
 }
@@ -1674,7 +1665,7 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
   };
 
   return (
-    <Modal title={isEdit?"Editar Entregável":"Novo Entregável"} onClose={onClose} width={720}
+    <Modal title={isEdit?"Editar Entregável":"Novo Entregável"} onClose={onClose} width={860}
       footer={<>{onDelete&&<Btn onClick={()=>onDelete(item.id)} variant="danger" size="sm">Excluir</Btn>}<div style={{flex:1}}/><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={handleSave} variant="primary" size="sm">{isEdit?"Salvar":"Criar"}</Btn></>}>
 
       {/* Tabs */}
@@ -1718,16 +1709,13 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
 
       {/* ── Tab: Roteiro ── */}
       {modalTab==="roteiro" && (
-        <div>
+        <div style={{margin:"0 -20px -20px",borderTop:`1px solid ${LN}`,display:"flex",flexDirection:"column"}}>
           <RichTextEditor
             value={f.roteiro||""}
             onChange={v=>set("roteiro",v)}
+            title={`${f.title||"Roteiro"} · ${contracts.find(c=>c.id===f.contractId)?.company||""}`}
             minHeight={480}
-            placeholder="Escreva o roteiro aqui... Use os botões de seção para estruturar o conteúdo."
           />
-          <div style={{fontSize:10,color:TX3,marginTop:8}}>
-            💡 Salvo automaticamente ao clicar em <strong>Salvar</strong>. Formatação preservada.
-          </div>
         </div>
       )}
 

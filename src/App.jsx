@@ -1730,7 +1730,6 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
             setNewOpen(false); setEditItem(null); setPrefillDate("");
           }}
           prefillDate={prefillDate}
-          }}
           onDelete={editItem ? id => {
             if (confirm("Excluir este entregável?")) { save(deliverables.filter(d => d.id !== id)); setEditItem(null); }
           } : null}

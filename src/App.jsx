@@ -290,6 +290,168 @@ function Textarea({ value, onChange, placeholder, rows=3, style:st }) {
   />;
 }
 
+// ─── Rich Text Editor ─────────────────────────────────────
+function RichTextEditor({ value, onChange, placeholder, minHeight = 420 }) {
+  const editorRef = useRef(null);
+  const [formats, setFormats] = useState({});
+  const [selColor, setSelColor] = useState("#000000");
+  const isComposing = useRef(false);
+
+  // Set initial content once
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = value || "";
+    }
+  // eslint-disable-next-line
+  }, []);
+
+  const exec = (cmd, val = null) => {
+    editorRef.current?.focus();
+    document.execCommand(cmd, false, val);
+    updateFormats();
+  };
+
+  const updateFormats = () => {
+    setFormats({
+      bold:          document.queryCommandState("bold"),
+      italic:        document.queryCommandState("italic"),
+      underline:     document.queryCommandState("underline"),
+      strikeThrough: document.queryCommandState("strikeThrough"),
+    });
+  };
+
+  const handleInput = () => {
+    if (!isComposing.current) {
+      onChange(editorRef.current?.innerHTML || "");
+      updateFormats();
+    }
+  };
+
+  const insertSection = (label) => {
+    editorRef.current?.focus();
+    const html = `<div style="font-weight:700;color:#C8102E;font-size:13px;margin:18px 0 6px;letter-spacing:.04em">[${label}]</div><p><br></p>`;
+    document.execCommand("insertHTML", false, html);
+    onChange(editorRef.current?.innerHTML || "");
+  };
+
+  const charCount = (value || "").replace(/<[^>]*>/g, "").length;
+
+  const SECTIONS = ["Abertura","Campinho","Bloco Publi","Desenvolvimento","CTA","Encerramento"];
+  const COLORS   = ["#000000","#C8102E","#2563EB","#16A34A","#D97706","#7C3AED","#6E6E6E","#FFFFFF"];
+  const HIGHLIGHTS = [
+    { bg:"transparent", label:"Sem marca" },
+    { bg:"#FEF08A", label:"Amarelo" },
+    { bg:"#BBF7D0", label:"Verde" },
+    { bg:"#BFDBFE", label:"Azul" },
+    { bg:"#FCA5A5", label:"Vermelho" },
+    { bg:"#DDD6FE", label:"Roxo" },
+  ];
+  const SIZES = [{ v:"1",l:"XS" },{ v:"2",l:"S" },{ v:"3",l:"M" },{ v:"4",l:"L" },{ v:"5",l:"XL" },{ v:"6",l:"XXL" }];
+
+  const ToolBtn = ({ cmd, children, active, onDown, title, style:st }) => (
+    <button title={title} onMouseDown={e=>{e.preventDefault();onDown?onDown():exec(cmd);}}
+      style={{ minWidth:28,height:28,borderRadius:5,border:`1px solid ${active?RED:LN}`,background:active?`${RED}12`:B1,color:active?RED:TX,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 6px",fontFamily:"inherit",...st }}>
+      {children}
+    </button>
+  );
+
+  return (
+    <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", borderTop:`3px solid ${RED}` }}>
+      {/* ── Toolbar ── */}
+      <div style={{ background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 10px", display:"flex", flexWrap:"wrap", gap:4, alignItems:"center" }}>
+
+        {/* Format buttons */}
+        <ToolBtn cmd="bold"          active={formats.bold}          title="Negrito (Ctrl+B)"    style={{fontWeight:700}}>B</ToolBtn>
+        <ToolBtn cmd="italic"        active={formats.italic}        title="Itálico (Ctrl+I)"    style={{fontStyle:"italic"}}>I</ToolBtn>
+        <ToolBtn cmd="underline"     active={formats.underline}     title="Sublinhado (Ctrl+U)" style={{textDecoration:"underline"}}>U</ToolBtn>
+        <ToolBtn cmd="strikeThrough" active={formats.strikeThrough} title="Riscado">
+          <span style={{textDecoration:"line-through"}}>S</span>
+        </ToolBtn>
+
+        <div style={{width:1,height:20,background:LN,margin:"0 2px"}}/>
+
+        {/* Font size */}
+        <select defaultValue="3" title="Tamanho"
+          onMouseDown={e=>e.stopPropagation()}
+          onChange={e=>{exec("fontSize",e.target.value);editorRef.current?.focus();}}
+          style={{height:28,padding:"0 6px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:5,color:TX,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
+          {SIZES.map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
+        </select>
+
+        <div style={{width:1,height:20,background:LN,margin:"0 2px"}}/>
+
+        {/* Text color */}
+        <div style={{display:"flex",alignItems:"center",gap:3}} title="Cor do texto">
+          <span style={{fontSize:10,fontWeight:700,color:TX2,marginRight:2}}>A</span>
+          {COLORS.map(c=>(
+            <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);setSelColor(c);}}
+              style={{width:18,height:18,borderRadius:3,background:c,border:`2px solid ${selColor===c?RED:LN2}`,cursor:"pointer",flexShrink:0,outline:c==="#FFFFFF"?`1px solid ${LN}`:"none"}}/>
+          ))}
+        </div>
+
+        <div style={{width:1,height:20,background:LN,margin:"0 2px"}}/>
+
+        {/* Highlight */}
+        <div style={{display:"flex",alignItems:"center",gap:3}} title="Marcador">
+          <span style={{fontSize:12,color:TX2,marginRight:2}}>🖊</span>
+          {HIGHLIGHTS.map((h,i)=>(
+            <div key={i} onMouseDown={e=>{e.preventDefault();exec("backColor",h.bg==="transparent"?"#FFFFFF":h.bg);}} title={h.label}
+              style={{
+                width:18,height:18,borderRadius:3,border:`1px solid ${LN2}`,cursor:"pointer",flexShrink:0,
+                background: h.bg==="transparent"
+                  ? "repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 0 / 8px 8px"
+                  : h.bg
+              }}/>
+          ))}
+        </div>
+
+        <div style={{width:1,height:20,background:LN,margin:"0 2px"}}/>
+
+        {/* Clear format */}
+        <ToolBtn title="Limpar formatação" onDown={()=>{exec("removeFormat");exec("backColor","#FFFFFF");}}>
+          <span style={{fontSize:11}}>✕A</span>
+        </ToolBtn>
+
+        {/* Char count */}
+        <span style={{marginLeft:"auto",fontSize:10,color:TX3,flexShrink:0}}>{charCount} car.</span>
+      </div>
+
+      {/* ── Section buttons ── */}
+      <div style={{background:`${RED}06`,borderBottom:`1px solid ${LN}`,padding:"6px 10px",display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{fontSize:9,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:".1em",marginRight:4}}>Seções</span>
+        {SECTIONS.map(s=>(
+          <button key={s} onMouseDown={e=>{e.preventDefault();insertSection(s);}}
+            style={{fontSize:10,padding:"3px 10px",background:B1,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:RED,fontWeight:700,transition:TRANS}}
+            onMouseEnter={e=>{e.currentTarget.style.background=`${RED}10`;e.currentTarget.style.borderColor=RED;}}
+            onMouseLeave={e=>{e.currentTarget.style.background=B1;e.currentTarget.style.borderColor=LN;}}>
+            + {s}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Editable area ── */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        onKeyUp={updateFormats}
+        onMouseUp={updateFormats}
+        onCompositionStart={()=>{isComposing.current=true;}}
+        onCompositionEnd={()=>{isComposing.current=false;handleInput();}}
+        style={{
+          minHeight, padding:"20px 24px", outline:"none",
+          fontSize:14, lineHeight:1.9, color:TX, background:"#FEFEFE",
+          fontFamily:"inherit", wordBreak:"break-word",
+        }}
+      />
+      <style>{`
+        [contenteditable][data-ph]:empty::before{content:attr(data-ph);color:#ABABAB;pointer-events:none;display:block}
+      `}</style>
+    </div>
+  );
+}
+
 function Toggle({ on, onToggle }) {
   return <div onClick={onToggle} style={{ width:32, height:18, borderRadius:9, background:on?RED:"rgba(255,255,255,.1)", border:`1px solid ${on?RED:LN}`, position:"relative", cursor:"pointer", transition:"all .2s", flexShrink:0 }}>
     <div style={{ position:"absolute", top:2, left:on?14:2, width:12, height:12, borderRadius:"50%", background:"#fff", transition:"left .2s" }}/>
@@ -1557,35 +1719,14 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
       {/* ── Tab: Roteiro ── */}
       {modalTab==="roteiro" && (
         <div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12,flexWrap:"wrap"}}>
-            <span style={{fontSize:11,color:TX2,marginRight:4}}>Inserir seção:</span>
-            {ROTEIRO_SECTIONS.map(s=>(
-              <button key={s} onClick={()=>insertSection(s)}
-                style={{fontSize:10,padding:"4px 10px",background:B2,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:TX2,fontWeight:600,transition:TRANS}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor=RED;e.currentTarget.style.color=RED;}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor=LN;e.currentTarget.style.color=TX2;}}>
-                + {s}
-              </button>
-            ))}
-            <span style={{marginLeft:"auto",fontSize:10,color:TX3}}>{(f.roteiro||"").length} caracteres</span>
-          </div>
-          <textarea
+          <RichTextEditor
             value={f.roteiro||""}
-            onChange={e=>set("roteiro",e.target.value)}
-            placeholder={"[Abertura]\nEstamos aqui com...\n\n[Campinho]\n(aqui nessa minha entrada já entra campinho vazio)\n\n[Desenvolvimento]\n...\n\n[CTA]\nSe você curtiu, comenta aqui embaixo..."}
-            rows={22}
-            style={{
-              width:"100%", padding:"16px", background:B0,
-              border:`1px solid ${LN}`, borderRadius:10, color:TX,
-              fontSize:13, fontFamily:"inherit", lineHeight:1.85,
-              resize:"vertical", outline:"none",
-              borderTop:`3px solid ${RED}`,
-            }}
-            onFocus={e=>e.target.style.borderColor=LN2}
-            onBlur={e=>e.target.style.borderTop=`3px solid ${RED}`}
+            onChange={v=>set("roteiro",v)}
+            minHeight={480}
+            placeholder="Escreva o roteiro aqui... Use os botões de seção para estruturar o conteúdo."
           />
-          <div style={{fontSize:10,color:TX3,marginTop:6}}>
-            💡 Use <code style={{background:B2,padding:"1px 5px",borderRadius:3}}>[Nome da seção]</code> para estruturar o roteiro. Salvo junto com o entregável.
+          <div style={{fontSize:10,color:TX3,marginTop:8}}>
+            💡 Salvo automaticamente ao clicar em <strong>Salvar</strong>. Formatação preservada.
           </div>
         </div>
       )}

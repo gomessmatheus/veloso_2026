@@ -542,91 +542,6 @@ function RichTextEditor({ value, onChange, onAutoSave, title, minHeight = 440 })
   );
 }
 
-  return (
-    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
-
-      {/* ── slim toolbar ── */}
-      <div style={{display:"flex",alignItems:"center",gap:2,padding:"6px 12px",borderBottom:`1px solid ${LN}`,background:B1,flexWrap:"wrap"}}>
-        <Tb cmd="bold"          active={fmt.bold}    ttl="Negrito · Ctrl+B" fw={700} fs={13}>B</Tb>
-        <Tb cmd="italic"        active={fmt.italic}  ttl="Itálico · Ctrl+I" fw={400} fs={13}><em>I</em></Tb>
-        <Tb cmd="underline"     active={fmt.underline} ttl="Sublinhado · Ctrl+U"><span style={{textDecoration:"underline",fontSize:12}}>U</span></Tb>
-        <Tb cmd="strikeThrough" active={fmt.strike}  ttl="Riscado"><span style={{textDecoration:"line-through",fontSize:12}}>S</span></Tb>
-        <Div/>
-        <select defaultValue="3" title="Tamanho da fonte" onMouseDown={e=>e.stopPropagation()}
-          onChange={e=>{exec("fontSize",e.target.value);editorRef.current?.focus();}}
-          style={{height:26,padding:"0 5px",fontSize:11,background:"transparent",border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
-          <option value="2">Pequeno</option>
-          <option value="3">Normal</option>
-          <option value="4">Grande</option>
-          <option value="5">Título</option>
-        </select>
-        <Div/>
-        {/* text color swatches — 6×4 grid */}
-        <div style={{display:"flex",flexDirection:"column",gap:2}}>
-          {[0,1,2,3].map(row=>(
-            <div key={row} style={{display:"flex",gap:2}}>
-              {COLORS.slice(row*6,(row+1)*6).map(c=>(
-                <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);}}
-                  title={c}
-                  style={{width:14,height:14,borderRadius:2,background:c,border:`1px solid ${c==="#FFFFFF"?LN2:c==="transparent"?LN2:"transparent"}`,cursor:"pointer",flexShrink:0,outline:c==="#FFFFFF"?`1px solid ${LN2}`:"none"}}/>
-              ))}
-            </div>
-          ))}
-        </div>
-        <Div/>
-        {/* highlight swatches */}
-        {HIGHLIGHTS.map((c,i)=>(
-          <div key={i} onMouseDown={e=>{e.preventDefault();exec("backColor",c);}}
-            title="Marcador"
-            style={{width:14,height:14,borderRadius:3,background:c===HIGHLIGHTS[HIGHLIGHTS.length-1]?"repeating-conic-gradient(#ddd 0% 25%,#fff 0% 50%) 0 0/8px 8px":c,border:`1px solid ${LN2}`,cursor:"pointer",flexShrink:0}}/>
-        ))}
-        <Div/>
-        <Tb ttl="Limpar formatação do texto selecionado" onDown={()=>{exec("removeFormat");exec("backColor","#FFFFFF");}}
-          fs={10} fw={600}><span title="Limpar formatação">🚫</span></Tb>
-
-        <span style={{marginLeft:"auto",fontSize:9,color:TX3,flexShrink:0}}>{charCount} car.</span>
-
-        {/* Export button */}
-        <button onMouseDown={e=>{e.preventDefault();exportRoteiro(value,title);}}
-          title="Exportar roteiro" 
-          style={{marginLeft:8,padding:"3px 10px",height:26,fontSize:10,fontWeight:700,background:`${RED}10`,border:`1px solid ${RED}30`,borderRadius:5,color:RED,cursor:"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
-          ↗ Exportar
-        </button>
-      </div>
-
-      {/* ── section chips ── */}
-      <div style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderBottom:`1px solid ${LN}`,background:B2,flexWrap:"wrap"}}>
-        <span style={{fontSize:9,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:".1em",marginRight:4}}>+ Seção</span>
-        {SECTIONS.map(s=>(
-          <button key={s} onMouseDown={e=>{e.preventDefault();insertSection(s);}}
-            style={{fontSize:10,padding:"2px 9px",background:B1,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:TX2,fontWeight:600,transition:"all .12s"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=RED;e.currentTarget.style.color=RED;e.currentTarget.style.background=`${RED}08`;}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor=LN;e.currentTarget.style.color=TX2;e.currentTarget.style.background=B1;}}>
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {/* ── writing area ── */}
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleInput}
-        onKeyUp={e=>{syncFormats();checkSelection();}}
-        onMouseUp={checkSelection}
-        onCompositionStart={()=>{isComposing.current=true;}}
-        onCompositionEnd={()=>{isComposing.current=false;handleInput();}}
-        style={{
-          flex:1, minHeight, padding:"24px 28px", outline:"none",
-          fontSize:14, lineHeight:1.9, color:TX, background:"#FEFEFE",
-          fontFamily:"inherit", wordBreak:"break-word", overflowY:"auto",
-        }}
-      />
-    </div>
-  );
-}
-
 function Toggle({ on, onToggle }) {
   return <div onClick={onToggle} style={{ width:32, height:18, borderRadius:9, background:on?RED:"rgba(255,255,255,.1)", border:`1px solid ${on?RED:LN}`, position:"relative", cursor:"pointer", transition:"all .2s", flexShrink:0 }}>
     <div style={{ position:"absolute", top:2, left:on?14:2, width:12, height:12, borderRadius:"50%", background:"#fff", transition:"left .2s" }}/>
@@ -1702,6 +1617,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
   const [view, setView]   = useState("pipeline");
   const [editItem, setEditItem] = useState(null);
   const [newOpen, setNewOpen]   = useState(false);
+  const [prefillDate, setPrefillDate] = useState("");
   const [filter, setFilter]       = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const toast = useToast();
@@ -1794,7 +1710,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
       {/* Calendar view */}
       {view === "calendar" && (
-        <CalendarView contracts={contracts} deliverables={deliverables} saveDeliverables={save} onEditDeliverable={setEditItem} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
+        <CalendarView contracts={contracts} deliverables={deliverables} saveDeliverables={save} onEditDeliverable={setEditItem} onNewDeliverable={date=>{setPrefillDate(date);setNewOpen(true);}} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
       )}
 
       {/* Modals */}
@@ -1802,7 +1718,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
         <DeliverableModal
           item={editItem}
           contracts={contracts}
-          onClose={() => { setNewOpen(false); setEditItem(null); }}
+          onClose={() => { setNewOpen(false); setEditItem(null); setPrefillDate(""); }}
           onSave={item => {
             if (editItem) {
               save(deliverables.map(d => d.id === item.id ? item : d));
@@ -1811,7 +1727,9 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
               save([...deliverables, { ...item, id: uid(), stage: "briefing", createdAt: new Date().toISOString() }]);
               toast?.("✓ Entregável criado", "success");
             }
-            setNewOpen(false); setEditItem(null);
+            setNewOpen(false); setEditItem(null); setPrefillDate("");
+          }}
+          prefillDate={prefillDate}
           }}
           onDelete={editItem ? id => {
             if (confirm("Excluir este entregável?")) { save(deliverables.filter(d => d.id !== id)); setEditItem(null); }
@@ -1822,9 +1740,9 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
   );
 }
 
-function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
+function DeliverableModal({ item, contracts, onClose, onSave, onDelete, prefillDate="" }) {
   const isEdit = !!item;
-  const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: "", stage: "briefing", responsible: {}, stageDateOverrides: {}, notes: "", roteiro: "", networks: [], networkMetrics: {} });
+  const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: prefillDate||"", stage: "briefing", responsible: {}, stageDateOverrides: {}, notes: "", roteiro: "", networks: [], networkMetrics: {} });
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
   const [modalTab, setModalTab] = useState("info");
   const [openNet, setOpenNet] = useState(null);
@@ -2658,7 +2576,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
 }
 
 // ─── Calendar View ───────────────────────────────────────
-function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeliverable, calEvents={}, calMonth, setCal, calFilter, setCalF }) {
+function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeliverable, onNewDeliverable, calEvents={}, calMonth, setCal, calFilter, setCalF }) {
   const isMobile = useIsMobile();
   const { y, m } = calMonth;
   const today    = startOfToday();
@@ -2800,28 +2718,41 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
             const dayDels  = visibleDels.filter(del=>del.plannedPostDate===ds);
             const cEvents  = contractEventsFor(ds);
             const travels  = travelFor(ds);
+            const [cellHov, setCellHov] = useState(false);
 
             return (
               <div key={d}
+                onMouseEnter={()=>setCellHov(true)}
+                onMouseLeave={()=>setCellHov(false)}
                 onDragOver={e=>{e.preventDefault();setDragOver(ds);}}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
                 onDrop={e=>handleDrop(e,ds)}
                 style={{
                   minHeight: isMobile?48:110,
                   padding: isMobile?"4px":"6px 7px",
-                  background: isDragTarget?`${RED}06`:isT?`${RED}04`:B1,
+                  background: isDragTarget?`${RED}06`:isT?`${RED}04`:cellHov?B2:B1,
                   border: isDragTarget?`1px solid ${RED}40`:"none",
                   transition:"background .12s",
                   position:"relative",
                 }}>
 
-                {/* Day number */}
+                {/* Day number + add button */}
                 <div style={{marginBottom:4,display:"flex",alignItems:"center",justifyContent:isMobile?"center":"space-between"}}>
                   {isT
                     ? <span style={{width:22,height:22,borderRadius:"50%",background:RED,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{d}</span>
                     : <span style={{fontSize:11,fontWeight:400,color:TX2}}>{d}</span>
                   }
-                  {!isMobile && travels.length>0 && <span title={travels[0].label} style={{fontSize:11}}>✈️</span>}
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    {!isMobile && travels.length>0 && <span title={travels[0].label} style={{fontSize:11}}>✈️</span>}
+                    {!isMobile && cellHov && onNewDeliverable && (
+                      <button
+                        onClick={e=>{e.stopPropagation();onNewDeliverable(ds);}}
+                        title={`Novo entregável em ${fmtDate(ds)}`}
+                        style={{width:18,height:18,borderRadius:4,background:RED,border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,flexShrink:0,boxShadow:"0 1px 4px rgba(200,16,46,.3)"}}>
+                        +
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Deliverable cards */}

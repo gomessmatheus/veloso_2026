@@ -1487,8 +1487,9 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
 function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
   const isEdit = !!item;
-  const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: "", stage: "briefing", responsible: {}, stageDateOverrides: {}, notes: "", networks: [], networkMetrics: {} });
+  const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: "", stage: "briefing", responsible: {}, stageDateOverrides: {}, notes: "", roteiro: "", networks: [], networkMetrics: {} });
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
+  const [modalTab, setModalTab] = useState("info");
   const [openNet, setOpenNet] = useState(null);
   const NETS = ["Instagram","TikTok","YouTube","Facebook","X / Twitter","Kwai"];
   const NET_EMOJI = {"Instagram":"📸","TikTok":"🎵","YouTube":"▶️","Facebook":"👥","X / Twitter":"𝕏","Kwai":"🎬"};
@@ -1501,56 +1502,119 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
   const getMetric = (net,field) => f.networkMetrics?.[net]?.[field] || "";
   const stageDates = f.plannedPostDate ? calcStageDates(f.plannedPostDate) : {};
   const handleSave = () => { if (!f.title?.trim()) { alert("Preencha o título."); return; } if (!f.contractId) { alert("Selecione o contrato."); return; } onSave(f); };
+
+  const MODAL_TABS = [{ id:"info", label:"Info" },{ id:"roteiro", label:"✍️ Roteiro" },{ id:"metricas", label:"Métricas" }];
+  const ROTEIRO_SECTIONS = ["Abertura","Campinho","Desenvolvimento","Bloco Publi","CTA","Encerramento"];
+
+  const insertSection = (s) => {
+    const cur = f.roteiro || "";
+    set("roteiro", cur + (cur ? "\n\n" : "") + `[${s}]\n`);
+  };
+
   return (
-    <Modal title={isEdit?"Editar Entregável":"Novo Entregável"} onClose={onClose} width={680}
+    <Modal title={isEdit?"Editar Entregável":"Novo Entregável"} onClose={onClose} width={720}
       footer={<>{onDelete&&<Btn onClick={()=>onDelete(item.id)} variant="danger" size="sm">Excluir</Btn>}<div style={{flex:1}}/><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={handleSave} variant="primary" size="sm">{isEdit?"Salvar":"Criar"}</Btn></>}>
-      <SRule>Identificação</SRule>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <Field label="Contrato"><Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>{contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}</Select></Field>
-        <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="reel">Reel / Post Feed</option><option value="story">Story</option><option value="tiktok">TikTok</option><option value="link">Link Comunidade</option></Select></Field>
-        <Field label="Título" full><Input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="ex: Reel Amazon Copa #1"/></Field>
-        <Field label="Etapa"><Select value={f.stage||"briefing"} onChange={e=>set("stage",e.target.value)}>{STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</Select></Field>
-        <Field label="Data Postagem (D)"><Input type="date" value={f.plannedPostDate} onChange={e=>set("plannedPostDate",e.target.value)}/></Field>
-      </div>
-      {f.plannedPostDate&&(<><SRule>Cronograma automático</SRule>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-          {STAGES.filter(s=>s.id!=="done").map(s=>{const auto=stageDates[s.id];const override=f.stageDateOverrides?.[s.id];const dl=daysLeft(override||auto);return(<div key={s.id} style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"10px 12px"}}>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:5}}>{s.label}</div>
-            <div style={{fontSize:12,fontWeight:600,color:dl!==null&&dl<0?RED:TX,marginBottom:4}}>{fmtDate(override||auto)}</div>
-            {dl!==null&&<div style={{fontSize:10,color:dl<0?RED:dl<=1?AMB:TX3,marginBottom:5}}>{dl<0?`${Math.abs(dl)}d atrás`:dl===0?"Hoje":`${dl}d`}</div>}
-            <input type="date" value={f.stageDateOverrides?.[s.id]||""} onChange={e=>setF(x=>({...x,stageDateOverrides:{...(x.stageDateOverrides||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX3,fontFamily:"inherit",outline:"none"}}/>
-            <input value={f.responsible?.[s.id]||""} placeholder="Responsável" onChange={e=>setF(x=>({...x,responsible:{...(x.responsible||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",outline:"none",marginTop:4}}/>
-          </div>);})}</div></>)}
-      <SRule>Redes Sociais & Métricas</SRule>
-      <div style={{fontSize:11,color:TX2,marginBottom:10}}>Selecione onde foi publicado. Clique na rede para ver/editar métricas.</div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
-        {NETS.map(net=>{const sel=(f.networks||[]).includes(net);return(<div key={net} onClick={()=>toggleNetwork(net)} style={{padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:99,transition:TRANS,display:"flex",alignItems:"center",gap:5,background:sel?`${RED}18`:B2,border:`1.5px solid ${sel?RED:LN}`,color:sel?RED:TX2}}>{NET_EMOJI[net]} {net}</div>);})}
-      </div>
-      {(f.networks||[]).map(net=>{
-        const reach=Number(getMetric(net,"reach")||0);
-        const eng=reach>0?((Number(getMetric(net,"likes")||0)+Number(getMetric(net,"comments")||0))/reach*100).toFixed(1):null;
-        return(<div key={net} style={{marginBottom:8,border:`1px solid ${LN}`,borderRadius:8,overflow:"hidden"}}>
-          <div onClick={()=>setOpenNet(openNet===net?null:net)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",cursor:"pointer",background:B2,transition:TRANS}} onMouseEnter={e=>e.currentTarget.style.background=B3} onMouseLeave={e=>e.currentTarget.style.background=B2}>
-            <span style={{fontSize:12,fontWeight:600,color:TX}}>{NET_EMOJI[net]} {net}</span>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {reach>0&&<span style={{fontSize:10,color:TX2}}>{reach.toLocaleString("pt-BR")} alcance</span>}
-              {eng&&<span style={{fontSize:10,fontWeight:700,color:GRN}}>{eng}% eng.</span>}
-              <span style={{fontSize:11,color:TX2}}>{openNet===net?"▲":"▼"}</span>
-            </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:16,marginTop:-4}}>
+        {MODAL_TABS.map(t=>(
+          <div key={t.id} onClick={()=>setModalTab(t.id)}
+            style={{padding:"8px 16px",fontSize:12,fontWeight:modalTab===t.id?700:400,cursor:"pointer",color:modalTab===t.id?TX:TX2,borderBottom:`2px solid ${modalTab===t.id?RED:"transparent"}`,transition:TRANS,marginBottom:-1}}>
+            {t.label}
           </div>
-          {openNet===net&&(<div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-            {[["views","Views"],["reach","Alcance"],["likes","Curtidas"],["comments","Comentários"],["shares","Shares"],["saves","Saves"]].map(([k,l])=>(<Field key={k} label={l}><Input type="number" min="0" value={getMetric(net,k)} onChange={e=>setMetric(net,k,e.target.value)} placeholder="0"/></Field>))}
-          </div>)}
-        </div>);
-      })}
-      {(f.stage==="postagem"||f.stage==="done")&&(<><SRule>Publicação</SRule>
+        ))}
+      </div>
+
+      {/* ── Tab: Info ── */}
+      {modalTab==="info" && <>
+        <SRule>Identificação</SRule>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <Field label="Link"><Input value={f.postLink||""} onChange={e=>set("postLink",e.target.value)} placeholder="https://instagram.com/p/..."/></Field>
-          <Field label="Data publicação"><Input type="date" value={f.publishedAt||""} onChange={e=>set("publishedAt",e.target.value)}/></Field>
+          <Field label="Contrato"><Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>{contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}</Select></Field>
+          <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="reel">Reel / Post Feed</option><option value="story">Story</option><option value="tiktok">TikTok</option><option value="link">Link Comunidade</option></Select></Field>
+          <Field label="Título" full><Input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="ex: Reel Amazon Copa #1"/></Field>
+          <Field label="Etapa"><Select value={f.stage||"briefing"} onChange={e=>set("stage",e.target.value)}>{STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</Select></Field>
+          <Field label="Data Postagem (D)"><Input type="date" value={f.plannedPostDate} onChange={e=>set("plannedPostDate",e.target.value)}/></Field>
         </div>
-      </>)}
-      <SRule>Notas</SRule>
-      <Field label="Briefing / Observações"><Textarea value={f.notes||""} onChange={e=>set("notes",e.target.value)} rows={3} placeholder="Resumo do briefing, links, pontos obrigatórios…"/></Field>
+        {f.plannedPostDate&&(<><SRule>Cronograma automático</SRule>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+            {STAGES.filter(s=>s.id!=="done").map(s=>{const auto=stageDates[s.id];const override=f.stageDateOverrides?.[s.id];const dl=daysLeft(override||auto);return(<div key={s.id} style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"10px 12px"}}>
+              <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:5}}>{s.label}</div>
+              <div style={{fontSize:12,fontWeight:600,color:dl!==null&&dl<0?RED:TX,marginBottom:4}}>{fmtDate(override||auto)}</div>
+              {dl!==null&&<div style={{fontSize:10,color:dl<0?RED:dl<=1?AMB:TX3,marginBottom:5}}>{dl<0?`${Math.abs(dl)}d atrás`:dl===0?"Hoje":`${dl}d`}</div>}
+              <input type="date" value={f.stageDateOverrides?.[s.id]||""} onChange={e=>setF(x=>({...x,stageDateOverrides:{...(x.stageDateOverrides||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX3,fontFamily:"inherit",outline:"none"}}/>
+              <input value={f.responsible?.[s.id]||""} placeholder="Responsável" onChange={e=>setF(x=>({...x,responsible:{...(x.responsible||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",outline:"none",marginTop:4}}/>
+            </div>);})}</div></>)}
+        {(f.stage==="postagem"||f.stage==="done")&&(<><SRule>Publicação</SRule>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <Field label="Link"><Input value={f.postLink||""} onChange={e=>set("postLink",e.target.value)} placeholder="https://instagram.com/p/..."/></Field>
+            <Field label="Data publicação"><Input type="date" value={f.publishedAt||""} onChange={e=>set("publishedAt",e.target.value)}/></Field>
+          </div>
+        </>)}
+        <SRule>Briefing / Observações</SRule>
+        <Field label=""><Textarea value={f.notes||""} onChange={e=>set("notes",e.target.value)} rows={4} placeholder="Resumo do briefing, links, pontos obrigatórios, don'ts…"/></Field>
+      </>}
+
+      {/* ── Tab: Roteiro ── */}
+      {modalTab==="roteiro" && (
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,color:TX2,marginRight:4}}>Inserir seção:</span>
+            {ROTEIRO_SECTIONS.map(s=>(
+              <button key={s} onClick={()=>insertSection(s)}
+                style={{fontSize:10,padding:"4px 10px",background:B2,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:TX2,fontWeight:600,transition:TRANS}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=RED;e.currentTarget.style.color=RED;}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=LN;e.currentTarget.style.color=TX2;}}>
+                + {s}
+              </button>
+            ))}
+            <span style={{marginLeft:"auto",fontSize:10,color:TX3}}>{(f.roteiro||"").length} caracteres</span>
+          </div>
+          <textarea
+            value={f.roteiro||""}
+            onChange={e=>set("roteiro",e.target.value)}
+            placeholder={"[Abertura]\nEstamos aqui com...\n\n[Campinho]\n(aqui nessa minha entrada já entra campinho vazio)\n\n[Desenvolvimento]\n...\n\n[CTA]\nSe você curtiu, comenta aqui embaixo..."}
+            rows={22}
+            style={{
+              width:"100%", padding:"16px", background:B0,
+              border:`1px solid ${LN}`, borderRadius:10, color:TX,
+              fontSize:13, fontFamily:"inherit", lineHeight:1.85,
+              resize:"vertical", outline:"none",
+              borderTop:`3px solid ${RED}`,
+            }}
+            onFocus={e=>e.target.style.borderColor=LN2}
+            onBlur={e=>e.target.style.borderTop=`3px solid ${RED}`}
+          />
+          <div style={{fontSize:10,color:TX3,marginTop:6}}>
+            💡 Use <code style={{background:B2,padding:"1px 5px",borderRadius:3}}>[Nome da seção]</code> para estruturar o roteiro. Salvo junto com o entregável.
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Métricas ── */}
+      {modalTab==="metricas" && <>
+        <SRule>Redes Sociais & Métricas</SRule>
+        <div style={{fontSize:11,color:TX2,marginBottom:10}}>Selecione onde foi publicado. Clique na rede para ver/editar métricas.</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+          {NETS.map(net=>{const sel=(f.networks||[]).includes(net);return(<div key={net} onClick={()=>toggleNetwork(net)} style={{padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:99,transition:TRANS,display:"flex",alignItems:"center",gap:5,background:sel?`${RED}18`:B2,border:`1.5px solid ${sel?RED:LN}`,color:sel?RED:TX2}}>{NET_EMOJI[net]} {net}</div>);})}
+        </div>
+        {(f.networks||[]).map(net=>{
+          const reach=Number(getMetric(net,"reach")||0);
+          const eng=reach>0?((Number(getMetric(net,"likes")||0)+Number(getMetric(net,"comments")||0))/reach*100).toFixed(1):null;
+          return(<div key={net} style={{marginBottom:8,border:`1px solid ${LN}`,borderRadius:8,overflow:"hidden"}}>
+            <div onClick={()=>setOpenNet(openNet===net?null:net)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",cursor:"pointer",background:B2,transition:TRANS}} onMouseEnter={e=>e.currentTarget.style.background=B3} onMouseLeave={e=>e.currentTarget.style.background=B2}>
+              <span style={{fontSize:12,fontWeight:600,color:TX}}>{NET_EMOJI[net]} {net}</span>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {reach>0&&<span style={{fontSize:10,color:TX2}}>{reach.toLocaleString("pt-BR")} alcance</span>}
+                {eng&&<span style={{fontSize:10,fontWeight:700,color:GRN}}>{eng}% eng.</span>}
+                <span style={{fontSize:11,color:TX2}}>{openNet===net?"▲":"▼"}</span>
+              </div>
+            </div>
+            {openNet===net&&(<div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              {[["views","Views"],["reach","Alcance"],["likes","Curtidas"],["comments","Comentários"],["shares","Shares"],["saves","Saves"]].map(([k,l])=>(<Field key={k} label={l}><Input type="number" min="0" value={getMetric(net,k)} onChange={e=>setMetric(net,k,e.target.value)} placeholder="0"/></Field>))}
+            </div>)}
+          </div>);
+        })}
+      </>}
     </Modal>
   );
 }
@@ -2342,7 +2406,15 @@ function CalendarView({ contracts, calEvents, calMonth, setCal, calFilter, setCa
                     : <span style={{ color:isSel?RED:TX }}>{d}</span>}
                 </div>
                 {!isMobile && evs.slice(0,maxEvs).map((ev,ei)=>(
-                  <div key={ei} style={{ fontSize:8, fontWeight:700, padding:"1px 4px", marginBottom:2, borderLeft:`2px solid ${ev.color}`, background:ev.dashed?"transparent":`${ev.color}18`, color:ev.color, borderLeftStyle:ev.dashed?"dashed":"solid", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", textTransform:"uppercase", letterSpacing:".03em" }}>{ev.label}</div>
+                  ev.type==="deliverable" ? (
+                    <div key={ei} style={{ background:B1, border:`1px solid ${LN}`, borderRadius:5, padding:"3px 6px", marginBottom:2, display:"flex", alignItems:"center", gap:4, boxShadow:"0 1px 2px rgba(0,0,0,0.06)", overflow:"hidden" }}>
+                      <span style={{ fontSize:9, flexShrink:0 }}>📄</span>
+                      <span style={{ fontSize:9, fontWeight:500, color:TX, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ev.label}</span>
+                      <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:99, background:`${ev.stageColor}20`, color:ev.stageColor, flexShrink:0, whiteSpace:"nowrap" }}>{ev.stageLabel}</span>
+                    </div>
+                  ) : (
+                    <div key={ei} style={{ fontSize:8, fontWeight:700, padding:"1px 4px", marginBottom:2, borderLeft:`2px solid ${ev.color}`, background:ev.dashed?"transparent":`${ev.color}18`, color:ev.color, borderLeftStyle:ev.dashed?"dashed":"solid", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", textTransform:"uppercase", letterSpacing:".03em" }}>{ev.label}</div>
+                  )
                 ))}
                 {isMobile && evs.length>0 && (
                   <div style={{ display:"flex", justifyContent:"center", gap:2, flexWrap:"wrap" }}>
@@ -4695,19 +4767,36 @@ export default function App() {
     });
     posts.forEach(p=>{const c=contracts.find(x=>x.id===p.contractId);if(!c)return;if(calFilter!=="all"&&calFilter!==c.id)return;add(p.isPosted?(p.publishDate||p.plannedDate):p.plannedDate,{label:(p.isPosted?"✓ ":"📅 ")+p.title,color:c.color});});
     // Pipeline deliverables on calendar (by plannedPostDate)
+    const STAGE_BADGE = {
+      briefing:   { label:"Só a ideia",  color:"#94A3B8" },
+      roteiro:    { label:"Roteirizando",color:"#7C3AED" },
+      ap_roteiro: { label:"Ap. Roteiro", color:"#D97706" },
+      gravacao:   { label:"Gravação",    color:"#BE185D" },
+      edicao:     { label:"Edição",      color:"#2563EB" },
+      ap_final:   { label:"Ap. Final",   color:"#EA580C" },
+      postagem:   { label:"Publicando",  color:"#0891B2" },
+      done:       { label:"Postado",     color:"#16A34A" },
+    };
     const pipeDeliverables = deliverables || [];
     pipeDeliverables.forEach(d=>{
-      if(!d||!d.plannedPostDate||d.stage==="done") return;
+      if(!d||!d.plannedPostDate) return;
       const c=contracts.find(x=>x.id===d.contractId);
       if(!c) return;
       if(calFilter!=="all"&&calFilter!==c.id) return;
-      // Stage deadlines
-      STAGES.filter(s=>s.id!=="done"&&s.id!=="postagem").forEach(s=>{
-        const stageDue = d.stageDateOverrides?.[s.id] || addDays(d.plannedPostDate, s.days);
-        if(stageDue) add(stageDue,{label:`${s.label} · ${d.title}`,color:c.color,dashed:true});
+      const badge = STAGE_BADGE[d.stage] || STAGE_BADGE.briefing;
+      // Main card on postagem date
+      add(d.plannedPostDate,{
+        label:d.title, color:c.color, type:"deliverable",
+        stageLabel:badge.label, stageColor:badge.color,
+        isDone:d.stage==="done"
       });
-      // Postagem
-      add(d.plannedPostDate,{label:`📅 ${d.title}`,color:c.color});
+      // Stage deadline dashes (only if not done)
+      if(d.stage!=="done"){
+        STAGES.filter(s=>s.id!=="done"&&s.id!=="postagem").forEach(s=>{
+          const stageDue = d.stageDateOverrides?.[s.id] || addDays(d.plannedPostDate, s.days);
+          if(stageDue) add(stageDue,{label:`${s.label} · ${d.title}`,color:c.color,dashed:true});
+        });
+      }
     });
     try{const cronos=JSON.parse(localStorage.getItem("copa6_cron")||"{}");Object.entries(cronos).forEach(([cid,ms])=>{const c=contracts.find(x=>x.id===cid);if(!c)return;if(calFilter!=="all"&&calFilter!==c.id)return;(ms||[]).forEach(m=>{if(m.date&&m.fase)add(m.date,{label:`${m.fase}${m.resp?` · ${m.resp}`:""}`,color:c.color,dashed:true});});});}catch{}
     // Travel dates + period + conflict detection

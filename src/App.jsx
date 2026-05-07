@@ -316,13 +316,14 @@ function exportRoteiro(html, title) {
   w.document.close();
 }
 
-function RichTextEditor({ value, onChange, title, minHeight = 440 }) {
-  const editorRef    = useRef(null);
-  const wrapRef      = useRef(null);
-  const floatRef     = useRef(null);
-  const [fmt, setFmt]         = useState({});
-  const [floatPos, setFloatPos] = useState(null); // {top,left} | null
-  const isComposing  = useRef(false);
+function RichTextEditor({ value, onChange, onAutoSave, title, minHeight = 440 }) {
+  const editorRef   = useRef(null);
+  const floatRef    = useRef(null);
+  const autoTimer   = useRef(null);
+  const [fmt, setFmt]           = useState({});
+  const [floatPos, setFloatPos] = useState(null);
+  const [savedAt, setSavedAt]   = useState(null);
+  const isComposing = useRef(false);
 
   useEffect(() => {
     if (editorRef.current) editorRef.current.innerHTML = value || "";
@@ -334,7 +335,6 @@ function RichTextEditor({ value, onChange, title, minHeight = 440 }) {
     document.execCommand(cmd, false, val);
     syncFormats();
   };
-
   const syncFormats = () => setFmt({
     bold:      document.queryCommandState("bold"),
     italic:    document.queryCommandState("italic"),
@@ -342,143 +342,205 @@ function RichTextEditor({ value, onChange, title, minHeight = 440 }) {
     strike:    document.queryCommandState("strikeThrough"),
   });
 
-  // Show floating toolbar on selection
+  // Auto-save with debounce
+  const triggerAutoSave = (html) => {
+    if (!onAutoSave) return;
+    clearTimeout(autoTimer.current);
+    autoTimer.current = setTimeout(() => {
+      onAutoSave(html);
+      setSavedAt(new Date());
+    }, 1500);
+  };
+
+  const handleInput = () => {
+    if (!isComposing.current) {
+      const html = editorRef.current?.innerHTML || "";
+      onChange(html);
+      syncFormats();
+      triggerAutoSave(html);
+    }
+  };
+
+  // Floating toolbar — uses fixed coords so it escapes the modal
   const checkSelection = useCallback(() => {
     syncFormats();
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !editorRef.current?.contains(sel.anchorNode)) {
-      setFloatPos(null);
-      return;
+      setFloatPos(null); return;
     }
     try {
       const range = sel.getRangeAt(0);
       const rect  = range.getBoundingClientRect();
-      const wrap  = wrapRef.current?.getBoundingClientRect();
-      if (!wrap || rect.width === 0) { setFloatPos(null); return; }
-      const FLOAT_W = 320;
-      let left = rect.left - wrap.left + rect.width / 2 - FLOAT_W / 2;
-      left = Math.max(0, Math.min(left, wrap.width - FLOAT_W));
-      const top = rect.top - wrap.top - 50;
-      setFloatPos({ top: top < 4 ? rect.bottom - wrap.top + 8 : top, left });
+      if (rect.width === 0) { setFloatPos(null); return; }
+      const W    = 310;
+      let left   = rect.left + rect.width / 2 - W / 2;
+      left       = Math.max(8, Math.min(left, window.innerWidth - W - 8));
+      const top  = rect.top - 56;
+      setFloatPos({ top: top < 8 ? rect.bottom + 8 : top, left, above: top >= 8 });
     } catch { setFloatPos(null); }
   }, []);
 
-  // Hide float when clicking outside editor
   useEffect(() => {
     const hide = (e) => {
-      if (!editorRef.current?.contains(e.target) && !floatRef.current?.contains(e.target)) {
-        setFloatPos(null);
-      }
+      if (floatRef.current && !floatRef.current.contains(e.target)) setFloatPos(null);
     };
     document.addEventListener("mousedown", hide);
     return () => document.removeEventListener("mousedown", hide);
   }, []);
 
-  const handleInput = () => {
-    if (!isComposing.current) { onChange(editorRef.current?.innerHTML || ""); syncFormats(); }
-  };
-
   const insertSection = (label) => {
     editorRef.current?.focus();
     document.execCommand("insertHTML", false,
-      `<p style="font-weight:700;color:#C8102E;font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:20px 0 4px">${label}</p><p><br></p>`
+      `<p style="font-weight:700;color:#C8102E;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin:20px 0 2px">${label}</p><p><br></p>`
     );
-    onChange(editorRef.current?.innerHTML || "");
+    const html = editorRef.current?.innerHTML || "";
+    onChange(html); triggerAutoSave(html);
   };
 
-  const SECTIONS   = ["Abertura","Campinho","Bloco Publi","Desenvolvimento","CTA","Encerramento"];
-  const COLORS = [
-    "#000000","#1F2937","#374151","#6B7280","#9CA3AF","#D1D5DB",
-    "#C8102E","#DC2626","#EA580C","#D97706","#CA8A04","#A16207",
-    "#16A34A","#059669","#0891B2","#2563EB","#4F46E5","#7C3AED",
-    "#BE185D","#9D174D","#86198F","#6D28D9","#1E40AF","#FFFFFF",
+  const SECTIONS = ["Abertura","Campinho","Bloco Publi","Desenvolvimento","CTA","Encerramento"];
+  const FLOAT_COLORS = [
+    "#000000","#C8102E","#2563EB","#16A34A","#D97706","#7C3AED","#EA580C","#BE185D","#374151","#FFFFFF",
   ];
-  const HIGHLIGHTS = ["#FEF08A","#BBF7D0","#BFDBFE","#FCA5A5","#DDD6FE","#FED7AA","#ffffff"];
+  const FLOAT_HLS = ["#FEF08A","#BBF7D0","#BFDBFE","#FCA5A5","#DDD6FE","#FED7AA"];
 
-  const Div = () => <div style={{width:1,height:18,background:LN,margin:"0 3px"}}/>;
-
-  const Tb = ({cmd,children,active,onDown,title:ttl,w=28,fs=13,fw=600,sm=false}) => (
+  const Tb = ({cmd,children,active,onDown,ttl,w=26,fs=13,fw=600}) => (
     <button title={ttl} onMouseDown={e=>{e.preventDefault();onDown?onDown():exec(cmd);}}
-      style={{width:sm?24:w,height:sm?24:26,border:"none",background:active?`${RED}14`:"transparent",color:active?RED:TX2,borderRadius:4,cursor:"pointer",fontSize:sm?11:fs,fontWeight:fw,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}>
+      style={{width:w,height:26,border:"none",background:active?`${RED}14`:"transparent",color:active?RED:TX2,borderRadius:4,cursor:"pointer",fontSize:fs,fontWeight:fw,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}>
       {children}
     </button>
   );
 
-  // Floating quick-format buttons (simple row)
-  const FLOAT_COLORS = ["#000000","#C8102E","#2563EB","#16A34A","#D97706","#7C3AED"];
-
   const charCount = (value||"").replace(/<[^>]*>/g,"").trim().length;
 
   return (
-    <div ref={wrapRef} style={{display:"flex",flexDirection:"column",height:"100%",position:"relative"}}>
+    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
 
-      {/* ── Floating selection toolbar ── */}
+      {/* ── Floating selection toolbar (fixed, escapes modal) ── */}
       {floatPos && (
-        <div ref={floatRef}
-          style={{
-            position:"absolute", top:floatPos.top, left:floatPos.left,
-            zIndex:300, width:320,
-            background:"#1C1C1E", borderRadius:10,
-            boxShadow:"0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.2)",
-            display:"flex", alignItems:"center", gap:2, padding:"5px 8px",
-            animation:"floatIn .12s ease",
-          }}>
-          {/* Format */}
+        <div ref={floatRef} style={{
+          position:"fixed", top:floatPos.top, left:floatPos.left,
+          zIndex:9999, width:310,
+          background:"#18181B", borderRadius:10,
+          boxShadow:"0 8px 32px rgba(0,0,0,0.32), 0 2px 8px rgba(0,0,0,0.24)",
+          display:"flex", alignItems:"center", gap:2, padding:"5px 8px",
+          animation:"floatIn .12s ease",
+        }}>
+          {/* B I U S */}
           {[
-            {cmd:"bold",      label:"B",  active:fmt.bold,    fw:700, fs:13},
-            {cmd:"italic",    label:"I",  active:fmt.italic,  fw:400, fs:13, italic:true},
-            {cmd:"underline", label:"U",  active:fmt.underline,fw:600,fs:12,ul:true},
-            {cmd:"strikeThrough",label:"S",active:fmt.strike,fw:600,fs:12,st:true},
-          ].map(({cmd,label,active,fw,fs,italic:it,ul,st})=>(
+            {cmd:"bold",      ch:"B",  a:fmt.bold,      fw:700,fs:13},
+            {cmd:"italic",    ch:"I",  a:fmt.italic,    fw:400,fs:13,it:true},
+            {cmd:"underline", ch:"U",  a:fmt.underline, fw:600,fs:12,ul:true},
+            {cmd:"strikeThrough",ch:"S",a:fmt.strike,  fw:600,fs:12,st:true},
+          ].map(({cmd,ch,a,fw,fs,it,ul,st})=>(
             <button key={cmd} onMouseDown={e=>{e.preventDefault();exec(cmd);}}
-              style={{width:26,height:26,border:"none",borderRadius:5,background:active?"rgba(200,16,46,.3)":"transparent",color:active?RED:"#E5E7EB",cursor:"pointer",fontSize:fs,fontWeight:fw,fontStyle:it?"italic":"normal",textDecoration:ul?"underline":st?"line-through":"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              {label}
+              style={{width:26,height:26,border:"none",borderRadius:4,background:a?"rgba(200,16,46,.28)":"transparent",color:a?RED:"#D4D4D8",cursor:"pointer",fontSize:fs,fontWeight:fw,fontStyle:it?"italic":"normal",textDecoration:ul?"underline":st?"line-through":"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {ch}
             </button>
           ))}
 
-          {/* Separator */}
-          <div style={{width:1,height:18,background:"rgba(255,255,255,.15)",margin:"0 3px"}}/>
+          <div style={{width:1,height:16,background:"rgba(255,255,255,.12)",margin:"0 3px"}}/>
 
-          {/* Font size quick */}
+          {/* Size */}
           <select defaultValue="3" onMouseDown={e=>e.stopPropagation()}
             onChange={e=>{exec("fontSize",e.target.value);editorRef.current?.focus();}}
-            style={{height:24,padding:"0 4px",fontSize:10,background:"transparent",border:"1px solid rgba(255,255,255,.2)",borderRadius:4,color:"#E5E7EB",fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
-            <option value="2" style={{color:TX}}>P</option>
-            <option value="3" style={{color:TX}}>M</option>
-            <option value="4" style={{color:TX}}>G</option>
-            <option value="5" style={{color:TX}}>T</option>
+            style={{height:24,padding:"0 4px",fontSize:10,background:"transparent",border:"1px solid rgba(255,255,255,.18)",borderRadius:4,color:"#D4D4D8",fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
+            {[["2","P"],["3","M"],["4","G"],["5","T"]].map(([v,l])=><option key={v} value={v} style={{color:TX,background:B1}}>{l}</option>)}
           </select>
 
-          <div style={{width:1,height:18,background:"rgba(255,255,255,.15)",margin:"0 3px"}}/>
+          <div style={{width:1,height:16,background:"rgba(255,255,255,.12)",margin:"0 3px"}}/>
 
-          {/* Quick colors */}
-          {FLOAT_COLORS.map(c=>(
-            <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);}}
-              style={{width:14,height:14,borderRadius:"50%",background:c,border:`1.5px solid rgba(255,255,255,.3)`,cursor:"pointer",flexShrink:0}}/>
+          {/* Text colors */}
+          <div style={{display:"flex",flexWrap:"wrap",gap:2,width:54}}>
+            {FLOAT_COLORS.map(c=>(
+              <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);}}
+                style={{width:14,height:14,borderRadius:"50%",background:c,border:`1.5px solid rgba(255,255,255,.25)`,cursor:"pointer"}}/>
+            ))}
+          </div>
+
+          <div style={{width:1,height:16,background:"rgba(255,255,255,.12)",margin:"0 3px"}}/>
+
+          {/* Highlights */}
+          {FLOAT_HLS.map((c,i)=>(
+            <div key={i} onMouseDown={e=>{e.preventDefault();exec("backColor",c);}}
+              style={{width:14,height:14,borderRadius:3,background:c,border:"1px solid rgba(0,0,0,.12)",cursor:"pointer"}}/>
           ))}
 
-          <div style={{width:1,height:18,background:"rgba(255,255,255,.15)",margin:"0 3px"}}/>
+          <div style={{width:1,height:16,background:"rgba(255,255,255,.12)",margin:"0 3px"}}/>
 
-          {/* Highlight */}
-          {["#FEF08A","#BBF7D0","#BFDBFE","#FCA5A5"].map(c=>(
-            <div key={c} onMouseDown={e=>{e.preventDefault();exec("backColor",c);}}
-              style={{width:14,height:14,borderRadius:3,background:c,border:"1px solid rgba(255,255,255,.2)",cursor:"pointer",flexShrink:0}}/>
-          ))}
-
-          <div style={{width:1,height:18,background:"rgba(255,255,255,.15)",margin:"0 3px"}}/>
-
-          {/* Clear */}
           <button onMouseDown={e=>{e.preventDefault();exec("removeFormat");exec("backColor","#FFFFFF");setFloatPos(null);}}
             title="Limpar formatação"
-            style={{width:24,height:24,border:"none",borderRadius:4,background:"transparent",color:"#9CA3AF",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            🚫
+            style={{width:24,height:24,border:"none",borderRadius:4,background:"transparent",color:"#71717A",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            ✕
           </button>
 
-          {/* Caret arrow */}
-          <div style={{position:"absolute",bottom:-5,left:"50%",transform:"translateX(-50%)",width:10,height:10,background:"#1C1C1E",clipPath:"polygon(0 0,100% 0,50% 100%)"}}/>
+          {/* Arrow */}
+          {floatPos.above && <div style={{position:"absolute",bottom:-5,left:"50%",transform:"translateX(-50%)",width:10,height:6,clipPath:"polygon(0 0,100% 0,50% 100%)",background:"#18181B"}}/>}
         </div>
       )}
-      <style>{`@keyframes floatIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <style>{`@keyframes floatIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {/* ── Static toolbar (clean) ── */}
+      <div style={{display:"flex",alignItems:"center",gap:2,padding:"6px 12px",borderBottom:`1px solid ${LN}`,background:B1}}>
+        <Tb cmd="bold"          active={fmt.bold}      ttl="Negrito · Ctrl+B"    fw={700} fs={13}>B</Tb>
+        <Tb cmd="italic"        active={fmt.italic}    ttl="Itálico · Ctrl+I"    fw={400} fs={13}><em>I</em></Tb>
+        <Tb cmd="underline"     active={fmt.underline} ttl="Sublinhado · Ctrl+U"><span style={{textDecoration:"underline",fontSize:12}}>U</span></Tb>
+        <Tb cmd="strikeThrough" active={fmt.strike}    ttl="Riscado"><span style={{textDecoration:"line-through",fontSize:12}}>S</span></Tb>
+        <div style={{width:1,height:16,background:LN,margin:"0 3px"}}/>
+        <select defaultValue="3" onMouseDown={e=>e.stopPropagation()}
+          onChange={e=>{exec("fontSize",e.target.value);editorRef.current?.focus();}}
+          style={{height:26,padding:"0 6px",fontSize:11,background:"transparent",border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
+          <option value="2">Pequeno</option>
+          <option value="3">Normal</option>
+          <option value="4">Grande</option>
+          <option value="5">Título</option>
+        </select>
+        <div style={{width:1,height:16,background:LN,margin:"0 3px"}}/>
+        <Tb ttl="Limpar formatação" onDown={()=>{exec("removeFormat");exec("backColor","#FFFFFF");}} fs={11} fw={500}>✕</Tb>
+
+        {/* Auto-save indicator */}
+        <span style={{marginLeft:"auto",fontSize:9,color:savedAt?GRN:TX3,flexShrink:0,display:"flex",alignItems:"center",gap:3}}>
+          {savedAt ? <>✓ Salvo {savedAt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</> : `${charCount} car.`}
+        </span>
+
+        <button onMouseDown={e=>{e.preventDefault();exportRoteiro(value,title);}}
+          style={{marginLeft:8,padding:"3px 10px",height:26,fontSize:10,fontWeight:700,background:`${RED}10`,border:`1px solid ${RED}30`,borderRadius:5,color:RED,cursor:"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+          ↗ Exportar
+        </button>
+      </div>
+
+      {/* ── Section chips ── */}
+      <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderBottom:`1px solid ${LN}`,background:B2,flexWrap:"wrap"}}>
+        <span style={{fontSize:9,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:".1em",marginRight:4}}>+ Seção</span>
+        {SECTIONS.map(s=>(
+          <button key={s} onMouseDown={e=>{e.preventDefault();insertSection(s);}}
+            style={{fontSize:10,padding:"2px 9px",background:B1,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:TX2,fontWeight:600,transition:"all .12s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=RED;e.currentTarget.style.color=RED;e.currentTarget.style.background=`${RED}08`;}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=LN;e.currentTarget.style.color=TX2;e.currentTarget.style.background=B1;}}>
+            {s}
+          </button>
+        ))}
+        <span style={{marginLeft:"auto",fontSize:9,color:TX3}}>Selecione texto para formatar</span>
+      </div>
+
+      {/* ── Writing area ── */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        onKeyUp={e=>{syncFormats();checkSelection();}}
+        onMouseUp={checkSelection}
+        onCompositionStart={()=>{isComposing.current=true;}}
+        onCompositionEnd={()=>{isComposing.current=false;handleInput();}}
+        style={{
+          flex:1, minHeight, padding:"24px 28px", outline:"none",
+          fontSize:14, lineHeight:1.9, color:TX, background:"#FEFEFE",
+          fontFamily:"inherit", wordBreak:"break-word", overflowY:"auto",
+        }}
+      />
+    </div>
+  );
+}
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
@@ -1835,6 +1897,7 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete }) {
           <RichTextEditor
             value={f.roteiro||""}
             onChange={v=>set("roteiro",v)}
+            onAutoSave={isEdit ? v => { onSave({...f, roteiro:v}); } : null}
             title={`${f.title||"Roteiro"} · ${contracts.find(c=>c.id===f.contractId)?.company||""}`}
             minHeight={480}
           />

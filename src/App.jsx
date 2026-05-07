@@ -350,8 +350,17 @@ function RichTextEditor({ value, onChange, title, minHeight = 440 }) {
   };
 
   const SECTIONS   = ["Abertura","Campinho","Bloco Publi","Desenvolvimento","CTA","Encerramento"];
-  const COLORS     = ["#000000","#C8102E","#2563EB","#16A34A","#D97706","#7C3AED","#9CA3AF"];
-  const HIGHLIGHTS = ["#FEF08A","#BBF7D0","#BFDBFE","#FCA5A5","#DDD6FE","#ffffff"];
+  const COLORS = [
+    // Row 1 — neutros
+    "#000000","#1F2937","#374151","#6B7280","#9CA3AF","#D1D5DB",
+    // Row 2 — quentes
+    "#C8102E","#DC2626","#EA580C","#D97706","#CA8A04","#A16207",
+    // Row 3 — frios
+    "#16A34A","#059669","#0891B2","#2563EB","#4F46E5","#7C3AED",
+    // Row 4 — especiais
+    "#BE185D","#9D174D","#86198F","#6D28D9","#1E40AF","#FFFFFF",
+  ];
+  const HIGHLIGHTS = ["#FEF08A","#BBF7D0","#BFDBFE","#FCA5A5","#DDD6FE","#FED7AA","#ffffff"];
 
   const Div = (props) => <div style={{width:1,height:18,background:LN,margin:"0 3px"}} {...props}/>;
 
@@ -383,12 +392,18 @@ function RichTextEditor({ value, onChange, title, minHeight = 440 }) {
           <option value="5">Título</option>
         </select>
         <Div/>
-        {/* text color swatches */}
-        {COLORS.map(c=>(
-          <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);}}
-            title={`Cor ${c}`}
-            style={{width:14,height:14,borderRadius:3,background:c,border:`1px solid ${LN2}`,cursor:"pointer",flexShrink:0}}/>
-        ))}
+        {/* text color swatches — 6×4 grid */}
+        <div style={{display:"flex",flexDirection:"column",gap:2}}>
+          {[0,1,2,3].map(row=>(
+            <div key={row} style={{display:"flex",gap:2}}>
+              {COLORS.slice(row*6,(row+1)*6).map(c=>(
+                <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);}}
+                  title={c}
+                  style={{width:14,height:14,borderRadius:2,background:c,border:`1px solid ${c==="#FFFFFF"?LN2:c==="transparent"?LN2:"transparent"}`,cursor:"pointer",flexShrink:0,outline:c==="#FFFFFF"?`1px solid ${LN2}`:"none"}}/>
+              ))}
+            </div>
+          ))}
+        </div>
         <Div/>
         {/* highlight swatches */}
         {HIGHLIGHTS.map((c,i)=>(
@@ -1610,7 +1625,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
       {/* Calendar view */}
       {view === "calendar" && (
-        <CalendarView contracts={contracts} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
+        <CalendarView contracts={contracts} deliverables={deliverables} saveDeliverables={save} onEditDeliverable={setEditItem} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
       )}
 
       {/* Modals */}
@@ -2473,105 +2488,213 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
 }
 
 // ─── Calendar View ───────────────────────────────────────
-function CalendarView({ contracts, calEvents, calMonth, setCal, calFilter, setCalF }) {
+function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeliverable, calEvents={}, calMonth, setCal, calFilter, setCalF }) {
   const isMobile = useIsMobile();
   const { y, m } = calMonth;
-  const today = startOfToday();
-  const [sel, setSel] = useState(today);
-  const firstDay = new Date(y, m, 1).getDay();
-  const daysInMo = new Date(y, m+1, 0).getDate();
-  const todayStr = today.toISOString().substr(0, 10);
+  const today    = startOfToday();
+  const todayStr = today.toISOString().substr(0,10);
+  const [dragOver, setDragOver] = useState(null); // date string being dragged over
+
+  const firstDay  = new Date(y, m, 1).getDay();
+  const daysInMo  = new Date(y, m+1, 0).getDate();
+  const MONTHS_LONG = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const DAY_LABELS  = isMobile ? ["D","S","T","Q","Q","S","S"] : ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
   const cells = [];
   for(let i=0;i<firstDay;i++) cells.push(null);
   for(let d=1;d<=daysInMo;d++) cells.push(d);
   while(cells.length%7) cells.push(null);
-  const MONTHS_LONG=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  const prev=()=>setCal(p=>{const d=new Date(p.y,p.m-1,1);return{y:d.getFullYear(),m:d.getMonth()};});
-  const next=()=>setCal(p=>{const d=new Date(p.y,p.m+1,1);return{y:d.getFullYear(),m:d.getMonth()};});
-  const selStr = sel ? `${y}-${String(m+1).padStart(2,"0")}-${String(sel.getDate()).padStart(2,"0")}` : "";
-  const selEvs = selStr ? (calEvents[selStr]||[]) : [];
+
+  const prev = () => setCal(p=>{ const d=new Date(p.y,p.m-1,1); return{y:d.getFullYear(),m:d.getMonth()}; });
+  const next = () => setCal(p=>{ const d=new Date(p.y,p.m+1,1); return{y:d.getFullYear(),m:d.getMonth()}; });
+
+  // Filter deliverables for calendar
+  const visibleDels = deliverables.filter(d => {
+    if (!d?.plannedPostDate) return false;
+    if (calFilter !== "all" && d.contractId !== calFilter) return false;
+    return d.plannedPostDate.startsWith(`${y}-${String(m+1).padStart(2,"0")}`);
+  });
+
+  // Contract events (payments, deadlines) from calEvents — exclude deliverable type
+  const contractEventsFor = (ds) => (calEvents[ds]||[]).filter(e=>e.type!=="deliverable"&&!e.dashed&&!e.isTravelPeriod);
+  const travelFor         = (ds) => (calEvents[ds]||[]).filter(e=>e.isTravel||e.isTravelPeriod);
+
+  // Stage badge map
+  const SBADGE = {
+    briefing:   ["Só a ideia",  "#94A3B8"],
+    roteiro:    ["Roteirizando","#7C3AED"],
+    ap_roteiro: ["Ap. Roteiro", "#D97706"],
+    gravacao:   ["Gravação",    "#BE185D"],
+    edicao:     ["Edição",      "#2563EB"],
+    ap_final:   ["Ap. Final",   "#EA580C"],
+    postagem:   ["Publicando",  "#0891B2"],
+    done:       ["Postado",     "#16A34A"],
+  };
+
+  // Drag handlers
+  const handleDragStart = (e, delId) => {
+    e.dataTransfer.setData("text/plain", delId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDrop = (e, ds) => {
+    e.preventDefault();
+    setDragOver(null);
+    const id = e.dataTransfer.getData("text/plain");
+    if (!id || !saveDeliverables) return;
+    const updated = deliverables.map(d => d.id===id ? {...d, plannedPostDate:ds} : d);
+    saveDeliverables(updated);
+  };
+
+  // DeliverableCard inside calendar
+  const CalCard = ({ del }) => {
+    const contract = contracts.find(c=>c.id===del.contractId);
+    const [badge, color] = SBADGE[del.stage] || ["Briefing","#94A3B8"];
+    const [hov, setHov] = useState(false);
+    return (
+      <div
+        draggable
+        onDragStart={e=>handleDragStart(e,del.id)}
+        onDragEnd={()=>setDragOver(null)}
+        onClick={e=>{e.stopPropagation();onEditDeliverable?.(del);}}
+        onMouseEnter={()=>setHov(true)}
+        onMouseLeave={()=>setHov(false)}
+        style={{
+          background: hov ? "#FAFAFA" : B1,
+          border: `1px solid ${hov?LN2:LN}`,
+          borderLeft: `3px solid ${contract?.color||TX3}`,
+          borderRadius: 6,
+          padding: "4px 7px",
+          marginBottom: 3,
+          cursor: "pointer",
+          boxShadow: hov ? "0 2px 8px rgba(0,0,0,0.1)" : "0 1px 2px rgba(0,0,0,0.05)",
+          transform: hov ? "translateY(-1px)" : "none",
+          transition: "all .15s ease",
+          userSelect: "none",
+        }}>
+        <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+          <span style={{ fontSize:9, flexShrink:0, opacity:.7 }}>📄</span>
+          <span style={{ fontSize:10, fontWeight:500, color:TX, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>
+            {del.title}
+          </span>
+        </div>
+        <div style={{ marginTop:3 }}>
+          <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:99, background:`${color}18`, color, letterSpacing:".03em" }}>{badge}</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
-      {/* Month nav */}
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-        <div style={{ fontWeight:700, fontSize:isMobile?15:14, color:TX, flex:1 }}>{MONTHS_LONG[m]} {y}</div>
-        <button onClick={prev} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, width:30, height:30, cursor:"pointer", color:TX2, fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
-        <button onClick={()=>setCal({y:today.getFullYear(),m:today.getMonth()})} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"0 12px", height:30, cursor:"pointer", color:TX2, fontSize:11, fontWeight:600 }}>Hoje</button>
-        <button onClick={next} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, width:30, height:30, cursor:"pointer", color:TX2, fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
+      {/* ── Month nav ── */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <h2 style={{fontSize:16,fontWeight:700,color:TX,flex:1,letterSpacing:"-.01em"}}>{MONTHS_LONG[m]} {y}</h2>
+        <button onClick={prev} style={{background:"none",border:`1px solid ${LN}`,borderRadius:6,width:30,height:30,cursor:"pointer",color:TX2,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+        <button onClick={()=>setCal({y:today.getFullYear(),m:today.getMonth()})} style={{background:"none",border:`1px solid ${LN}`,borderRadius:6,padding:"0 14px",height:30,cursor:"pointer",color:TX2,fontSize:11,fontWeight:700}}>Hoje</button>
+        <button onClick={next} style={{background:"none",border:`1px solid ${LN}`,borderRadius:6,width:30,height:30,cursor:"pointer",color:TX2,fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
       </div>
-      {/* Filters */}
-      <div style={{ display:"flex", gap:6, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:8, marginBottom:12, scrollbarWidth:"none" }}>
-        <div onClick={()=>setCalF("all")} style={{ padding:"5px 12px", fontSize:10, fontWeight:700, cursor:"pointer", borderRadius:99, flexShrink:0, background:calFilter==="all"?TX:B2, color:calFilter==="all"?"white":TX2, border:`1px solid ${calFilter==="all"?TX:LN}`, transition:TRANS }}>Todos</div>
+
+      {/* ── Contract filter pills ── */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10,marginBottom:14,scrollbarWidth:"none"}}>
+        <div onClick={()=>setCalF("all")} style={{padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:99,flexShrink:0,background:calFilter==="all"?TX:B2,color:calFilter==="all"?"white":TX2,border:`1px solid ${calFilter==="all"?TX:LN}`,transition:TRANS}}>
+          Todos
+        </div>
         {contracts.map(c=>(
-          <div key={c.id} onClick={()=>setCalF(calFilter===c.id?"all":c.id)} style={{ padding:"5px 12px", fontSize:10, fontWeight:600, cursor:"pointer", borderRadius:99, flexShrink:0, display:"flex", alignItems:"center", gap:5, background:calFilter===c.id?c.color+"22":B2, color:calFilter===c.id?c.color:TX2, border:`1px solid ${calFilter===c.id?c.color+"66":LN}`, transition:TRANS }}>
-            <div style={{ width:5, height:5, borderRadius:"50%", background:c.color }}/>{c.company.split("/")[0].trim().slice(0,12)}
+          <div key={c.id} onClick={()=>setCalF(calFilter===c.id?"all":c.id)}
+            style={{padding:"4px 12px",fontSize:10,fontWeight:600,cursor:"pointer",borderRadius:99,flexShrink:0,display:"flex",alignItems:"center",gap:5,
+              background:calFilter===c.id?`${c.color}18`:B2,
+              color:calFilter===c.id?c.color:TX2,
+              border:`1px solid ${calFilter===c.id?c.color+"50":LN}`,
+              transition:TRANS}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:c.color,flexShrink:0}}/>{c.company.split("/")[0].trim().slice(0,14)}
           </div>
         ))}
       </div>
-      {/* Grid */}
-      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:B2 }}>
-          {(isMobile?["D","S","T","Q","Q","S","S"]:["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"]).map((d,i)=>(
-            <div key={i} style={{ padding:isMobile?"6px 0":"8px 0", textAlign:"center", fontSize:isMobile?10:9, fontWeight:700, letterSpacing:isMobile?0:".1em", textTransform:"uppercase", color:TX3 }}>{d}</div>
+
+      {/* ── Grid ── */}
+      <div style={{border:`1px solid ${LN}`,borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.05)"}}>
+        {/* Day headers */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:B2,borderBottom:`1px solid ${LN}`}}>
+          {DAY_LABELS.map((d,i)=>(
+            <div key={i} style={{padding:"10px 0",textAlign:"center",fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3}}>{d}</div>
           ))}
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:1, background:LN }}>
+
+        {/* Day cells */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"1px",background:LN}}>
           {cells.map((d,i)=>{
-            if(!d) return <div key={`e${i}`} style={{ minHeight:isMobile?50:90, background:B0 }}/>;
-            const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-            const evs=calEvents[ds]||[];
-            const isT=ds===todayStr;
-            const isSel=ds===selStr;
-            const maxEvs=isMobile?0:3;
+            if(!d) return <div key={`e${i}`} style={{minHeight:isMobile?48:110,background:"#FAFAFA"}}/>;
+            const ds = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+            const isT = ds===todayStr;
+            const isDragTarget = dragOver===ds;
+            const dayDels  = visibleDels.filter(del=>del.plannedPostDate===ds);
+            const cEvents  = contractEventsFor(ds);
+            const travels  = travelFor(ds);
+
             return (
-              <div key={d} onClick={()=>setSel(new Date(y,m,d))}
-                style={{ minHeight:isMobile?50:90, padding:isMobile?3:5, background:isSel?`${RED}08`:isT?`${RED}05`:B0, cursor:"pointer", transition:TRANS }}
-                onMouseEnter={e=>!(isSel||isT)&&(e.currentTarget.style.background=B2)}
-                onMouseLeave={e=>!(isSel||isT)&&(e.currentTarget.style.background=B0)}>
-                <div style={{ fontSize:11, fontWeight:isT?700:400, marginBottom:isMobile?3:3, textAlign:isMobile?"center":"left" }}>
+              <div key={d}
+                onDragOver={e=>{e.preventDefault();setDragOver(ds);}}
+                onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
+                onDrop={e=>handleDrop(e,ds)}
+                style={{
+                  minHeight: isMobile?48:110,
+                  padding: isMobile?"4px":"6px 7px",
+                  background: isDragTarget?`${RED}06`:isT?`${RED}04`:B1,
+                  border: isDragTarget?`1px solid ${RED}40`:"none",
+                  transition:"background .12s",
+                  position:"relative",
+                }}>
+
+                {/* Day number */}
+                <div style={{marginBottom:4,display:"flex",alignItems:"center",justifyContent:isMobile?"center":"space-between"}}>
                   {isT
-                    ? <span style={{ background:RED, color:"white", borderRadius:"50%", width:18, height:18, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10 }}>{d}</span>
-                    : <span style={{ color:isSel?RED:TX }}>{d}</span>}
+                    ? <span style={{width:22,height:22,borderRadius:"50%",background:RED,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{d}</span>
+                    : <span style={{fontSize:11,fontWeight:400,color:TX2}}>{d}</span>
+                  }
+                  {!isMobile && travels.length>0 && <span title={travels[0].label} style={{fontSize:11}}>✈️</span>}
                 </div>
-                {!isMobile && evs.slice(0,maxEvs).map((ev,ei)=>(
-                  ev.type==="deliverable" ? (
-                    <div key={ei} style={{ background:B1, border:`1px solid ${LN}`, borderRadius:5, padding:"3px 6px", marginBottom:2, display:"flex", alignItems:"center", gap:4, boxShadow:"0 1px 2px rgba(0,0,0,0.06)", overflow:"hidden" }}>
-                      <span style={{ fontSize:9, flexShrink:0 }}>📄</span>
-                      <span style={{ fontSize:9, fontWeight:500, color:TX, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{ev.label}</span>
-                      <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:99, background:`${ev.stageColor}20`, color:ev.stageColor, flexShrink:0, whiteSpace:"nowrap" }}>{ev.stageLabel}</span>
-                    </div>
-                  ) : (
-                    <div key={ei} style={{ fontSize:8, fontWeight:700, padding:"1px 4px", marginBottom:2, borderLeft:`2px solid ${ev.color}`, background:ev.dashed?"transparent":`${ev.color}18`, color:ev.color, borderLeftStyle:ev.dashed?"dashed":"solid", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", textTransform:"uppercase", letterSpacing:".03em" }}>{ev.label}</div>
-                  )
+
+                {/* Deliverable cards */}
+                {!isMobile && dayDels.map(del=>(
+                  <CalCard key={del.id} del={del}/>
                 ))}
-                {isMobile && evs.length>0 && (
-                  <div style={{ display:"flex", justifyContent:"center", gap:2, flexWrap:"wrap" }}>
-                    {evs.slice(0,4).map((ev,ei)=>(
-                      <div key={ei} style={{ width:5, height:5, borderRadius:"50%", background:ev.color }}/>
-                    ))}
+
+                {/* Mobile: colored dots */}
+                {isMobile && (dayDels.length>0||cEvents.length>0) && (
+                  <div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"center"}}>
+                    {dayDels.slice(0,4).map((del,i)=>{
+                      const c=contracts.find(x=>x.id===del.contractId);
+                      return <div key={i} style={{width:5,height:5,borderRadius:"50%",background:c?.color||TX3}}/>;
+                    })}
                   </div>
                 )}
-                {!isMobile && evs.length>maxEvs&&<div style={{fontSize:8,color:TX3}}>+{evs.length-maxEvs}</div>}
+
+                {/* Contract events (payment, deadline) — small badges */}
+                {!isMobile && cEvents.slice(0,2).map((ev,ei)=>(
+                  <div key={ei} style={{fontSize:8,fontWeight:700,padding:"1px 5px",marginBottom:2,borderRadius:3,background:`${ev.color}14`,color:ev.color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textTransform:"uppercase",letterSpacing:".03em"}}>
+                    {ev.label}
+                  </div>
+                ))}
+
+                {/* Overflow count */}
+                {!isMobile && dayDels.length>3 && (
+                  <div style={{fontSize:9,color:TX3,fontWeight:600,marginTop:2}}>+{dayDels.length-3} mais</div>
+                )}
               </div>
             );
           })}
         </div>
       </div>
-      {/* Selected day events */}
-      {selEvs.length>0&&(
-        <div style={{ marginTop:12, background:B1, border:`1px solid ${LN}`, borderRadius:10, padding:14 }}>
-          <div style={{ fontSize:10, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>
-            {sel?.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}
-          </div>
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {selEvs.map((ev,i)=>(
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", borderRadius:7, background:B2, borderLeft:`3px solid ${ev.color}` }}>
-                <div style={{ fontSize:12, fontWeight:500, color:TX, flex:1, lineHeight:1.4 }}>{ev.label}</div>
-                {ev.dashed&&<Badge color={TX2}>Fase</Badge>}
-              </div>
-            ))}
-          </div>
+
+      {/* ── Legend ── */}
+      {!isMobile && (
+        <div style={{display:"flex",gap:16,marginTop:12,flexWrap:"wrap"}}>
+          {Object.entries(SBADGE||{}).map(([k,[l,c]])=>(
+            <div key={k} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:TX2}}>
+              <span style={{width:8,height:8,borderRadius:2,background:`${c}30`,border:`1.5px solid ${c}`,display:"inline-block"}}/>
+              {l}
+            </div>
+          ))}
         </div>
       )}
     </div>

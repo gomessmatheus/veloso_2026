@@ -2581,7 +2581,8 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
   const { y, m } = calMonth;
   const today    = startOfToday();
   const todayStr = today.toISOString().substr(0,10);
-  const [dragOver, setDragOver] = useState(null); // date string being dragged over
+  const [dragOver, setDragOver] = useState(null);
+  const [hoveredDate, setHoveredDate] = useState(null);
 
   const firstDay  = new Date(y, m, 1).getDay();
   const daysInMo  = new Date(y, m+1, 0).getDate();
@@ -2718,12 +2719,12 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
             const dayDels  = visibleDels.filter(del=>del.plannedPostDate===ds);
             const cEvents  = contractEventsFor(ds);
             const travels  = travelFor(ds);
-            const [cellHov, setCellHov] = useState(false);
+            const cellHov  = hoveredDate===ds;
 
             return (
               <div key={d}
-                onMouseEnter={()=>setCellHov(true)}
-                onMouseLeave={()=>setCellHov(false)}
+                onMouseEnter={()=>setHoveredDate(ds)}
+                onMouseLeave={()=>setHoveredDate(null)}
                 onDragOver={e=>{e.preventDefault();setDragOver(ds);}}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
                 onDrop={e=>handleDrop(e,ds)}

@@ -4,6 +4,7 @@ import { auth } from "./firebase.js";
 import {
   loadContracts, syncContracts, loadPosts, syncPosts,
   loadDeliverables, syncDeliverables,
+  loadCaixaTx, syncCaixaTx,
   getSetting, setSetting, subscribeToChanges,
   updatePresence, removePresence, subscribeToPresence, getMyPresence,
 } from "./db.js";
@@ -4212,9 +4213,26 @@ ${Object.entries(cats).map(([cat,items])=>`
 function Caixa({ contracts }) {
   const [unlocked, setUnlocked] = useState(false);
   const [tab, setTab] = useState("dash");
-  const [transactions, setTransactions] = useState(() => lsLoad("caixa_tx", []));
-  const [baseBalance, setBaseBalance] = useState(() => lsLoad("caixa_base", 0));
-  const [baseDate, setBaseDate]       = useState(() => lsLoad("caixa_base_date", ""));
+  const [transactions, setTransactions] = useState([]);
+  const [baseBalance, setBaseBalance] = useState(0);
+  const [baseDate, setBaseDate]       = useState("");
+  const prevTxIds = useRef([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const [txs, base, bdate] = await Promise.all([loadCaixaTx(), getSetting("caixa_base"), getSetting("caixa_base_date")]);
+        const list = txs.length > 0 ? txs : lsLoad("caixa_tx", []);
+        setTransactions(list);
+        prevTxIds.current = list.map(t => t.id);
+        if (base != null) setBaseBalance(Number(base) || 0);
+        if (bdate) setBaseDate(bdate);
+      } catch {
+        setTransactions(lsLoad("caixa_tx", []));
+        setBaseBalance(lsLoad("caixa_base", 0));
+        setBaseDate(lsLoad("caixa_base_date", ""));
+      }
+    })();
+  }, []);
   const [txModal, setTxModal] = useState(null);
   const [showExport, setShowExport] = useState(false);
   const [aiMessages, setAiMessages] = useState([]);
@@ -4226,13 +4244,18 @@ function Caixa({ contracts }) {
   const [filterType2, setFilterType2] = useState("all");
   const toast = useToast();
 
-  const saveTx  = (list) => { setTransactions(list); lsSave("caixa_tx", list); };
+  const saveTx = async (list) => {
+    setTransactions(list);
+    lsSave("caixa_tx", list);
+    try { await syncCaixaTx(list, prevTxIds.current); prevTxIds.current = list.map(t => t.id); } catch(e) { console.error("syncCaixaTx:", e); }
+  };
 
-  const updateBase = (val, date) => {
+  const updateBase = async (val, date) => {
     setBaseBalance(Number(val)||0);
     setBaseDate(date);
     lsSave("caixa_base", Number(val)||0);
     lsSave("caixa_base_date", date);
+    try { await setSetting("caixa_base", String(val)); await setSetting("caixa_base_date", date); } catch(e) { console.error("updateBase:", e); }
   };
 
   if (!unlocked) return <CaixaPasswordGate onUnlock={()=>setUnlocked(true)}/>;

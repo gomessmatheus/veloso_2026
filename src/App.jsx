@@ -1742,6 +1742,10 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
             }
             setNewOpen(false); setEditItem(null); setPrefillDate("");
           }}
+          onAutoSave={editItem ? item => {
+            // Salva silenciosamente sem fechar o modal
+            save(deliverables.map(d => d.id === editItem.id ? item : d));
+          } : null}
           prefillDate={prefillDate}
           onDelete={editItem ? id => {
             if (confirm("Excluir este entregável?")) { save(deliverables.filter(d => d.id !== id)); setEditItem(null); }
@@ -1880,7 +1884,7 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
 }
 
 
-function DeliverableModal({ item, contracts, onClose, onSave, onDelete, prefillDate="" }) {
+function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSave, prefillDate="" }) {
   const isEdit = !!item;
   const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: prefillDate||"", stage: "briefing", responsible: {}, stageDateOverrides: {}, notes: "", roteiro: "", networks: [], networkMetrics: {} });
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
@@ -1955,7 +1959,7 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, prefillD
           <RichTextEditor
             value={f.roteiro||""}
             onChange={v=>set("roteiro",v)}
-            onAutoSave={isEdit ? v => { onSave({...f, roteiro:v}); } : null}
+            onAutoSave={onAutoSave ? v => onAutoSave({...f, roteiro:v}) : null}
             title={`${f.title||"Roteiro"} · ${contracts.find(c=>c.id===f.contractId)?.company||""}`}
             minHeight={480}
           />

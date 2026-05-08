@@ -1978,7 +1978,8 @@ function PipelineColumn({ stage, items, contracts, onEdit, onDrop }) {
   );
 }
 
-function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF }) {
+function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF, role }) {
+  const isMobile = useIsMobile();
   const setDeliverables = saveDeliverables || (() => {});
   const [view, setView]   = useState("calendar");
   const [editItem, setEditItem] = useState(null);
@@ -4218,7 +4219,8 @@ function PaymentsList({ contracts, saveC, rates }) {
 
 
 // ─── Financeiro View ──────────────────────────────────────
-function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCommPaid, saveC }) {
+function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCommPaid, saveC, role }) {
+  const isMobile = useIsMobile();
   const [tab, setTab] = useState("visao");
 
   const totalBRL = contracts.reduce((s,c) => s + toBRL(contractTotal(c),c.currency,rates), 0);

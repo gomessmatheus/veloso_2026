@@ -208,16 +208,51 @@ const SEED_POSTS = [
 const SEED_TASKS = [];
 
 // ─── Pipeline constants ───────────────────────────────────
+// ─── Production rules ────────────────────────────────────
+// Min 9 dias entre briefing e postagem
 const STAGES = [
-  { id:"briefing",    label:"Briefing",       days:-9, resp:"Marca → Matheus" },
-  { id:"roteiro",     label:"Roteiro",         days:-7, resp:"Lucas"           },
-  { id:"ap_roteiro",  label:"Ap. Roteiro",     days:-5, resp:"Marca"           },
-  { id:"gravacao",    label:"Gravação",         days:-4, resp:"Lucas"           },
-  { id:"edicao",      label:"Edição",           days:-3, resp:"Leandro"         },
-  { id:"ap_final",    label:"Ap. Final",        days:-1, resp:"Marca"           },
-  { id:"postagem",    label:"Postagem",         days:0,  resp:"Lucas"           },
-  { id:"done",        label:"✓ Entregue",       days:0,  resp:""               },
+  { id:"briefing",    label:"Briefing",    days:-9, resp:"Marca → Matheus", minDays:2, rule:"Marca envia briefing"                          },
+  { id:"roteiro",     label:"Roteiro",     days:-7, resp:"Lucas",           minDays:2, rule:"Mín. 2 dias para roteirizar"                    },
+  { id:"ap_roteiro",  label:"Ap. Roteiro", days:-5, resp:"Marca",           minDays:1, rule:"1 dia para marca aprovar o roteiro"              },
+  { id:"gravacao",    label:"Gravação",    days:-4, resp:"Lucas",           minDays:1, rule:"Gravação 1 dia após aprovação do roteiro"        },
+  { id:"edicao",      label:"Edição",      days:-2, resp:"Leandro",         minDays:2, rule:"Mín. 2 dias entre gravação e envio para edição" },
+  { id:"ap_final",    label:"Ap. Final",   days:-1, resp:"Marca",           minDays:1, rule:"1 dia para aprovação final"                     },
+  { id:"postagem",    label:"Postagem",    days:0,  resp:"Lucas",           minDays:0, rule:"Post vai ao ar"                                 },
+  { id:"done",        label:"✓ Entregue",  days:0,  resp:"",                minDays:0, rule:""                                               },
 ];
+
+// Regras de produção — exportadas para capacidade e agentes
+export const PRODUCTION_RULES = {
+  minDaysTotal: 9,
+  roteiro:     2,
+  gravacao:    1,
+  edicao:      2,
+  bottleneck: "Lucas",
+  lucasDaysPerDeliverable: 3,
+  maxPubliPerWeek:   3,   // máximo absoluto de publis por semana
+  idealPubliPerWeek: 2,   // ideal para não poluir o feed
+  maxPerWeek: 2,
+};
+
+// Valida se um entregável respeita as regras
+function validateDeliverable(d) {
+  if (!d?.plannedPostDate) return [];
+  const warnings = [];
+  STAGES.filter(s => s.minDays > 0 && s.id !== "postagem" && s.id !== "done").forEach(s => {
+    const deadline = d.stageDateOverrides?.[s.id] || addDays(d.plannedPostDate, s.days);
+    if (!deadline) return;
+    const prev = STAGES[STAGES.findIndex(x=>x.id===s.id) - 1];
+    if (!prev) return;
+    const prevDeadline = d.stageDateOverrides?.[prev.id] || addDays(d.plannedPostDate, prev.days);
+    if (!prevDeadline) return;
+    const gap = Math.round((new Date(deadline) - new Date(prevDeadline)) / 86400000);
+    if (gap < s.minDays) {
+      warnings.push({ stage: s.id, label: s.label, got: gap, need: s.minDays, rule: s.rule });
+    }
+  });
+  return warnings;
+}
+
 const STAGE_IDS = STAGES.map(s => s.id);
 
 function addDays(dateStr, n) {
@@ -233,9 +268,7 @@ function addDays(dateStr, n) {
 function calcStageDates(postDate) {
   if (!postDate) return {};
   const dates = {};
-  STAGES.forEach(s => {
-    dates[s.id] = addDays(postDate, s.days);
-  });
+  STAGES.forEach(s => { dates[s.id] = addDays(postDate, s.days); });
   return dates;
 }
 
@@ -246,6 +279,66 @@ function stageDeadline(deliverable, stageId) {
   const stage = STAGES.find(s => s.id === stageId);
   if (!stage) return null;
   return addDays(deliverable.plannedPostDate, stage.days);
+}
+
+// ─── Slot Calculator (para agentes) ──────────────────────
+function calcAvailableSlots(deliverables, contracts, weeksAhead = 8) {
+  const today = new Date();
+  const slots = [];
+  for (let w = 0; w < weeksAhead; w++) {
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() + w * 7);
+    const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+
+    const weekDels = deliverables.filter(d => {
+      if (!d.plannedPostDate || d.stage === "done") return false;
+      const ds = new Date(d.plannedPostDate);
+      const diff = Math.round((ds - weekStart) / 86400000);
+      return diff >= 0 && diff < 7;
+    });
+
+    // All deliverables linked to contracts = publis (reels + TikToks that are feed posts)
+    const publiDels = weekDels.filter(d => d.contractId && (d.type==="reel"||d.type==="tiktok"||d.type==="post"));
+    const publiCount = publiDels.length;
+
+    // Travel days
+    let travelDays = 0;
+    contracts.forEach(c => {
+      if (!c.hasTravel || !c.travelDates?.length) return;
+      c.travelDates.filter(td => td.date).forEach(td => {
+        const tdDate = new Date(td.date);
+        const diff = Math.round((tdDate - weekStart) / 86400000);
+        if (diff >= 0 && diff < 7) travelDays++;
+      });
+    });
+
+    const lucasAvailable = Math.max(0, 5 - travelDays);
+    const lucasUsed = weekDels.length * PRODUCTION_RULES.lucasDaysPerDeliverable;
+    const lucasRemaining = Math.max(0, Math.floor((lucasAvailable - lucasUsed) / PRODUCTION_RULES.lucasDaysPerDeliverable));
+
+    // Publi slots remaining — this is the real bottleneck
+    const publiSlotsRemaining = Math.max(0, PRODUCTION_RULES.maxPubliPerWeek - publiCount);
+    const publiOverIdeal = publiCount > PRODUCTION_RULES.idealPubliPerWeek;
+    const publiOverMax   = publiCount >= PRODUCTION_RULES.maxPubliPerWeek;
+
+    // Status based on publi count (primary constraint)
+    let status = "ok";
+    if (publiOverMax || lucasRemaining === 0) status = "full";
+    else if (publiOverIdeal || lucasRemaining <= 1) status = "tight";
+
+    slots.push({
+      weekStart: weekStart.toISOString().substr(0, 10),
+      weekEnd:   weekEnd.toISOString().substr(0, 10),
+      label: weekStart.toLocaleDateString("pt-BR", { day:"numeric", month:"short" }),
+      scheduled: weekDels.length,
+      publiCount, publiSlotsRemaining, publiOverIdeal, publiOverMax,
+      lucasAvailable, lucasUsed, lucasRemaining: Math.min(lucasRemaining, publiSlotsRemaining),
+      travelDays,
+      status,
+      deliverables: publiDels.map(d => d.title),
+    });
+  }
+  return slots;
 }
 
 
@@ -942,6 +1035,144 @@ function DashKpi({ label, value, sub, accent, small=false }) {
   );
 }
 
+// ─── Production Rules Card (visible to all, highlighted for agentes) ──
+function ProductionRulesCard({ deliverables=[], contracts=[] }) {
+  const [open, setOpen] = useState(false);
+  const slots = useMemo(() => calcAvailableSlots(deliverables, contracts, 6), [deliverables, contracts]);
+
+  const exceptions = useMemo(() => {
+    const exc = [];
+    deliverables.forEach(d => {
+      const warns = validateDeliverable(d);
+      if (warns.length) exc.push({ ...d, warnings: warns });
+    });
+    return exc;
+  }, [deliverables]);
+
+  const STATUS_COLOR = { ok:"#16A34A", tight:"#D97706", full:"#C8102E" };
+  const STATUS_LABEL = { ok:"Disponível", tight:"Apertado", full:"Cheio" };
+
+  return (
+    <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer" }} onClick={()=>setOpen(o=>!o)}>
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:2 }}>⚙️ Regras de Produção & Slots disponíveis</div>
+          <div style={{ fontSize:11, color:TX2 }}>
+            Ciclo mínimo: <strong>9 dias</strong> · Roteiro: <strong>2 dias</strong> · Gravação: <strong>1 dia após ap. roteiro</strong> · Edição: <strong>2 dias</strong>
+            <span style={{ marginLeft:12, padding:"2px 8px", borderRadius:99, background:`${AMB}14`, color:AMB, fontWeight:700, fontSize:10 }}>
+              Publis: ideal 2/sem · máx 3/sem
+            </span>
+            {exceptions.length > 0 && <span style={{ marginLeft:10, color:RED, fontWeight:700 }}>⚠️ {exceptions.length} exceção{exceptions.length>1?"ões":""}</span>}
+          </div>
+        </div>
+        <span style={{ fontSize:12, color:TX2 }}>{open?"▲":"▼"}</span>
+      </div>
+
+      {open && (
+        <div style={{ marginTop:16 }}>
+          {/* Rules table */}
+          <div style={{ ...G2, padding:"12px 16px", marginBottom:14 }}>
+            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>Fluxo de produção obrigatório</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:8 }}>
+              {STAGES.filter(s=>s.id!=="done"&&s.id!=="postagem").map((s,i) => (
+                <div key={s.id} style={{ background:B2, borderRadius:8, padding:"10px 12px", borderTop:`3px solid ${s.minDays>=2?RED:AMB}` }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:TX, marginBottom:4 }}>{s.label}</div>
+                  <div style={{ fontSize:11, fontWeight:700, color:s.minDays>=2?RED:AMB }}>{s.minDays}d mín.</div>
+                  <div style={{ fontSize:9, color:TX2, marginTop:4, lineHeight:1.4 }}>{s.rule}</div>
+                  <div style={{ fontSize:9, color:TX3, marginTop:4 }}>→ {s.resp}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Slot calendar */}
+          <div style={{ marginBottom:14 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:10 }}>
+              <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2 }}>
+                Slots de publi · próximas 6 semanas
+              </div>
+              <div style={{ display:"flex", gap:10, fontSize:10 }}>
+                <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:GRN, display:"inline-block" }}/>● Ideal (≤2/sem)</span>
+                <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:AMB, display:"inline-block" }}/>▲ Máximo (3/sem)</span>
+                <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:LN, display:"inline-block" }}/>Vazio</span>
+              </div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:8 }}>
+              {slots.map((s,i) => {
+                const sc = { ok:GRN, tight:AMB, full:RED }[s.status];
+                return (
+                  <div key={i} style={{ background:`${sc}06`, border:`1px solid ${sc}20`, borderRadius:8, padding:"10px 12px" }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:TX }}>{s.label}</div>
+                      <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:99, background:`${sc}18`, color:sc }}>
+                        {{ok:"✓ OK", tight:"⚠ Atenção", full:"🔴 Cheio"}[s.status]}
+                      </span>
+                    </div>
+                    {/* 3 publi slots visual */}
+                    <div style={{ display:"flex", gap:3, marginBottom:6 }}>
+                      {[1,2,3].map(n => (
+                        <div key={n} style={{
+                          flex:1, height:22, borderRadius:4,
+                          background: s.publiCount >= n ? (n <= PRODUCTION_RULES.idealPubliPerWeek ? GRN : AMB) : LN,
+                          border: `1px solid ${s.publiCount >= n ? (n <= 2 ? GRN+"50" : AMB+"50") : LN2}`,
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          fontSize:9, fontWeight:700, color: s.publiCount >= n ? "#fff" : TX3,
+                          transition:"all .15s",
+                        }}>
+                          {n <= 2 ? "●" : "▲"}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize:12, fontWeight:700, color:sc }}>
+                      {s.publiCount} publi{s.publiCount!==1?"s":""}
+                      {s.lucasRemaining > 0 && <span style={{ fontSize:10, fontWeight:400, color:TX2 }}> · +{s.lucasRemaining} livre{s.lucasRemaining!==1?"s":""}</span>}
+                    </div>
+                    {s.travelDays > 0 && <div style={{ fontSize:9, color:"#7C3AED", marginTop:3 }}>✈️ {s.travelDays}d viagem</div>}
+                    {s.deliverables?.length > 0 && (
+                      <div style={{ fontSize:8, color:TX3, marginTop:4, lineHeight:1.4 }}>
+                        {s.deliverables.slice(0,2).map((t,i)=><div key={i}>· {t.length>18?t.substr(0,18)+"…":t}</div>)}
+                        {s.deliverables.length>2&&<div>+{s.deliverables.length-2} mais</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {slots.some(s=>s.publiOverIdeal) && (
+              <div style={{ marginTop:10, padding:"8px 14px", background:`${AMB}08`, border:`1px solid ${AMB}25`, borderRadius:8, fontSize:11 }}>
+                ⚠️ <strong style={{color:AMB}}>Semanas com mais de 2 publis</strong> — ideal é máximo 2/semana para não comprometer o feed orgânico.
+                {slots.some(s=>s.publiOverMax) && <span style={{color:RED, fontWeight:700}}> Há semanas no limite máximo (3) — não vender mais nessas semanas.</span>}
+              </div>
+            )}
+          </div>
+
+          {/* Exceptions */}
+          {exceptions.length > 0 && (
+            <div style={{ background:"#FFF1F2", border:"1px solid #FCA5A5", borderRadius:8, padding:"12px 16px" }}>
+              <div style={{ fontSize:11, fontWeight:700, color:RED, marginBottom:10 }}>⚠️ Exceções detectadas — prazos abaixo do mínimo</div>
+              {exceptions.map((d,i) => (
+                <div key={i} style={{ marginBottom:i<exceptions.length-1?10:0, paddingBottom:i<exceptions.length-1?10:0, borderBottom:i<exceptions.length-1?`1px solid #FCA5A5`:"none" }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:TX, marginBottom:4 }}>{d.title}</div>
+                  {d.warnings.map((w,j) => (
+                    <div key={j} style={{ fontSize:11, color:RED, display:"flex", alignItems:"center", gap:6 }}>
+                      <span>↳ {w.label}:</span>
+                      <span><strong>{w.got}d disponíveis</strong> vs {w.need}d necessários</span>
+                      <span style={{ color:TX2 }}>— {w.rule}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          {exceptions.length === 0 && (
+            <div style={{ fontSize:11, color:GRN, fontWeight:600 }}>✓ Nenhuma exceção. Todos os entregáveis respeitam as regras de produção.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo, role="admin", userName="Matheus" }) {
   const isMobile = useIsMobile();
   const today    = new Date();
@@ -1225,7 +1456,10 @@ Responda APENAS com o JSON, sem markdown.`
         <DashKpi label="Engajamento" value={stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—"} sub="média das publis" accent={stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2}/>
       </div>
 
-      {/* Capacidade de Absorção */}
+      {/* Production Rules & Slots */}
+      <ProductionRulesCard deliverables={allDeliverables} contracts={contracts}/>
+
+      {/* Capacidade de Absorção (AI) */}
       <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div>
@@ -1644,6 +1878,7 @@ function DeliverableCard({ item, contracts, onEdit, stageId }) {
   const isDone = item.stage === "done";
   const isLate = !isDone && !item.publishedAt && !item.postLink && daysUntil !== null && daysUntil < 0;
   const isUrgent = daysUntil !== null && daysUntil >= 0 && daysUntil <= 1;
+  const exceptions = useMemo(() => validateDeliverable(item), [item]);
 
   return (
     <div
@@ -1684,6 +1919,12 @@ function DeliverableCard({ item, contracts, onEdit, stageId }) {
       )}
       {item.responsible?.[stageId] && (
         <div style={{ marginTop: 4, fontSize: 10, color: TX3 }}>👤 {item.responsible[stageId]}</div>
+      )}
+      {exceptions.length > 0 && (
+        <div title={exceptions.map(e=>`${e.label}: ${e.got}d disponíveis (mín. ${e.need}d)`).join(" · ")}
+          style={{ marginTop:4, fontSize:9, fontWeight:700, color:"#EA580C", background:"rgba(234,88,12,.1)", borderRadius:4, padding:"1px 6px", display:"inline-block", cursor:"help" }}>
+          ⚠️ {exceptions.length} exceção{exceptions.length>1?"ões":""}
+        </div>
       )}
     </div>
   );
@@ -2047,10 +2288,12 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
         </div>
         {f.plannedPostDate&&(<><SRule>Cronograma automático</SRule>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-            {STAGES.filter(s=>s.id!=="done").map(s=>{const auto=stageDates[s.id];const override=f.stageDateOverrides?.[s.id];const dl=daysLeft(override||auto);return(<div key={s.id} style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"10px 12px"}}>
-              <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:5}}>{s.label}</div>
+            {STAGES.filter(s=>s.id!=="done").map(s=>{const auto=stageDates[s.id];const override=f.stageDateOverrides?.[s.id];const dl=daysLeft(override||auto);const exc=validateDeliverable(f).find(e=>e.stage===s.id);return(<div key={s.id} style={{background:exc?`rgba(234,88,12,.06)`:B2,border:`1px solid ${exc?"rgba(234,88,12,.3)":LN}`,borderRadius:8,padding:"10px 12px"}}>
+              <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>{s.label}{exc&&<span title={exc.rule} style={{fontSize:10,cursor:"help"}}>⚠️</span>}</div>
               <div style={{fontSize:12,fontWeight:600,color:dl!==null&&dl<0?RED:TX,marginBottom:4}}>{fmtDate(override||auto)}</div>
               {dl!==null&&<div style={{fontSize:10,color:dl<0?RED:dl<=1?AMB:TX3,marginBottom:5}}>{dl<0?`${Math.abs(dl)}d atrás`:dl===0?"Hoje":`${dl}d`}</div>}
+              {exc&&<div style={{fontSize:9,color:"#EA580C",fontWeight:600,marginBottom:4}}>{exc.got}d / mín. {exc.need}d</div>}
+              <div style={{fontSize:9,color:TX3,marginBottom:4,fontStyle:"italic"}}>{s.rule}</div>
               <input type="date" value={f.stageDateOverrides?.[s.id]||""} onChange={e=>setF(x=>({...x,stageDateOverrides:{...(x.stageDateOverrides||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX3,fontFamily:"inherit",outline:"none"}}/>
               <input value={f.responsible?.[s.id]||""} placeholder="Responsável" onChange={e=>setF(x=>({...x,responsible:{...(x.responsible||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",outline:"none",marginTop:4}}/>
             </div>);})}</div></>)}

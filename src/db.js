@@ -122,3 +122,24 @@ export function subscribeToChanges({ onContracts, onPosts, onDeliverables, onSet
   })
   return () => { unsubC(); unsubP(); unsubD(); unsubS() }
 }
+
+// ─── User Roles ───────────────────────────────────────────
+const DEFAULT_ROLES = {
+  "lucas.veloso4001@gmail.com": "influencer",
+  "caio@rnkd.com.br":           "agente",
+  "matheus@rnkd.com.br":        "atendimento",
+  "beatriz@rnkd.com.br":        "atendimento",
+  "thiago@rnkd.com.br":         "agente",
+  "matheussgbf@gmail.com":      "admin",
+}
+export async function getUserRole(email) {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'user_roles'))
+    if (snap.exists()) return snap.data()[email] || 'atendimento'
+    await setDoc(doc(db, 'settings', 'user_roles'), DEFAULT_ROLES)
+    return DEFAULT_ROLES[email] || 'atendimento'
+  } catch { return DEFAULT_ROLES[email] || 'atendimento' }
+}
+export async function setUserRoles(roles) {
+  await setDoc(doc(db, 'settings', 'user_roles'), roles)
+}

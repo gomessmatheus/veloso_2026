@@ -7,6 +7,7 @@ import {
   loadCaixaTx, syncCaixaTx,
   getSetting, setSetting, subscribeToChanges,
   updatePresence, removePresence, subscribeToPresence, getMyPresence,
+  getUserRole,
 } from "./db.js";
 import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSameDay, isSameMonth, isToday, parse, startOfToday, startOfWeek, add } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -33,6 +34,42 @@ const CONTRACT_COLORS = ["#C8102E","#1D4ED8","#059669","#D97706","#7C3AED","#089
 const NETWORKS   = ["Instagram","TikTok","YouTube","X / Twitter","Facebook"];
 const COMM_RATE  = 0.20;
 const MONTHS_PT  = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+// ─── Role system ──────────────────────────────────────────
+const USER_ROLES = {
+  "lucas.veloso4001@gmail.com": "influencer",
+  "caio@rnkd.com.br":           "agente",
+  "matheus@rnkd.com.br":        "atendimento",
+  "beatriz@rnkd.com.br":        "atendimento",
+  "thiago@rnkd.com.br":         "agente",
+  "matheussgbf@gmail.com":      "admin",
+};
+const ROLE_NAMES = {
+  "lucas.veloso4001@gmail.com": "Lucas",
+  "caio@rnkd.com.br":           "Caio",
+  "matheus@rnkd.com.br":        "Matheus",
+  "beatriz@rnkd.com.br":        "Beatriz",
+  "thiago@rnkd.com.br":         "Thiago",
+  "matheussgbf@gmail.com":      "Matheus",
+};
+const ROLE_META = {
+  admin:       { label:"Admin",          color:RED,       badge:"👑" },
+  agente:      { label:"Agente Ranked",  color:"#7C3AED", badge:"📊" },
+  atendimento: { label:"Atendimento",    color:"#2563EB", badge:"🤝" },
+  influencer:  { label:"Influenciador",  color:"#059669", badge:"🎬" },
+};
+const ROLE_NAV = {
+  admin:       ["dashboard","acompanhamento","contratos","financeiro","caixa"],
+  agente:      ["dashboard","contratos","financeiro"],
+  atendimento: ["dashboard","acompanhamento","contratos"],
+  influencer:  ["dashboard","acompanhamento","financeiro"],
+};
+const ROLE_CAN = {
+  admin:       { editContracts:true,  seeValues:true,  seeCaixa:true,   editDeliverables:true, seeRoteiros:true,  seeFullFinanceiro:true  },
+  agente:      { editContracts:true,  seeValues:true,  seeCaixa:false,  editDeliverables:false,seeRoteiros:false, seeFullFinanceiro:true  },
+  atendimento: { editContracts:false, seeValues:false, seeCaixa:false,  editDeliverables:true, seeRoteiros:true,  seeFullFinanceiro:false },
+  influencer:  { editContracts:false, seeValues:false, seeCaixa:false,  editDeliverables:true, seeRoteiros:true,  seeFullFinanceiro:false },
+};
 const MONTHS_SH  = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const VIEW_TYPES = new Set(["post","tiktok","repost"]);
 const TASK_STATUSES = [
@@ -668,8 +705,54 @@ const NAV_ITEMS = [
   { id:"caixa",          label:"Caixa",            icon:Landmark },
 ];
 
-function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts }) {
+function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts, role, userName, deliverables }) {
   const my = useMemo(() => getMyPresence(), []);
+  const allowedNav = ROLE_NAV[role] || ROLE_NAV.admin;
+  const roleMeta = ROLE_META[role] || ROLE_META.admin;
+  const today = new Date();
+  const isSunday = today.getDay() === 0;
+
+  // WhatsApp weekly summary generator
+  const sendWhatsApp = () => {
+    const activeContracts = contracts.filter(c=>!c.archived);
+    const hour = today.getHours();
+    const greet = hour<12?"Bom dia":hour<18?"Boa tarde":"Boa noite";
+    const dateStr = today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
+
+    let msg = "";
+    if (role==="influencer") {
+      const upcoming = (deliverables||[]).filter(d=>d.stage!=="done"&&d.plannedPostDate).sort((a,b)=>a.plannedPostDate.localeCompare(b.plannedPostDate)).slice(0,7);
+      const late = (deliverables||[]).filter(d=>d.stage!=="done"&&d.plannedPostDate&&daysLeft(d.plannedPostDate)<0);
+      msg = `${greet}, ${userName}! 🎬\n\n📅 *Resumo semanal — ${dateStr}*\n\n`;
+      if (late.length) msg += `⚠️ *Atrasados (${late.length}):*\n${late.map(d=>`• ${d.title}`).join("\n")}\n\n`;
+      msg += `📋 *Próximas postagens:*\n${upcoming.map(d=>`• ${d.title} → ${fmtDate(d.plannedPostDate)}`).join("\n")||"Nenhuma agendada"}\n\n`;
+      msg += `Bora produzir! 💪`;
+    } else if (role==="agente") {
+      const totalBRL = activeContracts.reduce((s,c)=>s+(Number(c.contractValue)||Number(c.monthlyValue)||0),0);
+      msg = `${greet}, ${userName}! 📊\n\n*Resumo semanal Ranked — ${dateStr}*\n\n`;
+      msg += `💰 *Contratos ativos:* ${activeContracts.length}\n`;
+      msg += `💵 *Volume total:* R$${totalBRL.toLocaleString("pt-BR")}\n\n`;
+      const pending = activeContracts.filter(c=>c.contractDeadline&&daysLeft(c.contractDeadline)<=14&&daysLeft(c.contractDeadline)>=0);
+      if (pending.length) msg += `⏰ *Vencendo em 14 dias:*\n${pending.map(c=>`• ${c.company} — ${fmtDate(c.contractDeadline)}`).join("\n")}\n\n`;
+      msg += `Boa semana! 🚀`;
+    } else if (role==="atendimento") {
+      const late = (deliverables||[]).filter(d=>d.stage!=="done"&&d.plannedPostDate&&daysLeft(d.plannedPostDate)<0);
+      const upcoming = (deliverables||[]).filter(d=>d.stage!=="done"&&d.plannedPostDate&&daysLeft(d.plannedPostDate)>=0&&daysLeft(d.plannedPostDate)<=7);
+      msg = `${greet}, ${userName}! 🤝\n\n*Resumo semanal — ${dateStr}*\n\n`;
+      if (late.length) msg += `🔴 *Atrasados (${late.length}):*\n${late.slice(0,5).map(d=>`• ${d.title}`).join("\n")}\n\n`;
+      msg += `📅 *Entregas esta semana (${upcoming.length}):*\n${upcoming.slice(0,5).map(d=>`• ${d.title} → ${fmtDate(d.plannedPostDate)}`).join("\n")||"Nenhuma"}\n\n`;
+      msg += `Boa semana! 💪`;
+    } else {
+      const totalBRL = activeContracts.reduce((s,c)=>s+(Number(c.contractValue)||Number(c.monthlyValue)||0),0);
+      const late = (deliverables||[]).filter(d=>d.stage!=="done"&&d.plannedPostDate&&daysLeft(d.plannedPostDate)<0);
+      msg = `${greet}, ${userName}! 👑\n\n*Resumo semanal ENTREGAS — ${dateStr}*\n\n`;
+      msg += `📊 Contratos ativos: ${activeContracts.length} | Volume: R$${totalBRL.toLocaleString("pt-BR")}\n`;
+      msg += `⚙️ Entregáveis atrasados: ${late.length}\n\n`;
+      msg += `Boa semana! 🚀`;
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
   return (
     <div style={{ width:220, background:B0, borderRight:`1px solid ${LN}`, display:"flex", flexDirection:"column", height:"100vh", flexShrink:0, position:"sticky", top:0 }}>
       {/* Logo */}
@@ -683,7 +766,7 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
       {/* Nav */}
       <nav style={{ padding:"12px 8px", flex:1, overflowY:"auto" }}>
         <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, padding:"4px 8px", marginBottom:4 }}>Navegação</div>
-        {NAV_ITEMS.map(item => {
+        {NAV_ITEMS.filter(item => allowedNav.includes(item.id)).map(item => {
           const active = view===item.id;
           return (
             <div key={item.id} onClick={()=>setView(item.id)}
@@ -692,20 +775,26 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
             onMouseLeave={e=>{ if(!active){e.currentTarget.style.background="transparent";e.currentTarget.style.color=TX2;}}}>
               <item.icon size={14} style={{ color:active?RED:TX3, flexShrink:0 }}/>
               {item.label}
-              {item.id==="tarefas" && (
-                <span style={{ marginLeft:"auto", fontSize:9, background:"rgba(200,16,46,.2)", color:RED, padding:"1px 5px", borderRadius:99, fontWeight:700 }}>
-                  {lsLoad("copa6_tasks",[]).filter(t=>t.status!=="done"&&t.status!=="cancelled").length||""}
-                </span>
-              )}
             </div>
           );
         })}
-
-
       </nav>
 
+      {/* WhatsApp summary button */}
+      <div style={{ padding:"8px 8px 0" }}>
+        <button onClick={sendWhatsApp}
+          style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${isSunday?"#25D366":"rgba(37,211,102,.3)"}`,
+            background:isSunday?"rgba(37,211,102,.12)":"transparent",
+            color:isSunday?"#128C7E":TX2, fontSize:11, fontWeight:isSunday?700:500,
+            cursor:"pointer", display:"flex", alignItems:"center", gap:7, transition:"all .2s",
+            boxShadow:isSunday?"0 0 0 2px rgba(37,211,102,.2)":"none" }}>
+          <span style={{fontSize:14}}>📱</span>
+          <span>{isSunday?"📤 Enviar resumo da semana":"Resumo WhatsApp"}</span>
+        </button>
+      </div>
+
       {/* Online + user */}
-      <div style={{ padding:"12px 16px", borderTop:`1px solid ${LN}` }}>
+      <div style={{ padding:"12px 16px", borderTop:`1px solid ${LN}`, marginTop:8 }}>
         {onlineUsers.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:-4, marginBottom:10 }}>
             {[...onlineUsers.filter(u=>u.sessionId!==my.sessionId), {...my,isMe:true}].slice(0,5).map((u,i) => (
@@ -715,15 +804,18 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
                 {u.isMe && <div style={{ position:"absolute", bottom:-1, right:-1, width:7, height:7, borderRadius:"50%", background:GRN, border:`1px solid ${B0}` }}/>}
               </div>
             ))}
-            <span style={{ fontSize:10, color:TX2, marginLeft:12 }}>
-              {onlineUsers.length} online
-            </span>
+            <span style={{ fontSize:10, color:TX2, marginLeft:12 }}>{onlineUsers.length} online</span>
           </div>
         )}
+        {/* Role badge */}
+        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+          <span style={{ fontSize:10 }}>{roleMeta.badge}</span>
+          <span style={{ fontSize:10, fontWeight:700, color:roleMeta.color, padding:"1px 7px", borderRadius:99, background:`${roleMeta.color}14` }}>{roleMeta.label}</span>
+        </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ fontSize:11, color:TX2 }}>{user?.email?.split("@")[0]}</div>
+          <div style={{ fontSize:11, color:TX2, fontWeight:500 }}>{userName || user?.email?.split("@")[0]}</div>
           <div style={{display:"flex",gap:4}}>
-            <button onClick={onInvite} title="Convidar usuário" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,fontSize:12}}>👤+</button>
+            {role==="admin" && <button onClick={onInvite} title="Convidar usuário" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,fontSize:12}}>👤+</button>}
             <button onClick={onSignOut} style={{ background:"none", border:"none", color:TX3, cursor:"pointer", padding:4 }} title="Sair"><LogOut size={14}/></button>
           </div>
         </div>
@@ -850,7 +942,7 @@ function DashKpi({ label, value, sub, accent, small=false }) {
   );
 }
 
-function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo }) {
+function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo, role="admin", userName="Matheus" }) {
   const isMobile = useIsMobile();
   const today    = new Date();
   const todayStr = today.toISOString().substr(0, 10);
@@ -979,6 +1071,12 @@ Responda APENAS com o JSON, sem markdown.`
 
   const hour = today.getHours();
   const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const roleSubtitle = {
+    admin:       "Visão geral · Copa 2026",
+    agente:      "Visão comercial · Copa 2026",
+    atendimento: "Produção e entregas · Copa 2026",
+    influencer:  "Seus próximos conteúdos · Copa 2026",
+  }[role] || "Copa 2026";
 
   // Capacity analysis state
   const [capAnalysis, setCapAnalysis] = useState(null);
@@ -1066,8 +1164,8 @@ Responda APENAS com o JSON, sem markdown.`
       {/* Header */}
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24 }}>
         <div>
-          <h1 style={{ fontSize:isMobile?18:20, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{greeting}, Matheus 👋</h1>
-          <p style={{ fontSize:12, color:TX2, marginTop:4 }}>{today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · Copa 2026</p>
+          <h1 style={{ fontSize:isMobile?18:20, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{greeting}, {userName}! 👋</h1>
+          <p style={{ fontSize:12, color:TX2, marginTop:4 }}>{today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · {roleSubtitle}</p>
         </div>
         <Btn onClick={runAI} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
           {aiLoading ? "Analisando…" : "Análise IA"}
@@ -1205,14 +1303,27 @@ Responda APENAS com o JSON, sem markdown.`
           const stage = STAGES.find(s=>s.id===d.stage);
           const dl = d.plannedPostDate ? daysLeft(d.plannedPostDate) : null;
           const isLate = d.stage!=="done" && !d.publishedAt && !d.postLink && dl !== null && dl < 0;
+          const STAGE_COLOR = { briefing:"#94A3B8", roteiro:"#7C3AED", ap_roteiro:"#D97706", gravacao:"#BE185D", edicao:"#2563EB", ap_final:"#EA580C", postagem:"#0891B2", done:"#16A34A" };
+          const stageColor = STAGE_COLOR[d.stage] || TX2;
           return (
-            <div key={d.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<upcomingDeliverables.slice(0,6).length-1?`1px solid ${LN}`:"none" }}>
-              <div style={{ width:6, height:6, borderRadius:"50%", background:c?.color||TX3, flexShrink:0 }}/>
+            <div key={d.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:i<upcomingDeliverables.slice(0,6).length-1?`1px solid ${LN}`:"none" }}>
+              <div style={{ width:8, height:8, borderRadius:"50%", background:c?.color||TX3, flexShrink:0 }}/>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12, fontWeight:500, color:isLate?RED:TX, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{d.title}</div>
-                <div style={{ fontSize:10, color:TX2 }}>{stage?.label}{d.plannedPostDate?` — postagem ${fmtDate(d.plannedPostDate)}`:""}</div>
+                <div style={{ fontSize:13, fontWeight:600, color:isLate?RED:TX, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", marginBottom:5 }}>{d.title}</div>
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${stageColor}14`, color:stageColor }}>{stage?.label||d.stage}</span>
+                  {d.plannedPostDate && (
+                    <span style={{ fontSize:11, fontWeight:600, color:isLate?RED:TX2 }}>
+                      📅 {fmtDate(d.plannedPostDate)}
+                    </span>
+                  )}
+                </div>
               </div>
-              {dl!==null&&<div style={{ fontSize:11, fontWeight:700, color:dlColor(dl), flexShrink:0 }}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</div>}
+              {dl!==null && (
+                <div style={{ fontSize:12, fontWeight:700, color:dlColor(dl), flexShrink:0, minWidth:70, textAlign:"right" }}>
+                  {dl<0 ? `${Math.abs(dl)}d atraso` : dl===0 ? "Hoje" : `${dl}d`}
+                </div>
+              )}
             </div>
           );
         })}
@@ -1614,7 +1725,7 @@ function PipelineColumn({ stage, items, contracts, onEdit, onDrop }) {
 
 function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF }) {
   const setDeliverables = saveDeliverables || (() => {});
-  const [view, setView]   = useState("pipeline");
+  const [view, setView]   = useState("calendar");
   const [editItem, setEditItem] = useState(null);
   const [newOpen, setNewOpen]   = useState(false);
   const [prefillDate, setPrefillDate] = useState("");
@@ -2582,10 +2693,25 @@ Escreva em português, de forma direta e prática. Use marcadores claros.`}]})})
 }
 
 // ─── Contratos list ────────────────────────────────────────
-function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates }) {
+function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates, role }) {
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
   const selected = contracts.find(c => c.id === selectedId);
+
+  const activeContracts   = contracts.filter(c => !c.archived);
+  const archivedContracts = contracts.filter(c =>  c.archived);
+  const displayContracts  = showArchived ? archivedContracts : activeContracts;
+
+  const canEdit = ROLE_CAN[role]?.editContracts ?? true;
+  const seeValues = ROLE_CAN[role]?.seeValues ?? true;
+
+  const archive = async (id) => {
+    await saveC(contracts.map(c => c.id===id ? {...c, archived:true,  archivedAt:new Date().toISOString()} : c));
+  };
+  const unarchive = async (id) => {
+    await saveC(contracts.map(c => c.id===id ? {...c, archived:false, archivedAt:null} : c));
+  };
 
   const del = async (id) => {
     if (!confirm("Excluir contrato e todos os entregáveis vinculados?")) return;
@@ -2661,13 +2787,28 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
   // ── Desktop table view ──
   return (
     <div style={{ padding:24, maxWidth:1400 }}>
+      {/* Archive toggle */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+        <div style={{ display:"flex", background:B2, border:`1px solid ${LN}`, borderRadius:8, overflow:"hidden" }}>
+          <div onClick={()=>setShowArchived(false)}
+            style={{ padding:"6px 16px", fontSize:11, fontWeight:!showArchived?700:400, cursor:"pointer", color:!showArchived?TX:TX2, background:!showArchived?B1:"transparent", transition:TRANS }}>
+            Ativos ({activeContracts.length})
+          </div>
+          <div onClick={()=>setShowArchived(true)}
+            style={{ padding:"6px 16px", fontSize:11, fontWeight:showArchived?700:400, cursor:"pointer", color:showArchived?TX:TX2, background:showArchived?B1:"transparent", transition:TRANS }}>
+            Arquivados ({archivedContracts.length})
+          </div>
+        </div>
+        {showArchived && <span style={{ fontSize:11, color:TX3, fontStyle:"italic" }}>Contratos concluídos · somente leitura</span>}
+      </div>
+
       <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
         <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 70px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
           {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links",""].map((h,i)=>(
             <div key={i} style={{ padding:"0 12px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
           ))}
         </div>
-        {contracts.map(c=>{
+        {displayContracts.map(c=>{
           const dd2 = t => deliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&d.type===t).length;
           const cp=posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + dd2("reel") + dd2("post");
           const cs=posts.filter(p=>p.contractId===c.id&&p.type==="story"&&p.isPosted).length + dd2("story");
@@ -2680,7 +2821,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
           return (
             <div key={c.id}
               onClick={()=>setSelectedId(c.id)}
-              style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 70px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:12, cursor:"pointer", transition:TRANS }}
+              style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 80px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:12, cursor:"pointer", transition:TRANS, opacity:c.archived?.7:1 }}
               onMouseEnter={e=>e.currentTarget.style.background=B2}
               onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
               <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }}/>
@@ -2689,11 +2830,12 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
                 {currBadge(c.currency)}
                 {c.paymentType==="monthly"&&<Badge color={TX2}>M</Badge>}
                 {c.hasTravel&&<Badge color={BLU}>✈️</Badge>}
+                {c.archived&&<Badge color={TX3}>Arquivado</Badge>}
               </div>
-              <div style={{ padding:"0 12px", fontWeight:700, color:TX }}>{total>0?fmtMoney(total,c.currency):"—"}</div>
+              <div style={{ padding:"0 12px", fontWeight:700, color:TX }}>{seeValues&&total>0?fmtMoney(total,c.currency):"—"}</div>
               <div style={{ padding:"0 12px", color:dlColor(dl), fontWeight:dl!=null&&dl<=14?700:400 }}>{fmtDate(c.contractDeadline)}</div>
               <div style={{ padding:"0 12px", fontSize:11, color:TX2 }}>
-                {c.paymentType==="monthly"&&`${fmtMoney(c.monthlyValue)}/mês`}
+                {c.paymentType==="monthly"&&`${seeValues?fmtMoney(c.monthlyValue):"—"}/mês`}
                 {c.paymentType==="split"&&`${getInstallments(c).length} parcelas`}
                 {c.paymentType==="single"&&fmtDate(c.paymentDeadline)}
               </div>
@@ -2707,13 +2849,15 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
               <div style={{ padding:"0 12px", color:TX2 }}>{cs}/{c.numStories}</div>
               <div style={{ padding:"0 12px", color:TX2 }}>{cl}/{c.numCommunityLinks}</div>
               <div style={{ padding:"0 8px", display:"flex", gap:4 }} onClick={e=>e.stopPropagation()}>
-                <Btn onClick={()=>setModal({type:"contract",data:c})} variant="ghost" size="sm">✎</Btn>
-                <Btn onClick={()=>del(c.id)} variant="ghost" size="sm" style={{color:RED}}>×</Btn>
+                {!c.archived && canEdit && <Btn onClick={()=>setModal({type:"contract",data:c})} variant="ghost" size="sm">✎</Btn>}
+                {!c.archived && canEdit && <Btn onClick={()=>{if(window.confirm(`Arquivar "${c.company}"?`))archive(c.id);}} variant="ghost" size="sm" style={{color:TX2}} title="Arquivar contrato">📦</Btn>}
+                {c.archived && <Btn onClick={()=>unarchive(c.id)} variant="ghost" size="sm" style={{color:GRN}} title="Desarquivar">↩</Btn>}
+                {canEdit && <Btn onClick={()=>del(c.id)} variant="ghost" size="sm" style={{color:RED}}>×</Btn>}
               </div>
             </div>
           );
         })}
-        {contracts.length===0&&<div style={{padding:48,textAlign:"center",color:TX3}}>Nenhum contrato.</div>}
+        {displayContracts.length===0&&<div style={{padding:48,textAlign:"center",color:TX3}}>{showArchived?"Nenhum contrato arquivado.":"Nenhum contrato ativo."}</div>}
       </div>
     </div>
   );
@@ -3243,9 +3387,10 @@ function PostModal({ modal, setModal, contracts, posts, saveP, toast }) {
 function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, saveNote, toggleComm,
   toggleCommPaid, toggleNF, setModal, setView, saveC, saveP, saveD,
   calEvents, calMonth, setCal, calFilter, setCalF,
-  triggerNewTask, setTriggerNewTask }) {
+  triggerNewTask, setTriggerNewTask, role, userName }) {
   const [err, setErr] = useState(null);
   useEffect(() => { setErr(null); }, [view]);
+  const activeContracts = contracts.filter(c=>!c.archived);
   if (err) return (
     <div style={{ padding:40, maxWidth:600 }}>
       <div style={{ background:"#FFF1F2", border:"1px solid #FCA5A5", borderRadius:10, padding:24 }}>
@@ -3256,12 +3401,11 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     </div>
   );
   try {
-    if (view==="dashboard")      return <Dashboard contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView}/>;
-    if (view==="acompanhamento") return <Acompanhamento contracts={contracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>;
-    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates}/>;
-
-    if (view==="caixa")          return <Caixa contracts={contracts}/>;
-    if (view==="financeiro")     return <Financeiro contracts={contracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC}/>;
+    if (view==="dashboard")      return <Dashboard contracts={activeContracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView} role={role} userName={userName}/>;
+    if (view==="acompanhamento") return <Acompanhamento contracts={activeContracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} role={role}/>;
+    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role}/>;
+    if (view==="caixa")          return <Caixa contracts={activeContracts}/>;
+    if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
     return null;
   } catch(e) {
     setErr(e?.message || String(e));
@@ -5159,7 +5303,9 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
 // ─── App Root ─────────────────────────────────────────────
 export default function App() {
   const isMobile = useIsMobile();
-  const [user, setUser]     = useState(undefined); // undefined=loading
+  const [user, setUser]     = useState(undefined);
+  const [role, setRole]     = useState("admin");
+  const [userName, setUserName] = useState("");
   const [view, setView]     = useState("dashboard");
   const [contracts, setC]   = useState([]);
   const [posts, setP]       = useState([]);
@@ -5189,6 +5335,10 @@ export default function App() {
     (async()=>{
       try {
         const [cs,ps,ds,eur,usd]=await Promise.all([loadContracts(),loadPosts(),loadDeliverables(),getSetting("eurRate"),getSetting("usdRate")]);
+        // Load role
+        const userRole = USER_ROLES[user.email] || await getUserRole(user.email);
+        setRole(userRole);
+        setUserName(ROLE_NAMES[user.email] || user.email.split("@")[0]);
         const ic=cs.length>0?cs:SEED; const ip=ps.length>0?ps:SEED_POSTS; const id=ds||[];
         setC(ic); setP(ip); setD(id);
         prevCIds.current=ic.map(c=>c.id); prevPIds.current=ip.map(p=>p.id); prevDIds.current=id.map(d=>d.id);
@@ -5231,16 +5381,15 @@ export default function App() {
   const toggleNF=(cid,key)=>saveC(contracts.map(c=>{if(c.id!==cid)return c;const nf={...(c.nfEmitted||{})};nf[key]=!nf[key];return{...c,nfEmitted:nf};}));
 
   const stats=useMemo(()=>{
-    const totalBRL=contracts.reduce((s,c)=>s+toBRL(contractTotal(c),c.currency,rates),0);
-    // Count done deliverables as published posts per contract
+    const activeC = contracts.filter(c=>!c.archived);
+    const totalBRL=activeC.reduce((s,c)=>s+toBRL(contractTotal(c),c.currency,rates),0);
     const doneDeliverables=deliverables.filter(d=>d.stage==="done"||d.stage==="postagem");
-    const commBRL=contracts.filter(c=>c.hasCommission).reduce((s,c)=>s+toBRL(contractTotal(c)*COMM_RATE,c.currency,rates),0);
-    const totEur=contracts.filter(c=>c.currency==="EUR").reduce((s,c)=>s+contractTotal(c),0);
-    const totUsd=contracts.filter(c=>c.currency==="USD").reduce((s,c)=>s+contractTotal(c),0);
+    const commBRL=activeC.filter(c=>c.hasCommission).reduce((s,c)=>s+toBRL(contractTotal(c)*COMM_RATE,c.currency,rates),0);
+    const totEur=activeC.filter(c=>c.currency==="EUR").reduce((s,c)=>s+contractTotal(c),0);
+    const totUsd=activeC.filter(c=>c.currency==="USD").reduce((s,c)=>s+contractTotal(c),0);
     let commPaid=0,commPend=0;
-    contracts.forEach(c=>{if(!c.hasCommission)return;getCommEntries(c).forEach(e=>{const v=toBRL(e.amount,c.currency,rates);e.isPaid?commPaid+=v:commPend+=v;});});
-    const tot=k=>contracts.reduce((s,c)=>s+c[k],0);
-    // Combine posts + done deliverables for delivery counting
+    activeC.forEach(c=>{if(!c.hasCommission)return;getCommEntries(c).forEach(e=>{const v=toBRL(e.amount,c.currency,rates);e.isPaid?commPaid+=v:commPend+=v;});});
+    const tot=k=>activeC.reduce((s,c)=>s+c[k],0);
     const del=t=>{
       const postTypes = t==="post"?["post","reel"]:t==="repost"?["repost","tiktok"]:[t];
       const fromPosts=posts.filter(p=>postTypes.includes(p.type)&&p.isPosted).length;
@@ -5248,8 +5397,8 @@ export default function App() {
       return fromPosts+fromPipeline;
     };
     const engs=posts.map(calcEngagement).filter(e=>e!==null);
-    const nfPending=contracts.reduce((s,c)=>s+getNFEntries(c).filter(e=>!e.isEmitted).length,0);
-    const nfPendingValue=contracts.reduce((s,c)=>s+getNFEntries(c).filter(e=>!e.isEmitted).reduce((sv,e)=>sv+toBRL(e.amount,c.currency,rates),0),0);
+    const nfPending=activeC.reduce((s,c)=>s+getNFEntries(c).filter(e=>!e.isEmitted).length,0);
+    const nfPendingValue=activeC.reduce((s,c)=>s+getNFEntries(c).filter(e=>!e.isEmitted).reduce((sv,e)=>sv+toBRL(e.amount,c.currency,rates),0),0);
     return {totalBRL,commBRL,commPaidBRL:commPaid,commPendBRL:commPend,totEur,totUsd,tp:tot("numPosts"),ts:tot("numStories"),tl:tot("numCommunityLinks"),tr:tot("numReposts"),dp:del("post"),ds:del("story"),dl:del("link"),dr:0,avgEng:engs.length?engs.reduce((s,v)=>s+v,0)/engs.length:null,nfPending,nfPendingValue};
   },[contracts,posts,rates]);
 
@@ -5359,7 +5508,7 @@ a{color:${RED}}
 .hover-lift:hover{transform:translateY(-1px)!important;box-shadow:0 4px 12px rgba(0,0,0,0.08),0 1px 3px rgba(0,0,0,0.06)!important}
 .hover-row:hover{background:#F7F7F7!important}
 `}</style>
-        {!isMobile && <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts}/>}
+        {!isMobile && <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts} role={role} userName={userName} deliverables={deliverables}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <TopBar view={view} eurRate={eurRate} usdRate={usdRate} setEurRate={setEurRate} setUsdRate={setUsdRate}
             onNewContract={()=>setModal({type:"contract",data:null})}
@@ -5373,7 +5522,8 @@ a{color:${RED}}
               saveC={saveC} saveP={saveP} saveD={saveD}
               calEvents={calEvents} calMonth={calMonth} setCal={setCal}
               calFilter={calFilter} setCalF={setCalF}
-              triggerNewTask={triggerNewTask} setTriggerNewTask={setTriggerNewTask}/>
+              triggerNewTask={triggerNewTask} setTriggerNewTask={setTriggerNewTask}
+              role={role} userName={userName}/>
           </div>
         </div>
         {modal && (

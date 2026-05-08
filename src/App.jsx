@@ -4346,7 +4346,7 @@ const TX_TYPES = [
 
 const EXPENSE_CATS = {
   entrada:    ["Recebimento de Contrato","Receita Meta (Facebook/Instagram)","Receita YouTube","Receita TikTok","Receita Kwai","Rendimento Financeiro","Reembolso","Outros Ingressos"],
-  saida:      ["Produção de Conteúdo","Equipamento","Viagem","Alimentação","Hospedagem","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Aluguel / Condomínio","Obra / Reformas","Utilidades (Luz, Água, Internet)","Transporte / Estacionamento","Combustível","Uber / Táxi / App","Outros"],
+  saida:      ["Produção de Conteúdo","Equipamento","Passagem Aérea","Hospedagem","Alimentação","Viagem / Outros","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Aluguel / Condomínio","Obra / Reformas","Utilidades (Luz, Água, Internet)","Transporte / Estacionamento","Combustível","Uber / Táxi / App","Outros"],
   dividendos: ["Distribuição de Lucros","Pro-labore","Outros Dividendos"],
   imposto:    ["ISS","PIS/COFINS","IRPJ","CSLL","Simples Nacional","Outros Impostos"],
   transferencia:["Entre Contas"],
@@ -4377,7 +4377,8 @@ const DRE_MAP = {
   "Móveis e Eletrodomésticos":        "desp_adm",
   "Material de Escritório":           "desp_adm",
   "Material de Limpeza":              "desp_adm",
-  "Aluguel / Condomínio":             "desp_adm",
+  "Viagem / Outros":                  "desp_op",
+  "Passagem Aérea":                   "desp_op",
   "Obra / Reformas":                  "desp_adm",
   "Transporte / Estacionamento":       "desp_op",
   "Combustível":                        "desp_op",
@@ -5216,6 +5217,9 @@ function Caixa({ contracts }) {
     try { await setSetting("caixa_base", String(val)); await setSetting("caixa_base_date", date); } catch(e) { console.error("updateBase:", e); }
   };
 
+  const [minVal, setMinVal] = useState("");
+  const [maxVal, setMaxVal] = useState("");
+
   if (!unlocked) return <CaixaPasswordGate onUnlock={()=>setUnlocked(true)}/>;
 
   // ── Computed saldo ──────────────────────────────────────
@@ -5237,6 +5241,8 @@ function Caixa({ contracts }) {
     .filter(t => t.date?.startsWith(monthKey))
     .filter(t => filterType2==="all" || t.type===filterType2)
     .filter(t => !search || t.description?.toLowerCase().includes(search.toLowerCase()) || t.category?.toLowerCase().includes(search.toLowerCase()) || t.notes?.toLowerCase().includes(search.toLowerCase()))
+    .filter(t => !minVal || Number(t.amount) >= Number(minVal))
+    .filter(t => !maxVal || Number(t.amount) <= Number(maxVal))
     .sort((a,b) => b.date.localeCompare(a.date));
 
   const monthEntradas   = monthTx.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
@@ -5309,6 +5315,19 @@ function Caixa({ contracts }) {
           <div style={{ display:"flex",gap:8,marginBottom:12,flexWrap:"wrap" }}>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar descrição, categoria..."
               style={{ flex:1,minWidth:180,padding:"7px 12px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontFamily:"inherit",outline:"none" }}/>
+            {/* Value range filter */}
+            <div style={{ display:"flex",alignItems:"center",gap:4,background:B1,border:`1px solid ${LN}`,borderRadius:8,padding:"0 10px" }}>
+              <span style={{ fontSize:10,color:TX3,flexShrink:0 }}>R$</span>
+              <input type="number" value={minVal} onChange={e=>setMinVal(e.target.value)} placeholder="Min"
+                style={{ width:64,padding:"7px 0",fontSize:12,background:"transparent",border:"none",color:TX,fontFamily:"inherit",outline:"none" }}/>
+              <span style={{ fontSize:10,color:TX3 }}>–</span>
+              <input type="number" value={maxVal} onChange={e=>setMaxVal(e.target.value)} placeholder="Max"
+                style={{ width:64,padding:"7px 0",fontSize:12,background:"transparent",border:"none",color:TX,fontFamily:"inherit",outline:"none" }}/>
+              {(minVal||maxVal) && (
+                <button onClick={()=>{setMinVal("");setMaxVal("");}}
+                  style={{ background:"none",border:"none",color:TX3,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1 }}>×</button>
+              )}
+            </div>
             <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
               {[{id:"all",label:"Todos"},{id:"entrada",label:"↓ Entradas"},{id:"saida",label:"↑ Saídas"},{id:"dividendos",label:"💰 Dividendos"},{id:"imposto",label:"🏛 Impostos"},{id:"transferencia",label:"⇄ Trans."}].map(f=>(
                 <div key={f.id} onClick={()=>setFilterType2(f.id)}

@@ -347,8 +347,6 @@ function calcAvailableSlots(deliverables, contracts, weeksAhead = 8) {
 const G  = { background:B1, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06)" };
 const GHV= { background:B2, border:`1px solid ${LN2}`, borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.1)" };
 const G2 = { background:B2, border:`1px solid ${LN}`, borderRadius:10 };
-const G2 = { background:B2, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 2px rgba(0,0,0,0.03)" };
-const GHV = { background:B1, border:`1px solid ${LN2}`, borderRadius:12, boxShadow:"0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)", transform:"translateY(-1px)" };
 const TRANS = "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)";
 
 // ─── Toast ────────────────────────────────────────────────

@@ -222,7 +222,7 @@ const STAGES = [
 ];
 
 // Regras de produção — exportadas para capacidade e agentes
-export const PRODUCTION_RULES = {
+const PRODUCTION_RULES = {
   minDaysTotal: 9,
   roteiro:     2,
   gravacao:    1,
@@ -2566,50 +2566,68 @@ Responda APENAS com o JSON.` }]
 
   const scoreColor = aiReport?.performance?.score >= 70 ? GRN : aiReport?.performance?.score >= 40 ? AMB : RED;
 
+  const isMob = window.innerWidth < 768;
   return (
     <>
-    <div style={{ padding: window.innerWidth<768?12:24, maxWidth: 1100 }}>
-      {/* Back + header */}
-      <div style={{ display:"flex", alignItems:"flex-start", gap:16, marginBottom:24 }}>
-        <button onClick={onBack} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"6px 12px", cursor:"pointer", fontSize:11, color:TX2, display:"flex", alignItems:"center", gap:6, transition:TRANS, flexShrink:0 }}
-          onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-          ← Contratos
-        </button>
-        <button onClick={async()=>{
-          if(!confirm("Excluir contrato "+c.company+" e todos os seus entregáveis?")) return;
-          await saveC(contracts.filter(x=>x.id!==c.id));
-          if(saveDeliverables) await saveDeliverables(deliverables.filter(d=>d.contractId!==c.id));
-          onBack();
-        }} style={{ background:"none", border:`1px solid rgba(200,16,46,.3)`, borderRadius:6, padding:"6px 10px", cursor:"pointer", fontSize:11, color:RED, transition:TRANS, flexShrink:0 }}
-          onMouseEnter={e=>e.currentTarget.style.background="rgba(200,16,46,.06)"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-          🗑 Excluir contrato
-        </button>
-        <div style={{ flex:1 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
-            <div style={{ width:10, height:10, borderRadius:"50%", background:c.color }}/>
-            <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{c.company}</h1>
-            {currBadge(c.currency)}
-            {c.paymentType==="monthly" && <Badge color={TX2}>Mensal</Badge>}
-            {c.hasTravel && <Badge color={BLU}>✈️ {c.travelDestination||"Viagem"}</Badge>}
+    <div style={{ padding: isMob?"12px 12px 80px":24, maxWidth: 1100 }}>
+      {/* Mobile header */}
+      {isMob ? (
+        <div style={{ marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+            <button onClick={onBack} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:8, padding:"7px 12px", cursor:"pointer", fontSize:11, color:TX2, flexShrink:0 }}>
+              ← Contratos
+            </button>
+            <div style={{ flex:1 }}/>
+            <button onClick={()=>setModal({type:"contract",data:c})} style={{ background:B2, border:`1px solid ${LN}`, borderRadius:8, padding:"7px 12px", cursor:"pointer", fontSize:11, color:TX }}>✎ Editar</button>
           </div>
-          <div style={{ display:"flex", gap:16, fontSize:12, color:TX2 }}>
-            <span style={{ fontWeight:700, fontSize:16, color:TX }}>{total>0?fmtMoney(total,c.currency):"Valor TBD"}</span>
-            {c.contractDeadline && <span style={{ color:dlColor(dl) }}>prazo {fmtDate(c.contractDeadline)} · {dl}d</span>}
-            {c.cnpj && <span>{c.cnpj}</span>}
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+            <div style={{ width:12, height:12, borderRadius:"50%", background:c.color, flexShrink:0 }}/>
+            <h1 style={{ fontSize:22, fontWeight:800, color:TX, letterSpacing:"-.02em", flex:1 }}>{c.company}</h1>
           </div>
+          <div style={{ fontSize:20, fontWeight:800, color:TX, marginBottom:4 }}>{total>0?fmtMoney(total,c.currency):"Valor TBD"}</div>
+          {c.contractDeadline && <div style={{ fontSize:12, color:dlColor(dl) }}>prazo {fmtDate(c.contractDeadline)} · {dl}d</div>}
         </div>
-        <Btn onClick={()=>setModal({type:"contract",data:c})} variant="default" size="sm">✎ Editar</Btn>
-        <Btn onClick={()=>setShowClientReport(true)} variant="default" size="sm">📊 Relatório Cliente</Btn>
-        <Btn onClick={generateReport} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
-          {aiLoading ? "Gerando…" : "Gerar Relatório IA"}
-        </Btn>
-      </div>
+      ) : (
+        /* Desktop header */
+        <div style={{ display:"flex", alignItems:"flex-start", gap:16, marginBottom:24 }}>
+          <button onClick={onBack} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"6px 12px", cursor:"pointer", fontSize:11, color:TX2, display:"flex", alignItems:"center", gap:6, transition:TRANS, flexShrink:0 }}
+            onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+            ← Contratos
+          </button>
+          <button onClick={async()=>{
+            if(!confirm("Excluir contrato "+c.company+" e todos os seus entregáveis?")) return;
+            await saveC(contracts.filter(x=>x.id!==c.id));
+            if(saveDeliverables) await saveDeliverables(deliverables.filter(d=>d.contractId!==c.id));
+            onBack();
+          }} style={{ background:"none", border:`1px solid rgba(200,16,46,.3)`, borderRadius:6, padding:"6px 10px", cursor:"pointer", fontSize:11, color:RED, transition:TRANS, flexShrink:0 }}>
+            🗑 Excluir contrato
+          </button>
+          <div style={{ flex:1 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+              <div style={{ width:10, height:10, borderRadius:"50%", background:c.color }}/>
+              <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{c.company}</h1>
+              {currBadge(c.currency)}
+              {c.paymentType==="monthly" && <Badge color={TX2}>Mensal</Badge>}
+              {c.hasTravel && <Badge color={BLU}>✈️ {c.travelDestination||"Viagem"}</Badge>}
+            </div>
+            <div style={{ display:"flex", gap:16, fontSize:12, color:TX2 }}>
+              <span style={{ fontWeight:700, fontSize:16, color:TX }}>{total>0?fmtMoney(total,c.currency):"Valor TBD"}</span>
+              {c.contractDeadline && <span style={{ color:dlColor(dl) }}>prazo {fmtDate(c.contractDeadline)} · {dl}d</span>}
+            </div>
+          </div>
+          <Btn onClick={()=>setModal({type:"contract",data:c})} variant="default" size="sm">✎ Editar</Btn>
+          <Btn onClick={()=>setShowClientReport(true)} variant="default" size="sm">📊 Relatório Cliente</Btn>
+          <Btn onClick={generateReport} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
+            {aiLoading ? "Gerando…" : "Gerar Relatório IA"}
+          </Btn>
+        </div>
+      )}
 
-      {/* Tabs */}
-      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20 }}>
+      {/* Tabs — horizontal scroll on mobile */}
+      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
         {TABS.map(t => (
           <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1 }}>
+            style={{ padding:"10px 16px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
             {t.label}
           </div>
         ))}
@@ -4224,34 +4242,36 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
   ];
 
   return (
-    <div style={{ padding:"24px 28px", maxWidth:1100 }}>
+    <div style={{ padding:isMobile?"16px 16px 80px":"24px 28px", maxWidth:1100 }}>
       {/* Header */}
-      <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em", marginBottom:4 }}>Financeiro</h1>
-        <p style={{ fontSize:13, color:TX2 }}>Gestão de NFs, comissões Ranked e pagamentos</p>
-      </div>
+      {!isMobile && (
+        <div style={{ marginBottom:24 }}>
+          <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em", marginBottom:4 }}>Financeiro</h1>
+          <p style={{ fontSize:13, color:TX2 }}>Gestão de NFs, comissões Ranked e pagamentos</p>
+        </div>
+      )}
 
-      {/* Summary KPIs */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:24 }}>
+      {/* Summary KPIs — horizontal scroll on mobile */}
+      <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4, marginBottom:20, scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
         {[
-          { label:"Volume bruto total", value:fmtMoney(totalBRL), sub:`${contracts.length} contratos` },
-          { label:"Custos deduzidos",   value:fmtMoney(totalCosts), sub:"passagens, equipe, etc.", accent:totalCosts>0?AMB:TX2 },
-          { label:"Comissão a pagar",   value:fmtMoney(commPend), sub:"pendente à Ranked", accent:commPend>0?RED:GRN },
-          { label:"NFs a emitir",       value:nfPending.length, sub:`de ${contracts.length} contratos`, accent:nfPending.length>0?AMB:GRN },
+          { label:"Volume bruto", value:fmtMoney(totalBRL), sub:`${contracts.length} contratos` },
+          { label:"Custos deduzidos", value:fmtMoney(totalCosts), sub:"passagens, equipe, etc.", accent:totalCosts>0?AMB:TX2 },
+          { label:"Comissão a pagar", value:fmtMoney(commPend), sub:"pendente à Ranked", accent:commPend>0?RED:GRN },
+          { label:"NFs a emitir", value:nfPending.length, sub:`de ${contracts.length} contratos`, accent:nfPending.length>0?AMB:GRN },
         ].map((k,i) => (
-          <div key={i} style={{ ...G, padding:"16px 18px" }}>
-            <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>{k.label}</div>
-            <div style={{ fontSize:20,fontWeight:700,color:k.accent||TX,lineHeight:1 }}>{k.value}</div>
-            <div style={{ fontSize:11,color:TX2,marginTop:4 }}>{k.sub}</div>
+          <div key={i} style={{ ...G, padding:"16px 18px", flexShrink:0, minWidth:isMobile?160:undefined, flex:isMobile?"none":"1" }}>
+            <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:8 }}>{k.label}</div>
+            <div style={{ fontSize:isMobile?20:22,fontWeight:800,color:k.accent||TX,lineHeight:1,letterSpacing:"-.02em" }}>{k.value}</div>
+            <div style={{ fontSize:11,color:TX3,marginTop:5 }}>{k.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20 }}>
+      {/* Tabs — horizontal scroll on mobile */}
+      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
         {TABS.map(t => (
           <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1 }}>
+            style={{ padding:"10px 16px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
             {t.label}
           </div>
         ))}
@@ -4267,7 +4287,48 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
             const comm  = c.hasCommission ? getCommEntries(c).reduce((s,e)=>s+e.amount,0) : 0;
             const commP = c.hasCommission ? getCommEntries(c).filter(e=>e.isPaid).reduce((s,e)=>s+e.amount,0) : 0;
             const nfDone= getNFEntries(c).every(e=>e.isEmitted);
-            return (
+            return isMobile ? (
+              /* Mobile: stacked card */
+              <div key={c.id} style={{ ...G, overflow:"hidden" }}>
+                <div style={{ height:3, background:c.color }}/>
+                <div style={{ padding:"14px 16px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:14, color:TX }}>{c.company}</div>
+                      <div style={{ fontSize:11, color:TX3, marginTop:2 }}>
+                        {c.contractDeadline?`prazo ${fmtDate(c.contractDeadline)}`:"Sem prazo"}
+                      </div>
+                    </div>
+                    <div style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:99, fontSize:10, fontWeight:700,
+                      background: nfDone?`${GRN}15`:`${AMB}15`,
+                      color: nfDone?GRN:AMB }}>
+                      {nfDone?"✓ NF ok":"NF pendente"}
+                    </div>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                    <div style={{ background:B2, borderRadius:8, padding:"10px 12px" }}>
+                      <div style={{ fontSize:9, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Valor bruto</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:TX }}>{fmtMoney(gross,c.currency)}</div>
+                      {costs>0&&<div style={{ fontSize:10, color:AMB, marginTop:2 }}>- {fmtMoney(costs)} custos</div>}
+                    </div>
+                    {c.hasCommission ? (
+                      <div style={{ background:B2, borderRadius:8, padding:"10px 12px" }}>
+                        <div style={{ fontSize:9, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Comissão Ranked</div>
+                        <div style={{ fontSize:16, fontWeight:800, color:comm-commP>0?RED:GRN }}>{fmtMoney(comm,c.currency)}</div>
+                        {commP===comm&&<div style={{ fontSize:10, color:GRN, marginTop:2 }}>✓ Quitado</div>}
+                        {commP>0&&commP<comm&&<div style={{ fontSize:10, color:TX3, marginTop:2 }}>{fmtMoney(commP)} pago</div>}
+                      </div>
+                    ) : (
+                      <div style={{ background:B2, borderRadius:8, padding:"10px 12px" }}>
+                        <div style={{ fontSize:9, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Comissão</div>
+                        <div style={{ fontSize:14, color:TX3 }}>Sem comissão</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Desktop: grid row */
               <div key={c.id} style={{ ...G, padding:"14px 18px", display:"grid", gridTemplateColumns:"3px 1fr 130px 130px 130px 120px", alignItems:"center", gap:0 }}>
                 <div style={{ background:c.color, alignSelf:"stretch", borderRadius:2 }}/>
                 <div style={{ padding:"0 14px" }}>
@@ -4306,6 +4367,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
                   </div>
                 </div>
               </div>
+            );
             );
           })}
         </div>

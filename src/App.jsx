@@ -1727,6 +1727,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
           }}
         />
       )}
+      {(newOpen || editItem) && (
         <DeliverableModal
           item={editItem}
           contracts={contracts}

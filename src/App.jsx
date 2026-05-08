@@ -344,7 +344,9 @@ function calcAvailableSlots(deliverables, contracts, weeksAhead = 8) {
 
 
 // ─── CSS ──────────────────────────────────────────────────
-const G  = { background:B1, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06)" };
+const G  = { background:B1, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06)" };
+const GHV= { background:B2, border:`1px solid ${LN2}`, borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.1)" };
+const G2 = { background:B2, border:`1px solid ${LN}`, borderRadius:10 };
 const G2 = { background:B2, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 2px rgba(0,0,0,0.03)" };
 const GHV = { background:B1, border:`1px solid ${LN2}`, borderRadius:12, boxShadow:"0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)", transform:"translateY(-1px)" };
 const TRANS = "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)";
@@ -712,16 +714,19 @@ function InlineNotes({ notes, onSave }) {
 
 // ─── Modal shell ──────────────────────────────────────────
 function Modal({ title, onClose, children, footer, width=640 }) {
+  const mob = typeof window !== "undefined" && window.innerWidth < 768;
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.7)", zIndex:200, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:window.innerWidth<768?"8px":"48px 16px", overflowY:"auto", backdropFilter:"blur(4px)" }}
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:200, display:"flex", alignItems:mob?"flex-end":"flex-start", justifyContent:"center", padding:mob?0:"48px 16px", overflowY:mob?"hidden":"auto", backdropFilter:"blur(4px)" }}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{ ...G2, width:"100%", maxWidth:window.innerWidth<768?"100%":width, flexShrink:0 }}>
-        <div style={{ padding:"16px 20px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      <div style={{ background:B1, borderRadius:mob?"20px 20px 0 0":"14px", border:`1px solid ${LN}`, width:"100%", maxWidth:mob?"100%":width, flexShrink:0, maxHeight:mob?"92vh":"none", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,0.2)" }}>
+        {/* Handle indicator on mobile */}
+        {mob && <div style={{ width:40, height:4, background:LN2, borderRadius:2, margin:"12px auto 0", flexShrink:0 }}/>}
+        <div style={{ padding:mob?"12px 20px 14px":"16px 20px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
           <span style={{ fontSize:11, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", color:TX }}>{title}</span>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:TX2, cursor:"pointer", padding:4 }}><X size={16}/></button>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:TX2, cursor:"pointer", padding:6, borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center" }}><X size={16}/></button>
         </div>
-        <div style={{ padding:"20px" }}>{children}</div>
-        {footer && <div style={{ padding:"14px 20px", borderTop:`1px solid ${LN}`, display:"flex", justifyContent:"flex-end", gap:8 }}>{footer}</div>}
+        <div style={{ padding:"20px", overflowY:"auto", flex:1 }}>{children}</div>
+        {footer && <div style={{ padding:"14px 20px", borderTop:`1px solid ${LN}`, display:"flex", justifyContent:"flex-end", gap:8, flexShrink:0, background:B2, borderRadius:mob?0:"0 0 14px 14px" }}>{footer}</div>}
       </div>
     </div>
   );
@@ -917,20 +922,27 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
   );
 }
 
-function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract, onNewPost, onNewTask, syncStatus, isMobile }) {
+function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract, onNewPost, onNewTask, syncStatus, isMobile, role, userName }) {
   const title = NAV_ITEMS.find(i=>i.id===view)?.label || view;
   const statusColor = { loading:AMB, ok:GRN, error:RED }[syncStatus]||GRN;
   const statusLabel = { loading:"Sincronizando", ok:"Ao Vivo", error:"Offline" }[syncStatus]||"Ao Vivo";
+  const roleMeta = ROLE_META[role] || ROLE_META.admin;
+
   if (isMobile) return (
-    <div style={{ height:50, borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", paddingLeft:16, paddingRight:16, gap:8, background:B1, flexShrink:0, position:"sticky", top:0, zIndex:50 }}>
-      <div style={{ fontWeight:800, fontSize:12, letterSpacing:".15em", textTransform:"uppercase", color:TX, flex:1 }}>
-        ENTRE<span style={{color:RED}}>GAS</span>
+    <div style={{ height:56, borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", paddingLeft:16, paddingRight:16, gap:10, background:B1, flexShrink:0, position:"sticky", top:0, zIndex:50, boxShadow:"0 1px 8px rgba(0,0,0,0.06)" }}>
+      <div style={{ flex:1 }}>
+        <div style={{ fontWeight:800, fontSize:13, letterSpacing:".12em", textTransform:"uppercase", color:TX, lineHeight:1 }}>
+          ENTRE<span style={{color:RED}}>GAS</span>
+        </div>
+        {userName && <div style={{ fontSize:10, color:TX3, marginTop:1 }}>{roleMeta.badge} {userName}</div>}
       </div>
-      <div style={{ width:6, height:6, borderRadius:"50%", background:syncStatus==="synced"||syncStatus==="ok"?GRN:syncStatus==="syncing"||syncStatus==="loading"?AMB:RED, flexShrink:0 }}/>
-      <button onClick={onNewContract}
-        style={{ background:RED, border:"none", borderRadius:8, padding:"8px 16px", color:"white", fontSize:12, fontWeight:700, cursor:"pointer" }}>
-        + Novo
-      </button>
+      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+        <div style={{ width:6, height:6, borderRadius:"50%", background:syncStatus==="ok"?GRN:syncStatus==="loading"?AMB:RED, flexShrink:0 }}/>
+        <button onClick={onNewContract}
+          style={{ background:RED, border:"none", borderRadius:10, padding:"9px 18px", color:"white", fontSize:12, fontWeight:700, cursor:"pointer", boxShadow:"0 2px 8px rgba(200,16,46,.25)" }}>
+          + Novo
+        </button>
+      </div>
     </div>
   );
 
@@ -1023,14 +1035,18 @@ function StatTile({ label, value, sub, trend }) {
   );
 }
 
-function DashKpi({ label, value, sub, accent, small=false }) {
+function DashKpi({ label, value, sub, accent, icon, small=false }) {
+  const isMobile = useIsMobile();
   const [hov, setHov] = useState(false);
   return (
     <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{ ...(hov?GHV:G), padding:small?"12px 14px":"16px 18px", transition:TRANS }}>
-      <div style={{ fontSize:small?8:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:small?4:8 }}>{label}</div>
-      <div style={{ fontSize:small?16:20,fontWeight:700,color:accent||TX,lineHeight:1 }}>{value}</div>
-      {sub && <div style={{ fontSize:11,color:TX2,marginTop:4 }}>{sub}</div>}
+      style={{ ...(hov?GHV:G), padding:small?"12px 14px":isMobile?"14px 16px":"18px 20px", transition:TRANS, borderRadius:12 }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:small?6:10 }}>
+        <div style={{ fontSize:small?8:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX3, lineHeight:1.3, flex:1 }}>{label}</div>
+        {icon && <span style={{ fontSize:14, opacity:.6, flexShrink:0 }}>{icon}</span>}
+      </div>
+      <div style={{ fontSize:small?16:isMobile?22:26, fontWeight:800, color:accent||TX, lineHeight:1, letterSpacing:"-.02em" }}>{value}</div>
+      {sub && <div style={{ fontSize:10, color:TX3, marginTop:6, lineHeight:1.4 }}>{sub}</div>}
     </div>
   );
 }
@@ -1994,7 +2010,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
   const conflicts = Object.entries(postDateCounts).filter(([, count]) => count > 1);
 
   return (
-    <div style={{ padding: 24, maxWidth: 1600 }}>
+    <div style={{ padding: isMobile ? "12px 12px 80px" : 24, maxWidth:1600 }}>
       {/* Conflict alerts */}
       {conflicts.length > 0 && (
         <div style={{ background: "#FFF1F2", border: "1px solid #FCA5A5", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -2150,14 +2166,16 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
     </div>
   );
 
+  const mob = typeof window !== "undefined" && window.innerWidth < 768;
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(2px)"}}
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:500,display:"flex",alignItems:mob?"flex-end":"center",justifyContent:"center",backdropFilter:"blur(2px)"}}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:"#FEFEFE",borderRadius:12,width:"100%",maxWidth:560,boxShadow:"0 32px 80px rgba(0,0,0,0.14),0 4px 16px rgba(0,0,0,0.08)",overflow:"hidden"}}>
+      <div style={{background:"#FEFEFE",borderRadius:mob?"20px 20px 0 0":12,width:"100%",maxWidth:mob?"100%":560,boxShadow:"0 32px 80px rgba(0,0,0,0.14),0 4px 16px rgba(0,0,0,0.08)",overflow:"hidden",maxHeight:mob?"92vh":"none",display:"flex",flexDirection:"column"}}>
+        {mob&&<div style={{width:40,height:4,background:LN2,borderRadius:2,margin:"12px auto 0",flexShrink:0}}/>}
 
         {/* Title area */}
-        <div style={{padding:"28px 28px 20px"}}>
-          <div style={{fontSize:11,color:TX3,fontWeight:600,marginBottom:14}}>{fmtFull(date)}</div>
+        <div style={{padding:mob?"14px 20px 16px":"28px 28px 20px",flexShrink:0}}>
+          <div style={{fontSize:11,color:TX3,fontWeight:600,marginBottom:12}}>{fmtFull(date)}</div>
           <textarea
             ref={titleRef}
             value={title}
@@ -2170,7 +2188,7 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
         </div>
 
         {/* Fields */}
-        <div style={{padding:"0 28px 8px",borderTop:`1px solid ${LN}`}}>
+        <div style={{padding:mob?"0 20px 8px":"0 28px 8px",borderTop:`1px solid ${LN}`,overflowY:"auto",flex:1}}>
           <Row label="Status">
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
               {STAGE_OPTS.map(s=>(
@@ -2208,7 +2226,7 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
         </div>
 
         {/* Footer */}
-        <div style={{padding:"12px 28px",borderTop:`1px solid ${LN}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:B2}}>
+        <div style={{padding:mob?"12px 20px":"12px 28px",borderTop:`1px solid ${LN}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:B2,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <span style={{fontSize:11,padding:"2px 9px",borderRadius:99,background:curStage?`${curStage.color}14`:"transparent",color:curStage?.color||TX3,fontWeight:700}}>
               {curStage?.label}
@@ -2973,57 +2991,79 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
 
   // ── Mobile card view ──
   if (isMobile) return (
-    <div style={{ padding:"12px", display:"flex", flexDirection:"column", gap:8 }}>
-      {contracts.map(c => {
-        const total = contractTotal(c);
-        const dl = daysLeft(c.contractDeadline);
-        const dd = t => deliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&d.type===t).length;
-        const cp = posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + dd("reel") + dd("post");
-        const cs = posts.filter(p=>p.contractId===c.id&&p.type==="story"&&p.isPosted).length + dd("story");
-        const cr = posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")&&p.isPosted).length + dd("tiktok") + dd("repost");
-        const tot = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
-        const don = cp + cs + cr;
-        const pct = tot > 0 ? Math.round(don/tot*100) : 0;
+    <div style={{ padding:"12px 12px 80px" }}>
+      {/* Archive toggle */}
+      <div style={{ display:"flex", background:B2, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", marginBottom:12 }}>
+        <div onClick={()=>setShowArchived(false)}
+          style={{ flex:1, padding:"10px 0", textAlign:"center", fontSize:12, fontWeight:!showArchived?700:400, cursor:"pointer", color:!showArchived?TX:TX2, background:!showArchived?B1:"transparent", transition:TRANS }}>
+          Ativos ({activeContracts.length})
+        </div>
+        <div onClick={()=>setShowArchived(true)}
+          style={{ flex:1, padding:"10px 0", textAlign:"center", fontSize:12, fontWeight:showArchived?700:400, cursor:"pointer", color:showArchived?TX:TX2, background:showArchived?B1:"transparent", transition:TRANS }}>
+          Arquivados ({archivedContracts.length})
+        </div>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {displayContracts.map(c => {
+          const total = contractTotal(c);
+          const dl = daysLeft(c.contractDeadline);
+          const dd = t => deliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&d.type===t).length;
+          const cp = posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + dd("reel") + dd("post");
+          const cs = posts.filter(p=>p.contractId===c.id&&p.type==="story"&&p.isPosted).length + dd("story");
+          const cr = posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")&&p.isPosted).length + dd("tiktok") + dd("repost");
+          const tot = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
+          const don = cp + cs + cr;
+          const pct = tot > 0 ? Math.round(don/tot*100) : 0;
 
-        return (
-          <div key={c.id} onClick={()=>setSelectedId(c.id)}
-            style={{ background:B1, border:`1px solid ${LN}`, borderRadius:12, overflow:"hidden", cursor:"pointer", transition:TRANS, boxShadow:"0 1px 3px rgba(0,0,0,0.05)" }}
-            onMouseEnter={e=>e.currentTarget.style.borderColor=c.color}
-            onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>
-            {/* Color bar */}
-            <div style={{ height:3, background:c.color }}/>
-            <div style={{ padding:"12px 14px" }}>
-              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:8 }}>
-                <div>
-                  <div style={{ fontWeight:700, fontSize:14, color:TX, lineHeight:1.2 }}>{c.company}</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                    {c.currency!=="BRL"&&<span style={{ fontSize:9, padding:"1px 6px", borderRadius:99, background:`${BLU}15`, color:BLU, fontWeight:700 }}>{c.currency}</span>}
-                    {c.paymentType==="monthly"&&<span style={{ fontSize:9, padding:"1px 6px", borderRadius:99, background:`${TX2}15`, color:TX2, fontWeight:700 }}>M</span>}
-                    {c.hasTravel&&<span style={{ fontSize:11 }}>✈️</span>}
+          return (
+            <div key={c.id} onClick={()=>setSelectedId(c.id)}
+              style={{ background:B1, border:`1px solid ${LN}`, borderRadius:14, overflow:"hidden", cursor:"pointer", transition:"all .18s", boxShadow:"0 1px 4px rgba(0,0,0,0.05)", opacity:c.archived?.75:1 }}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=c.color;e.currentTarget.style.boxShadow=`0 4px 16px ${c.color}20`;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=LN;e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)";}}>
+              <div style={{ height:4, background:`linear-gradient(90deg, ${c.color}, ${c.color}80)` }}/>
+              <div style={{ padding:"14px 16px" }}>
+                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:15, color:TX, lineHeight:1.2, marginBottom:5 }}>{c.company}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
+                      {c.currency!=="BRL"&&<span style={{ fontSize:9, padding:"2px 7px", borderRadius:99, background:`${BLU}14`, color:BLU, fontWeight:700 }}>{c.currency}</span>}
+                      {c.paymentType==="monthly"&&<span style={{ fontSize:9, padding:"2px 7px", borderRadius:99, background:`${TX3}12`, color:TX3, fontWeight:700 }}>Mensal</span>}
+                      {c.hasTravel&&<span style={{ fontSize:11 }}>✈️</span>}
+                      {c.archived&&<span style={{ fontSize:9, padding:"2px 7px", borderRadius:99, background:`${TX3}12`, color:TX3, fontWeight:700 }}>Arquivado</span>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    {seeValues ? <>
+                      <div style={{ fontWeight:800, fontSize:16, color:TX, letterSpacing:"-.01em" }}>{fmtMoney(total,c.currency)}</div>
+                      {c.contractDeadline&&<div style={{ fontSize:11, color:dlColor(dl), marginTop:3, fontWeight:dl!==null&&dl<=14?700:400 }}>{fmtDate(c.contractDeadline)}</div>}
+                    </> : <>
+                      {c.contractDeadline&&<div style={{ fontSize:12, color:dlColor(dl), fontWeight:dl!==null&&dl<=14?700:400 }}>{fmtDate(c.contractDeadline)}</div>}
+                    </>}
                   </div>
                 </div>
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontWeight:700, fontSize:15, color:TX }}>{fmtMoney(total,c.currency)}</div>
-                  {c.contractDeadline&&<div style={{ fontSize:11, color:dlColor(dl), marginTop:2 }}>{fmtDate(c.contractDeadline)}</div>}
-                </div>
+                {tot > 0 && (
+                  <>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:TX2, marginBottom:5 }}>
+                      <span>Progresso de entregas</span>
+                      <span style={{ fontWeight:700, color:pct===100?GRN:pct>50?AMB:TX }}>{don}/{tot} · {pct}%</span>
+                    </div>
+                    <div style={{ height:5, background:LN, borderRadius:3, overflow:"hidden" }}>
+                      <div style={{ height:5, borderRadius:3, background:pct===100?GRN:c.color, width:`${pct}%`, transition:"width .5s ease" }}/>
+                    </div>
+                  </>
+                )}
               </div>
-              {/* Progress */}
-              {tot > 0 && (
-                <div>
-                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:TX2, marginBottom:4 }}>
-                    <span>Entregas</span>
-                    <span style={{ fontWeight:600, color:pct===100?GRN:TX }}>{don}/{tot} · {pct}%</span>
-                  </div>
-                  <div style={{ height:4, background:LN, borderRadius:2, overflow:"hidden" }}>
-                    <div style={{ height:4, borderRadius:2, background:pct===100?GRN:c.color, width:`${pct}%`, transition:"width .4s" }}/>
-                  </div>
-                </div>
-              )}
             </div>
+          );
+        })}
+        {displayContracts.length===0&&(
+          <div style={{ padding:"48px 24px", textAlign:"center" }}>
+            <div style={{ fontSize:32, marginBottom:12 }}>{showArchived?"📦":"📋"}</div>
+            <div style={{ fontSize:14, fontWeight:600, color:TX, marginBottom:6 }}>{showArchived?"Nenhum contrato arquivado":"Nenhum contrato ativo"}</div>
+            <div style={{ fontSize:12, color:TX3 }}>{showArchived?"Arquive contratos concluídos clicando em 📦":"Adicione um novo contrato pelo botão + Novo"}</div>
           </div>
-        );
-      })}
-      {contracts.length===0&&<div style={{padding:48,textAlign:"center",color:TX3}}>Nenhum contrato.</div>}
+        )}
+      </div>
     </div>
   );
 
@@ -3259,20 +3299,22 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                 onDragOver={e=>{e.preventDefault();setDragOver(ds);}}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
                 onDrop={e=>handleDrop(e,ds)}
+                onClick={isMobile&&(dayDels.length>0||onNewDeliverable)?()=>setHoveredDate(hoveredDate===ds?null:ds):undefined}
                 style={{
-                  minHeight: isMobile?48:110,
-                  padding: isMobile?"4px":"6px 7px",
-                  background: isDragTarget?`${RED}06`:isT?`${RED}04`:cellHov?B2:B1,
+                  minHeight: isMobile?52:110,
+                  padding: isMobile?"5px 4px":"6px 7px",
+                  background: isDragTarget?`${RED}06`:isT?`${RED}04`:(isMobile&&hoveredDate===ds)?`${RED}04`:cellHov&&!isMobile?B2:B1,
                   border: isDragTarget?`1px solid ${RED}40`:"none",
                   transition:"background .12s",
                   position:"relative",
+                  cursor: isMobile?(dayDels.length>0||onNewDeliverable)?"pointer":"default":"default",
                 }}>
 
                 {/* Day number + add button */}
-                <div style={{marginBottom:4,display:"flex",alignItems:"center",justifyContent:isMobile?"center":"space-between"}}>
+                <div style={{marginBottom:isMobile?3:4,display:"flex",alignItems:"center",justifyContent:isMobile?"center":"space-between"}}>
                   {isT
                     ? <span style={{width:22,height:22,borderRadius:"50%",background:RED,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{d}</span>
-                    : <span style={{fontSize:11,fontWeight:400,color:TX2}}>{d}</span>
+                    : <span style={{fontSize:11,fontWeight:400,color:hoveredDate===ds&&isMobile?RED:TX2}}>{d}</span>
                   }
                   <div style={{display:"flex",alignItems:"center",gap:4}}>
                     {!isMobile && travels.length>0 && <span title={travels[0].label} style={{fontSize:11}}>✈️</span>}
@@ -3287,29 +3329,30 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                   </div>
                 </div>
 
-                {/* Deliverable cards */}
+                {/* Deliverable cards (desktop) */}
                 {!isMobile && dayDels.map(del=>(
                   <CalCard key={del.id} del={del}/>
                 ))}
 
-                {/* Mobile: colored dots */}
-                {isMobile && (dayDels.length>0||cEvents.length>0) && (
-                  <div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"center"}}>
-                    {dayDels.slice(0,4).map((del,i)=>{
+                {/* Mobile: pill indicators */}
+                {isMobile && dayDels.length>0 && (
+                  <div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"center",marginTop:2}}>
+                    {dayDels.slice(0,3).map((del,i)=>{
                       const c=contracts.find(x=>x.id===del.contractId);
-                      return <div key={i} style={{width:5,height:5,borderRadius:"50%",background:c?.color||TX3}}/>;
+                      return <div key={i} style={{width:6,height:6,borderRadius:"50%",background:c?.color||TX3}}/>;
                     })}
+                    {dayDels.length>3&&<div style={{width:6,height:6,borderRadius:"50%",background:TX3}}/>}
                   </div>
                 )}
+                {isMobile && travels.length>0 && <div style={{textAlign:"center",fontSize:10,marginTop:2}}>✈️</div>}
 
-                {/* Contract events (payment, deadline) — small badges */}
+                {/* Contract events (payment, deadline) — small badges (desktop only) */}
                 {!isMobile && cEvents.slice(0,2).map((ev,ei)=>(
                   <div key={ei} style={{fontSize:8,fontWeight:700,padding:"1px 5px",marginBottom:2,borderRadius:3,background:`${ev.color}14`,color:ev.color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textTransform:"uppercase",letterSpacing:".03em"}}>
                     {ev.label}
                   </div>
                 ))}
 
-                {/* Overflow count */}
                 {!isMobile && dayDels.length>3 && (
                   <div style={{fontSize:9,color:TX3,fontWeight:600,marginTop:2}}>+{dayDels.length-3} mais</div>
                 )}
@@ -3319,7 +3362,67 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
         </div>
       </div>
 
-      {/* ── Legend ── */}
+      {/* ── Mobile day detail panel ── */}
+      {isMobile && hoveredDate && (
+        <div style={{ marginTop:12, background:B1, border:`1px solid ${LN}`, borderRadius:14, overflow:"hidden", boxShadow:"0 4px 20px rgba(0,0,0,0.08)" }}>
+          <div style={{ padding:"12px 16px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:TX }}>
+                {new Date(hoveredDate+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}
+              </div>
+              <div style={{ fontSize:11, color:TX2, marginTop:2 }}>
+                {visibleDels.filter(d=>d.plannedPostDate===hoveredDate).length} entregável(is)
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              {onNewDeliverable && (
+                <button onClick={()=>onNewDeliverable(hoveredDate)}
+                  style={{ background:RED, border:"none", borderRadius:8, padding:"7px 14px", color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
+                  + Criar
+                </button>
+              )}
+              <button onClick={()=>setHoveredDate(null)}
+                style={{ background:B2, border:`1px solid ${LN}`, borderRadius:8, padding:"7px 10px", color:TX2, fontSize:12, cursor:"pointer" }}>×</button>
+            </div>
+          </div>
+          <div style={{ padding:"8px" }}>
+            {visibleDels.filter(d=>d.plannedPostDate===hoveredDate).length === 0
+              ? <div style={{ padding:"20px", textAlign:"center", color:TX3, fontSize:13 }}>Nenhum entregável neste dia</div>
+              : visibleDels.filter(d=>d.plannedPostDate===hoveredDate).map(del=>(
+                <div key={del.id} onClick={()=>onEditDeliverable?.(del)}
+                  style={{ padding:"12px 14px", borderRadius:10, border:`1px solid ${LN}`, marginBottom:6, cursor:"pointer", background:B1, transition:"all .15s" }}
+                  onMouseEnter={e=>e.currentTarget.style.background=B2}
+                  onMouseLeave={e=>e.currentTarget.style.background=B1}>
+                  {(() => {
+                    const contract = contracts.find(c=>c.id===del.contractId);
+                    const [badge, color] = SBADGE[del.stage] || ["Briefing","#94A3B8"];
+                    return (
+                      <>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                          <div style={{ width:10, height:10, borderRadius:"50%", background:contract?.color||TX3, flexShrink:0 }}/>
+                          <span style={{ fontSize:13, fontWeight:600, color:TX, flex:1 }}>{del.title}</span>
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${color}14`, color }}>{badge}</span>
+                          {contract && <span style={{ fontSize:11, color:TX2 }}>{contract.company}</span>}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              ))
+            }
+            {/* Contract events for this day */}
+            {contractEventsFor(hoveredDate).map((ev,i)=>(
+              <div key={i} style={{ padding:"8px 14px", borderRadius:8, border:`1px solid ${ev.color}20`, marginBottom:4, background:`${ev.color}06` }}>
+                <span style={{ fontSize:11, fontWeight:700, color:ev.color }}>{ev.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Legend (desktop) ── */}
       {!isMobile && (
         <div style={{display:"flex",gap:16,marginTop:12,flexWrap:"wrap"}}>
           {Object.entries(SBADGE||{}).map(([k,[l,c]])=>(
@@ -3921,26 +4024,52 @@ function NavIcon({ type, active }) {
   return null;
 }
 
-function MobileNav({ view, setView }) {
-  const NAV_MOB = [
+function MobileNav({ view, setView, role, userName, deliverables, contracts }) {
+  const allowedNav = ROLE_NAV[role] || ROLE_NAV.admin;
+  const today = new Date();
+  const isSunday = today.getDay() === 0;
+
+  const ALL_MOB = [
     { id:"dashboard",      label:"Home",      icon:"home" },
-    { id:"acompanhamento", label:"Produção",  icon:"prod" },
+    { id:"acompanhamento", label:"Calendário", icon:"prod" },
     { id:"contratos",      label:"Contratos", icon:"contracts" },
-    { id:"financeiro",     label:"Financeiro",icon:"money" },
+    { id:"financeiro",     label:"Financeiro", icon:"money" },
+    { id:"caixa",          label:"Caixa",      icon:"money" },
   ];
+
+  const NAV_MOB = ALL_MOB.filter(item => allowedNav.includes(item.id)).slice(0, 4);
+
+  const sendWA = () => {
+    const name = userName || "time";
+    const hour = today.getHours();
+    const greet = hour<12?"Bom dia":hour<18?"Boa tarde":"Boa noite";
+    const upcoming = (deliverables||[]).filter(d=>d.stage!=="done"&&d.plannedPostDate).sort((a,b)=>a.plannedPostDate.localeCompare(b.plannedPostDate)).slice(0,5);
+    const msg = `${greet}, ${name}! 📱\n\n*Resumo semanal ENTREGAS*\n\n📋 Próximas postagens:\n${upcoming.map(d=>`• ${d.title} → ${fmtDate(d.plannedPostDate)}`).join("\n")||"Nenhuma agendada"}\n\nBoa semana! 🚀`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
   return (
-    <div style={{ position:"fixed", bottom:0, left:0, right:0, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"stretch", zIndex:100, boxShadow:"0 -1px 12px rgba(0,0,0,0.08)", paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
+    <div style={{ position:"fixed", bottom:0, left:0, right:0, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"stretch", zIndex:100, boxShadow:"0 -2px 16px rgba(0,0,0,0.1)", paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
       {NAV_MOB.map(item => {
         const active = view === item.id;
         return (
           <div key={item.id} onClick={()=>setView(item.id)}
             style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, cursor:"pointer", padding:"10px 0 8px", position:"relative",
-              borderTop: active ? `2px solid ${RED}` : "2px solid transparent" }}>
+              borderTop: active ? `2px solid ${RED}` : "2px solid transparent",
+              transition:"all .15s" }}>
             <NavIcon type={item.icon} active={active}/>
             <span style={{ fontSize:9, fontWeight:active?700:400, color:active?RED:"#ABABAB", letterSpacing:".02em" }}>{item.label}</span>
           </div>
         );
       })}
+      {/* WhatsApp button — always last */}
+      <div onClick={sendWA}
+        style={{ width:52, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, cursor:"pointer", padding:"10px 0 8px",
+          borderTop: isSunday ? `2px solid #25D366` : "2px solid transparent",
+          background: isSunday ? "rgba(37,211,102,.05)" : "transparent" }}>
+        <span style={{ fontSize:18, lineHeight:1 }}>📱</span>
+        <span style={{ fontSize:9, fontWeight:isSunday?700:400, color:isSunday?"#128C7E":"#ABABAB" }}>WA</span>
+      </div>
     </div>
   );
 }
@@ -5776,7 +5905,7 @@ a{color:${RED}}
             onNewContract={()=>setModal({type:"contract",data:null})}
             onNewPost={()=>setModal({type:"post",data:null})}
             onNewTask={()=>setTriggerNewTask(true)}
-            syncStatus={syncStatus} isMobile={isMobile}/>
+            syncStatus={syncStatus} isMobile={isMobile} role={role} userName={userName}/>
           <div style={{ flex:1, overflowY:"auto", paddingBottom:isMobile?84:0 }}>
             <ViewRenderer view={view} contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates}
               saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid}
@@ -5795,11 +5924,7 @@ a{color:${RED}}
           </div>
         )}
         {showInvite && <UserInviteModal onClose={()=>setShowInvite(false)}/>}
-        {isMobile && <MobileNav view={view} setView={setView} onNew={()=>{
-          if(view==="contratos") setModal({type:"contract",data:null});
-          else if(view==="acompanhamento") setView("acompanhamento");
-          else if(view==="acompanhamento") setView("acompanhamento");
-        }}/>}
+        {isMobile && <MobileNav view={view} setView={setView} role={role} userName={userName} deliverables={deliverables} contracts={contracts}/>}
       </div>
     </ToastProvider>
   );

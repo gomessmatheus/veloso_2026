@@ -4368,7 +4368,6 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
                 </div>
               </div>
             );
-            );
           })}
         </div>
       )}

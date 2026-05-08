@@ -1754,114 +1754,131 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
 // ─── Quick Post Modal (from calendar +) ──────────────────
 function QuickPostModal({ date, contracts, onClose, onSave }) {
-  const [title, setTitle]       = useState("");
-  const [contractId, setC]      = useState(contracts[0]?.id||"");
-  const [type, setType]         = useState("reel");
-  const [stage, setStage]       = useState("roteiro");
-  const [notes, setNotes]       = useState("");
+  const [title, setTitle] = useState("");
+  const [type, setType]   = useState("reel");
+  const [stage, setStage] = useState("roteiro");
+  const [notes, setNotes] = useState("");
   const titleRef = useRef(null);
 
-  useEffect(()=>{ setTimeout(()=>titleRef.current?.focus(),80); },[]);
+  useEffect(()=>{ setTimeout(()=>titleRef.current?.focus(),60); },[]);
+
+  const fmtFull = ds => ds ? new Date(ds+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "";
 
   const STAGE_OPTS = [
-    {id:"briefing",label:"Só a ideia"},
-    {id:"roteiro",label:"Roteirizando"},
-    {id:"edicao",label:"Edição"},
-    {id:"ap_final",label:"Ap. Final"},
-    {id:"postagem",label:"Publicando"},
-    {id:"done",label:"Postado"},
+    {id:"roteiro",  label:"Roteirizando", color:"#7C3AED"},
+    {id:"gravacao", label:"Gravação",     color:"#BE185D"},
+    {id:"edicao",   label:"Edição",       color:"#2563EB"},
+    {id:"ap_final", label:"Ap. Final",    color:"#EA580C"},
+    {id:"postagem", label:"Publicando",   color:"#0891B2"},
+    {id:"done",     label:"Postado",      color:"#16A34A"},
   ];
-  const TYPE_EMOJI = {reel:"🎬",story:"📸",tiktok:"🎵",link:"🔗"};
+  const TYPE_OPTS = [
+    {id:"reel",  label:"Reel",   emoji:"🎬"},
+    {id:"tiktok",label:"TikTok", emoji:"🎵"},
+    {id:"story", label:"Story",  emoji:"📸"},
+    {id:"link",  label:"Link",   emoji:"🔗"},
+  ];
 
-  const contract = contracts.find(c=>c.id===contractId);
-  const fmtFull = ds => ds ? new Date(ds+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"}) : "";
+  const curStage = STAGE_OPTS.find(s=>s.id===stage);
+  const contractId = contracts[0]?.id || "";
 
   const handleSave = () => {
     if (!title.trim()) { titleRef.current?.focus(); return; }
     onSave({ contractId, title, type, stage, plannedPostDate:date, notes, roteiro:"", responsible:{}, stageDateOverrides:{}, networks:[], networkMetrics:{} });
   };
 
+  const Row = ({label, children}) => (
+    <div style={{display:"flex",alignItems:"flex-start",padding:"10px 0",borderBottom:`1px solid ${LN}`,gap:0}}>
+      <span style={{fontSize:12,color:TX3,width:110,flexShrink:0,fontWeight:500,paddingTop:3}}>{label}</span>
+      {children}
+    </div>
+  );
+
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)"}}
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(2px)"}}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:"#FEFEFE",borderRadius:16,width:"100%",maxWidth:520,boxShadow:"0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.1)",overflow:"hidden"}}>
+      <div style={{background:"#FEFEFE",borderRadius:12,width:"100%",maxWidth:560,boxShadow:"0 32px 80px rgba(0,0,0,0.14),0 4px 16px rgba(0,0,0,0.08)",overflow:"hidden"}}>
 
-        {/* Header — date */}
-        <div style={{padding:"18px 24px 0",borderBottom:`1px solid ${LN}`}}>
-          <div style={{fontSize:11,fontWeight:700,color:TX3,letterSpacing:".06em",textTransform:"uppercase",marginBottom:6}}>
-            📅 {fmtFull(date)}
-          </div>
-
-          {/* Title input — big like Notion */}
-          <input
+        {/* Title area */}
+        <div style={{padding:"28px 28px 20px"}}>
+          <div style={{fontSize:11,color:TX3,fontWeight:600,marginBottom:14}}>{fmtFull(date)}</div>
+          <textarea
             ref={titleRef}
             value={title}
             onChange={e=>setTitle(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&handleSave()}
+            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSave();}}}
             placeholder="Título do post…"
-            style={{width:"100%",fontSize:22,fontWeight:700,color:TX,border:"none",outline:"none",background:"transparent",fontFamily:"inherit",letterSpacing:"-.01em",padding:"8px 0 16px",lineHeight:1.2}}
+            rows={2}
+            style={{width:"100%",fontSize:26,fontWeight:700,color:TX,border:"none",outline:"none",background:"transparent",fontFamily:"inherit",letterSpacing:"-.02em",lineHeight:1.25,resize:"none",padding:0}}
           />
         </div>
 
-        {/* Fields — Notion-style rows */}
-        <div style={{padding:"8px 0"}}>
-          {/* Contrato */}
-          <div style={{display:"flex",alignItems:"center",padding:"8px 24px",gap:16}} onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <span style={{fontSize:12,color:TX2,width:100,flexShrink:0}}>📁 Contrato</span>
-            <select value={contractId} onChange={e=>setC(e.target.value)}
-              style={{flex:1,border:"none",background:"transparent",color:TX,fontSize:13,fontFamily:"inherit",cursor:"pointer",outline:"none",fontWeight:500}}>
-              {contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}
-            </select>
-            {contract && <div style={{width:10,height:10,borderRadius:"50%",background:contract.color,flexShrink:0}}/>}
-          </div>
-
-          {/* Status */}
-          <div style={{display:"flex",alignItems:"center",padding:"8px 24px",gap:16}} onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <span style={{fontSize:12,color:TX2,width:100,flexShrink:0}}>◉ Status</span>
-            <select value={stage} onChange={e=>setStage(e.target.value)}
-              style={{flex:1,border:"none",background:"transparent",color:TX,fontSize:13,fontFamily:"inherit",cursor:"pointer",outline:"none",fontWeight:500}}>
-              {STAGE_OPTS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
-          </div>
-
-          {/* Tipo */}
-          <div style={{display:"flex",alignItems:"center",padding:"8px 24px",gap:16}} onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <span style={{fontSize:12,color:TX2,width:100,flexShrink:0}}>🎬 Tipo</span>
-            <div style={{display:"flex",gap:6}}>
-              {[["reel","Reel"],["story","Story"],["tiktok","TikTok"],["link","Link"]].map(([v,l])=>(
-                <div key={v} onClick={()=>setType(v)}
+        {/* Fields */}
+        <div style={{padding:"0 28px 8px",borderTop:`1px solid ${LN}`}}>
+          <Row label="Status">
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              {STAGE_OPTS.map(s=>(
+                <div key={s.id} onClick={()=>setStage(s.id)}
                   style={{padding:"3px 10px",fontSize:11,fontWeight:600,borderRadius:99,cursor:"pointer",transition:"all .1s",
-                    background:type===v?`${RED}14`:B2,color:type===v?RED:TX2,border:`1px solid ${type===v?RED+"40":LN}`}}>
-                  {TYPE_EMOJI[v]} {l}
+                    background:stage===s.id?`${s.color}14`:"transparent",
+                    color:stage===s.id?s.color:TX3,
+                    border:`1px solid ${stage===s.id?s.color+"40":"transparent"}`}}>
+                  {s.label}
                 </div>
               ))}
             </div>
-          </div>
+          </Row>
 
-          {/* Notes */}
-          <div style={{padding:"8px 24px 4px"}} onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <textarea
-              value={notes}
-              onChange={e=>setNotes(e.target.value)}
-              placeholder="Adicionar nota, ideia ou link…"
+          <Row label="Tipo">
+            <div style={{display:"flex",gap:4}}>
+              {TYPE_OPTS.map(t=>(
+                <div key={t.id} onClick={()=>setType(t.id)}
+                  style={{padding:"3px 10px",fontSize:11,fontWeight:600,borderRadius:99,cursor:"pointer",transition:"all .1s",
+                    background:type===t.id?`${RED}10`:"transparent",
+                    color:type===t.id?RED:TX3,
+                    border:`1px solid ${type===t.id?RED+"30":"transparent"}`}}>
+                  {t.emoji} {t.label}
+                </div>
+              ))}
+            </div>
+          </Row>
+
+          <div style={{padding:"10px 0"}}>
+            <textarea value={notes} onChange={e=>setNotes(e.target.value)}
+              placeholder="Adicionar ideia, referência ou link…"
               rows={3}
-              style={{width:"100%",border:"none",background:"transparent",color:TX2,fontSize:13,fontFamily:"inherit",resize:"none",outline:"none",lineHeight:1.7,fontStyle:notes?"normal":"italic"}}
-            />
+              style={{width:"100%",border:"none",background:"transparent",color:TX2,fontSize:13,fontFamily:"inherit",resize:"none",outline:"none",lineHeight:1.75,padding:0}}/>
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{padding:"12px 24px",borderTop:`1px solid ${LN}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:B2}}>
-          <button onClick={onClose} style={{background:"none",border:"none",color:TX3,cursor:"pointer",fontSize:12,padding:"6px 0"}}>Cancelar</button>
-          <button onClick={handleSave}
-            style={{background:RED,border:"none",borderRadius:8,padding:"8px 20px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(200,16,46,.3)"}}>
-            Criar post
-          </button>
+        <div style={{padding:"12px 28px",borderTop:`1px solid ${LN}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:B2}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:11,padding:"2px 9px",borderRadius:99,background:curStage?`${curStage.color}14`:"transparent",color:curStage?.color||TX3,fontWeight:700}}>
+              {curStage?.label}
+            </span>
+            <span style={{fontSize:11,color:TX3}}>· {TYPE_OPTS.find(t=>t.id===type)?.emoji} {TYPE_OPTS.find(t=>t.id===type)?.label}</span>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={onClose}
+              style={{background:"none",border:"none",color:TX3,cursor:"pointer",fontSize:12,padding:"7px 12px",borderRadius:6,transition:"all .1s"}}
+              onMouseEnter={e=>e.currentTarget.style.background=LN}
+              onMouseLeave={e=>e.currentTarget.style.background="none"}>
+              Cancelar
+            </button>
+            <button onClick={handleSave}
+              style={{background:RED,border:"none",borderRadius:8,padding:"8px 20px",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px rgba(200,16,46,.22)"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#a80d25";e.currentTarget.style.transform="translateY(-1px)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background=RED;e.currentTarget.style.transform="none";}}>
+              Criar post
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
 
 function DeliverableModal({ item, contracts, onClose, onSave, onDelete, prefillDate="" }) {
   const isEdit = !!item;

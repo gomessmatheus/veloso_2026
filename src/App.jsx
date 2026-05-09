@@ -4671,17 +4671,49 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
   const set = (k,v) => setF(x=>({...x,[k]:v}));
   const cats = EXPENSE_CATS[f.type] || [];
 
-  const handleNFFile = (e) => {
-    const file = e.target.files[0]; if(!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => set("nfFile", { name:file.name, type:file.type, data:ev.target.result, uploadedAt:new Date().toISOString() });
-    reader.readAsDataURL(file);
+  const [autoParc, setAutoParc] = useState(false);
+  const [numParc, setNumParc]   = useState("");
+
+  // Preview das parcelas futuras
+  const parcPreview = useMemo(() => {
+    if (!autoParc || !numParc || !f.date || !f.amount) return [];
+    const n = parseInt(numParc);
+    if (isNaN(n) || n < 2 || n > 120) return [];
+    return Array.from({length:n}, (_,i) => {
+      const d = new Date(f.date + "T12:00:00");
+      d.setMonth(d.getMonth() + i);
+      return { n:i+1, date:d.toISOString().substr(0,10) };
+    });
+  }, [autoParc, numParc, f.date, f.amount]);
+
+  const handleSave = () => {
+    if (!f.description || !f.amount) return alert("Preencha descrição e valor.");
+    if (autoParc && numParc && parseInt(numParc) > 1) {
+      const n = parseInt(numParc);
+      const groupId = uid();
+      const txs = parcPreview.map(p => ({
+        ...f,
+        id: uid(),
+        groupId,
+        installmentNum: p.n,
+        installmentTotal: n,
+        date: p.date,
+        description: `${f.description} (${p.n}/${n})`,
+      }));
+      onSave(txs); // pass array for batch save
+    } else {
+      onSave({...f, id:f.id||uid()});
+    }
   };
 
   return (
     <Modal title={isEdit?"Editar Lançamento":"Novo Lançamento"} onClose={onClose} width={580}
-      footer={<><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
-        <Btn onClick={()=>{if(!f.description||!f.amount)return alert("Preencha descrição e valor.");onSave({...f,id:f.id||uid()});}} variant="primary" size="sm">Salvar</Btn></>}>
+      footer={<>
+        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
+        <Btn onClick={handleSave} variant="primary" size="sm">
+          {autoParc && numParc > 1 ? `Criar ${numParc}x parcelas` : "Salvar"}
+        </Btn>
+      </>}>
 
       <SRule>Tipo e Data</SRule>
       <div style={{ display:"flex",gap:6,marginBottom:12,flexWrap:"wrap" }}>
@@ -4693,12 +4725,12 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
         ))}
       </div>
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-        <Field label="Data"><Input type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
-        <Field label="Valor (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="0,00"/></Field>
+        <Field label="Data da 1ª parcela"><Input type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
+        <Field label="Valor por parcela (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="0,00"/></Field>
       </div>
 
       <SRule>Detalhes</SRule>
-      <Field label="Descrição" full><Input value={f.description} onChange={e=>set("description",e.target.value)} placeholder="ex: Passagem aérea Copa 2026"/></Field>
+      <Field label="Descrição" full><Input value={f.description} onChange={e=>set("description",e.target.value)} placeholder="ex: MacBook Pro - parcelado"/></Field>
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
         <Field label="Categoria">
           <Select value={f.category} onChange={e=>set("category",e.target.value)}>
@@ -4722,53 +4754,71 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
             </Select>
           </Field>
         )}
-
       </div>
 
-      <SRule>Nota Fiscal</SRule>
-      <Field label="Número / Link da NF"><Input value={f.nfLink||""} onChange={e=>set("nfLink",e.target.value)} placeholder="Número ou URL da nota"/></Field>
-      {f.nfFile ? (
-        <div style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:B2,borderRadius:8,border:`1px solid ${LN}`,marginTop:8 }}>
-          <span style={{ fontSize:20 }}>{f.nfFile.type?.includes("image")?"🖼":"📄"}</span>
-          <div style={{ flex:1,minWidth:0 }}>
-            <div style={{ fontSize:11,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{f.nfFile.name}</div>
+      {/* ── Parcelamento automático ── */}
+      <SRule>Parcelamento</SRule>
+      <div style={{ background:autoParc?`${BLU}06`:B2, border:`1px solid ${autoParc?BLU+"30":LN}`, borderRadius:10, padding:"14px 16px", transition:TRANS }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:autoParc?14:0 }}>
+          <div>
+            <div style={{ fontSize:12, fontWeight:700, color:TX }}>Criar parcelas automaticamente</div>
+            <div style={{ fontSize:11, color:TX3, marginTop:2 }}>Gera uma entrada por mês para cada parcela</div>
           </div>
-          <a href={f.nfFile.data} download={f.nfFile.name} target="_blank" rel="noreferrer"
-            style={{ padding:"3px 8px",fontSize:10,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:4,textDecoration:"none" }}>↓</a>
-          <button onClick={()=>set("nfFile",null)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:4,padding:"3px 7px",cursor:"pointer",color:TX2,fontSize:11 }}>×</button>
+          <div onClick={()=>setAutoParc(a=>!a)}
+            style={{ width:44,height:24,borderRadius:99,background:autoParc?BLU:LN,cursor:"pointer",position:"relative",transition:TRANS,flexShrink:0 }}>
+            <div style={{ width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:autoParc?22:2,transition:TRANS,boxShadow:"0 1px 3px rgba(0,0,0,0.15)" }}/>
+          </div>
         </div>
-      ) : (
-        <label style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 14px",marginTop:8,background:B2,borderRadius:8,border:`1px dashed ${LN2}`,cursor:"pointer",transition:TRANS }}
-          onMouseEnter={e=>e.currentTarget.style.borderColor=BLU} onMouseLeave={e=>e.currentTarget.style.borderColor=LN2}>
-          <span>📎</span>
-          <span style={{ fontSize:11,color:TX2 }}>Anexar foto ou PDF da NF</span>
-          <input type="file" accept="image/*,.pdf" style={{ display:"none" }} onChange={handleNFFile}/>
-        </label>
-      )}
 
-      <SRule>Observações</SRule>
-      <Field label="Notas"><Input value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Informações adicionais"/></Field>
+        {autoParc && (
+          <>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+              <Field label="Nº de parcelas">
+                <Input type="number" min="2" max="120" value={numParc} onChange={e=>setNumParc(e.target.value)} placeholder="ex: 12"/>
+              </Field>
+              <div style={{ display:"flex", flexDirection:"column", justifyContent:"flex-end", paddingBottom:2 }}>
+                {numParc && f.amount && parseInt(numParc)>0 && (
+                  <div style={{ padding:"10px 12px", background:B1, borderRadius:8, border:`1px solid ${LN}` }}>
+                    <div style={{ fontSize:10, color:TX3, marginBottom:3 }}>Total comprometido</div>
+                    <div style={{ fontSize:16, fontWeight:800, color:RED }}>
+                      {fmtMoney(parseFloat(f.amount||0) * parseInt(numParc||0))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
-      <SRule>Parcelamento (opcional)</SRule>
-      <div style={{ display:"flex",alignItems:"center",gap:12 }}>
-        <Field label="Parcela atual">
-          <Input type="number" min="1" value={f.parcelaAtual||""} onChange={e=>set("parcelaAtual",e.target.value)} placeholder="ex: 2"/>
-        </Field>
-        <div style={{ fontSize:16,color:TX2,paddingTop:20 }}>de</div>
-        <Field label="Total de parcelas">
-          <Input type="number" min="1" value={f.parcelaTotal||""} onChange={e=>set("parcelaTotal",e.target.value)} placeholder="ex: 6"/>
-        </Field>
-        {f.parcelaAtual&&f.parcelaTotal&&(
-          <div style={{ paddingTop:20,fontSize:12,color:TX2,whiteSpace:"nowrap" }}>
-            → faltam {Math.max(0,Number(f.parcelaTotal)-Number(f.parcelaAtual))} parcelas
+            {/* Preview das parcelas */}
+            {parcPreview.length > 0 && (
+              <div>
+                <div style={{ fontSize:10, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX3, marginBottom:8 }}>
+                  Preview — {parcPreview.length} lançamentos serão criados
+                </div>
+                <div style={{ maxHeight:160, overflowY:"auto", display:"flex", flexDirection:"column", gap:4 }}>
+                  {parcPreview.map(p => (
+                    <div key={p.n} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:B1, borderRadius:6, border:`1px solid ${LN}` }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:BLU, width:32, flexShrink:0 }}>{p.n}/{numParc}</span>
+                      <span style={{ fontSize:11, color:TX, flex:1 }}>{f.description} ({p.n}/{numParc})</span>
+                      <span style={{ fontSize:11, color:TX2 }}>{fmtDate(p.date)}</span>
+                      <span style={{ fontSize:11, fontWeight:700, color:RED }}>{fmtMoney(parseFloat(f.amount||0))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {!autoParc && (
+          <div style={{ fontSize:11, color:TX3, marginTop:4 }}>
+            Lançamento único · ative para criar todas as parcelas de uma vez
           </div>
         )}
       </div>
-      {f.parcelaAtual&&f.parcelaTotal&&Number(f.parcelaTotal)>1&&(
-        <div style={{ fontSize:11,color:BLU,padding:"6px 10px",background:`${BLU}08`,borderRadius:6,marginTop:-8 }}>
-          💡 Dica: registre uma saída por mês para cada parcela com o mesmo título.
-        </div>
-      )}
+
+      <SRule>Nota Fiscal & Obs.</SRule>
+      <Field label="Número / Link da NF"><Input value={f.nfLink||""} onChange={e=>set("nfLink",e.target.value)} placeholder="Número ou URL da nota"/></Field>
+      <Field label="Notas" full><Input value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Informações adicionais"/></Field>
     </Modal>
   );
 }
@@ -4851,6 +4901,28 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
   const months = Array.from({length:12},(_,i)=>i);
   const currentYear = new Date().getFullYear();
   const MONTHS_SH2 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const today = new Date();
+
+  // ── Compromissos futuros (parcelamentos) ──
+  const futureInstallments = useMemo(() => {
+    const todayStr = today.toISOString().substr(0,10);
+    const future = transactions.filter(t =>
+      t.date > todayStr &&
+      t.installmentTotal > 1 &&
+      (t.type==="saida"||t.type==="imposto")
+    );
+    // Group by month
+    const byMonth = {};
+    future.forEach(t => {
+      const key = t.date.substr(0,7); // YYYY-MM
+      if (!byMonth[key]) byMonth[key] = { total:0, items:[] };
+      byMonth[key].total += Number(t.amount)||0;
+      byMonth[key].items.push(t);
+    });
+    return Object.entries(byMonth).sort(([a],[b])=>a.localeCompare(b)).slice(0,6);
+  }, [transactions]);
+
+  const totalFutureDebt = futureInstallments.reduce((s,[,v])=>s+v.total,0);
 
   const monthData = months.map(m => {
     const key = `${currentYear}-${String(m+1).padStart(2,"0")}`;
@@ -4870,6 +4942,60 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
         <div style={{ fontSize:28,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{fmtMoney(saldoTotal)}</div>
         <div style={{ fontSize:11,color:TX2,marginTop:4 }}>Base {fmtMoney(Number(baseBalance)||0)} + lançamentos</div>
       </div>
+
+      {/* Compromissos futuros — parcelamentos */}
+      {futureInstallments.length > 0 && (
+        <div style={{ ...G, padding:"16px 20px", borderLeft:`3px solid ${AMB}` }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Compromissos futuros · Parcelamentos</div>
+              <div style={{ fontSize:22,fontWeight:800,color:RED }}>{fmtMoney(totalFutureDebt)}</div>
+              <div style={{ fontSize:11,color:TX3,marginTop:2 }}>total comprometido em parcelas futuras</div>
+            </div>
+            <span style={{ fontSize:22 }}>📋</span>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {futureInstallments.map(([key, val]) => {
+              const [y,m] = key.split("-");
+              const label = `${MONTHS_SH2[parseInt(m)-1]}/${y}`;
+              const pct = Math.min(100, (val.total / Math.max(saldoTotal, val.total)) * 100);
+              const isHeavy = saldoTotal > 0 && val.total / saldoTotal > 0.3;
+              return (
+                <div key={key}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:TX, width:60 }}>{label}</span>
+                      <div style={{ display:"flex", gap:3 }}>
+                        {val.items.slice(0,3).map((t,i)=>(
+                          <span key={i} style={{ fontSize:9, padding:"1px 6px", borderRadius:99, background:`${AMB}14`, color:AMB, fontWeight:600, maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {t.description.replace(/\s*\(\d+\/\d+\)$/,"")}
+                          </span>
+                        ))}
+                        {val.items.length>3&&<span style={{ fontSize:9,color:TX3 }}>+{val.items.length-3}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      {isHeavy && <span style={{ fontSize:10, color:RED, fontWeight:700 }}>⚠ Alto</span>}
+                      <span style={{ fontSize:12, fontWeight:800, color:RED }}>{fmtMoney(val.total)}</span>
+                    </div>
+                  </div>
+                  <div style={{ height:4, background:LN, borderRadius:2, overflow:"hidden" }}>
+                    <div style={{ height:4, borderRadius:2, background:isHeavy?RED:AMB, width:`${pct}%`, transition:"width .4s ease" }}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {saldoTotal > 0 && (
+            <div style={{ marginTop:12, padding:"8px 12px", background:totalFutureDebt/saldoTotal>0.5?`${RED}08`:`${GRN}08`, borderRadius:8, fontSize:11 }}>
+              <span style={{ fontWeight:700, color:totalFutureDebt/saldoTotal>0.5?RED:GRN }}>
+                {totalFutureDebt/saldoTotal>0.5?"⚠ Parcelas comprometem":"✓ Parcelas representam"}
+              </span>
+              <span style={{ color:TX2 }}> {(totalFutureDebt/saldoTotal*100).toFixed(0)}% do saldo atual</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Decision KPIs */}
       {(() => {
@@ -5567,6 +5693,7 @@ function Caixa({ contracts }) {
                         {tx.category&&<span>· {tx.category}</span>}
                         {tx.beneficiario&&<span style={{fontWeight:600,color:"#7C3AED"}}>· {tx.beneficiario}</span>}
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
+                        {tx.installmentNum&&tx.installmentTotal&&<span style={{color:BLU,fontWeight:700,fontSize:10,padding:"1px 6px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}20`}}>📋 {tx.installmentNum}/{tx.installmentTotal}x</span>}
                         {tx.parcelaAtual&&tx.parcelaTotal&&<span style={{color:AMB,fontWeight:700}}>· {tx.parcelaAtual}/{tx.parcelaTotal}x</span>}
                         {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· 📄 NF</span>}
                       </div>
@@ -5693,9 +5820,14 @@ function Caixa({ contracts }) {
           defaultDate={`${monthKey}-01`}
           onClose={()=>setTxModal(null)}
           onSave={(tx)=>{
-            saveTx(txModal.id ? transactions.map(t=>t.id===tx.id?tx:t) : [...transactions,tx]);
+            if (Array.isArray(tx)) {
+              saveTx([...transactions, ...tx]);
+              toast?.(`${tx.length} parcelas criadas 🎉`, "success");
+            } else {
+              saveTx(txModal.id ? transactions.map(t=>t.id===tx.id?tx:t) : [...transactions,tx]);
+              toast?.(`${txModal.id?"Atualizado":"Salvo"}`, "success");
+            }
             setTxModal(null);
-            toast?.(`${txModal.id?"Atualizado":"Salvo"}`,"success");
           }}/>
       )}
     </div>

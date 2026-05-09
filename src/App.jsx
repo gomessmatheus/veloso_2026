@@ -1226,6 +1226,15 @@ function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, 
   const conflicts = Object.entries(postDateCounts).filter(([,c]) => c > 1);
 
   // Urgency signals
+  const [dismissedAlerts, setDismissedAlerts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("dismissed_alerts")||"[]"); } catch { return []; }
+  });
+  const dismissAlert = (key) => {
+    const next = [...dismissedAlerts, key];
+    setDismissedAlerts(next);
+    localStorage.setItem("dismissed_alerts", JSON.stringify(next));
+  };
+
   const urgency = [];
   if (lateDeliverables.length > 0) urgency.push({
     type:"danger", key:"pipe",
@@ -1515,12 +1524,12 @@ Responda APENAS com o JSON, sem markdown.`
         </>)}
       </div>
 
-      {/* Ações & Urgências — horizontal row */}
-      {urgency.length > 0 && urgency[0].key !== "ok" && (
+      {/* Ações & Urgências */}
+      {urgency.filter(u => !dismissedAlerts.includes(u.key) && u.key !== "ok").length > 0 && (
         <div style={{ marginBottom:20 }}>
           <div style={{ fontSize:10, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>Ações & Urgências</div>
           <div style={{ display:"flex", gap:10, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
-            {urgency.map(u => {
+            {urgency.filter(u => !dismissedAlerts.includes(u.key)).map(u => {
               const bg = u.type==="error"?`${RED}08`:u.type==="warning"?`${AMB}08`:u.type==="success"?`${GRN}08`:`${BLU}08`;
               const bc = u.type==="error"?`${RED}25`:u.type==="warning"?`${AMB}25`:u.type==="success"?`${GRN}25`:`${BLU}25`;
               const tc = u.type==="error"?RED:u.type==="warning"?AMB:u.type==="success"?GRN:BLU;
@@ -1528,10 +1537,18 @@ Responda APENAS com o JSON, sem markdown.`
                 <div key={u.key} style={{ background:bg, border:`1px solid ${bc}`, borderRadius:10, padding:"12px 14px", minWidth:220, flexShrink:0 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
                     <span style={{ fontSize:13 }}>{u.type==="error"?"🔴":u.type==="warning"?"🟡":u.type==="success"?"✅":"🔵"}</span>
-                    <span style={{ fontSize:12, fontWeight:700, color:tc }}>{u.title}</span>
+                    <span style={{ fontSize:12, fontWeight:700, color:tc, flex:1 }}>{u.title}</span>
+                    <button onClick={()=>dismissAlert(u.key)} title="Dispensar"
+                      style={{ background:"none",border:"none",color:TX3,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1 }}>×</button>
                   </div>
-                  {u.sub&&<p style={{ fontSize:11, color:TX2, marginBottom:u.action?8:0, lineHeight:1.4 }}>{u.sub}</p>}
-                  {u.action&&<button onClick={u.onAction} style={{ fontSize:11, fontWeight:700, color:tc, background:"none", border:`1px solid ${bc}`, borderRadius:5, padding:"4px 10px", cursor:"pointer" }}>{u.action} →</button>}
+                  {u.sub&&<p style={{ fontSize:11, color:TX2, marginBottom:4, lineHeight:1.4 }}>{u.sub}</p>}
+                  <div style={{ display:"flex", gap:6 }}>
+                    {u.action&&<button onClick={u.onAction} style={{ fontSize:11,fontWeight:700,color:tc,background:"none",border:`1px solid ${bc}`,borderRadius:5,padding:"4px 10px",cursor:"pointer" }}>{u.action} →</button>}
+                    <button onClick={()=>dismissAlert(u.key)}
+                      style={{ fontSize:11,color:TX3,background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"4px 10px",cursor:"pointer" }}>
+                      Dispensar
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -1896,16 +1913,13 @@ function DeliverableCard({ item, contracts, onEdit, stageId }) {
 
   return (
     <div
-      draggable
-      onDragStart={e => { e.dataTransfer.setData("text/plain", item.id); e.currentTarget.style.opacity = "0.5"; }}
-      onDragEnd={e => { e.currentTarget.style.opacity = "1"; }}
       onClick={() => onEdit(item)}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         background: isLate ? "#FFF1F2" : B1,
         border: `1px solid ${isLate ? "#FCA5A5" : isUrgent ? "#FCD34D" : hov ? LN2 : LN}`,
-        borderRadius: 8, padding: "10px 12px", cursor: "grab",
+        borderRadius: 8, padding: "10px 12px", cursor: "pointer",
         boxShadow: hov ? "0 4px 12px rgba(0,0,0,0.09)" : "0 1px 3px rgba(0,0,0,0.05)",
         transform: hov ? "translateY(-1px)" : "none",
         transition: TRANS, userSelect: "none",
@@ -1944,9 +1958,13 @@ function DeliverableCard({ item, contracts, onEdit, stageId }) {
   );
 }
 
-function PipelineColumn({ stage, items, contracts, onEdit, onDrop }) {
-  const [dragOver, setDragOver] = useState(false);
-  const lateCount = items.filter(item => {
+function PipelineColumn({ stage, items, contracts, onEdit, onDrop, onReorder }) {
+  const [dragOver, setDragOver]     = useState(false);
+  const [dragOverItem, setDragOverItem] = useState(null); // {id, before}
+  const [draggingId, setDraggingId] = useState(null);
+
+  const lateCount = stage.id === "done" ? 0 : items.filter(item => {
+    if (item.publishedAt || item.postLink) return false;
     const dl = stageDeadline(item, stage.id);
     return dl && daysLeft(dl) < 0;
   }).length;
@@ -1960,8 +1978,14 @@ function PipelineColumn({ stage, items, contracts, onEdit, onDrop }) {
         transition: "all 0.18s ease",
       }}
       onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={e => { e.preventDefault(); setDragOver(false); onDrop(e.dataTransfer.getData("text/plain"), stage.id); }}>
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false); }}
+      onDrop={e => {
+        e.preventDefault(); setDragOver(false); setDragOverItem(null);
+        const id = e.dataTransfer.getData("text/plain");
+        const fromStage = e.dataTransfer.getData("from-stage");
+        // Only move stage if dropped on the column (not on a card)
+        if (fromStage !== stage.id) onDrop(id, stage.id);
+      }}>
       <div style={{ padding: "10px 12px", borderBottom: `1px solid ${LN}`, background: B1, display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: TX, flex: 1 }}>{stage.label}</span>
         {lateCount > 0 && (
@@ -1969,9 +1993,48 @@ function PipelineColumn({ stage, items, contracts, onEdit, onDrop }) {
         )}
         <span style={{ fontSize: 9, fontWeight: 700, background: B3, color: TX2, padding: "2px 7px", borderRadius: 99 }}>{items.length}</span>
       </div>
-      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 6, minHeight: 80 }}>
+      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 0, minHeight: 80 }}>
         {items.map(item => (
-          <DeliverableCard key={item.id} item={item} contracts={contracts} onEdit={onEdit} stageId={stage.id} />
+          <div key={item.id}
+            draggable
+            onDragStart={e => {
+              e.dataTransfer.setData("text/plain", item.id);
+              e.dataTransfer.setData("from-stage", stage.id);
+              e.dataTransfer.effectAllowed = "move";
+              setDraggingId(item.id);
+            }}
+            onDragEnd={() => { setDraggingId(null); setDragOverItem(null); }}
+            onDragOver={e => {
+              e.preventDefault(); e.stopPropagation();
+              if (draggingId && draggingId !== item.id) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const before = e.clientY < rect.top + rect.height / 2;
+                setDragOverItem({ id: item.id, before });
+              }
+            }}
+            onDrop={e => {
+              e.preventDefault(); e.stopPropagation();
+              const id = e.dataTransfer.getData("text/plain");
+              const fromStage = e.dataTransfer.getData("from-stage");
+              setDragOverItem(null);
+              if (fromStage === stage.id && id !== item.id && onReorder) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const before = e.clientY < rect.top + rect.height / 2;
+                onReorder(id, item.id, before);
+              } else if (fromStage !== stage.id) {
+                onDrop(id, stage.id);
+              }
+            }}
+            style={{ marginBottom: 6, opacity: draggingId === item.id ? 0.4 : 1, transition: "opacity .15s" }}>
+            {/* Drop indicator */}
+            {dragOverItem?.id === item.id && dragOverItem.before && (
+              <div style={{ height: 2, background: RED, borderRadius: 1, marginBottom: 4 }}/>
+            )}
+            <DeliverableCard item={item} contracts={contracts} onEdit={onEdit} stageId={stage.id}/>
+            {dragOverItem?.id === item.id && !dragOverItem.before && (
+              <div style={{ height: 2, background: RED, borderRadius: 1, marginTop: 4 }}/>
+            )}
+          </div>
         ))}
       </div>
     </div>
@@ -1995,6 +2058,23 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
   const moveStage = (itemId, newStage) => {
     save(deliverables.map(d => d.id === itemId ? { ...d, stage: newStage } : d));
     toast?.(`Movido para ${STAGES.find(s=>s.id===newStage)?.label}`, "info");
+  };
+
+  // Reorder cards within same column
+  const reorderWithin = (fromId, toId, before) => {
+    const stage = deliverables.find(d=>d.id===fromId)?.stage;
+    if (!stage) return;
+    const stageItems = deliverables
+      .filter(d=>d.stage===stage)
+      .sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
+    const from = stageItems.find(d=>d.id===fromId);
+    const rest = stageItems.filter(d=>d.id!==fromId);
+    const toIdx = rest.findIndex(d=>d.id===toId);
+    if (toIdx<0) return;
+    const insertAt = before ? toIdx : toIdx+1;
+    rest.splice(insertAt,0,from);
+    const updated = rest.map((d,i)=>({...d,sortOrder:i*10}));
+    save(deliverables.map(d=>{const u=updated.find(x=>x.id===d.id);return u||d;}));
   };
 
   const filtered = deliverables
@@ -2066,10 +2146,13 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
               <PipelineColumn
                 key={stage.id}
                 stage={stage}
-                items={filtered.filter(d => (d.stage || "briefing") === stage.id)}
+                items={filtered
+                  .filter(d => (d.stage || "briefing") === stage.id)
+                  .sort((a,b)=>(a.sortOrder??9999)-(b.sortOrder??9999))}
                 contracts={contracts}
                 onEdit={setEditItem}
                 onDrop={moveStage}
+                onReorder={reorderWithin}
               />
             ))}
           </div>

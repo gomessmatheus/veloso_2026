@@ -95,7 +95,13 @@ const daysLeft = s => { try { if (!s) return null; const ms = new Date(s) - new 
 const cn       = (...cls) => cls.filter(Boolean).join(" ");
 
 function fmtMoney(v, currency = "BRL") {
+  if (v === null || v === undefined) return "—";
   return new Intl.NumberFormat("pt-BR", { style:"currency", currency, minimumFractionDigits:0, maximumFractionDigits:0 }).format(v || 0);
+}
+function fmtEng(v) {
+  // Etapa 4: show "—" when engagement is null (no reach data)
+  if (v === null || v === undefined) return "—";
+  return v.toFixed(1) + "%";
 }
 function monthsBetween(start, end) {
   if (!start || !end) return null;
@@ -109,34 +115,61 @@ function getInstallments(c) {
   if (c.parc2Deadline||c.parc2Value) arr.push({ value:Number(c.parc2Value)||0, date:c.parc2Deadline||"" });
   return arr.length ? arr : [];
 }
-function contractTotal(c) {
-  if (c.paymentType==="monthly") { const m=monthsBetween(c.contractStart,c.contractDeadline); return m?(c.monthlyValue||0)*m:0; }
-  if (c.paymentType==="split") { const inst=getInstallments(c); if(inst.length) return inst.reduce((s,i)=>s+(Number(i.value)||0),0); }
-  return c.contractValue||0;
+
+// Etapa 4: returns {value, warning} — warns when monthly has no dates
+function contractTotalWithWarning(c) {
+  if (c.paymentType==="monthly") {
+    if (!c.contractStart||!c.contractDeadline) {
+      return { value:0, warning:`"${c.company}" é mensal mas não tem datas de início/fim — valor não calculado.` };
+    }
+    const m=monthsBetween(c.contractStart,c.contractDeadline);
+    return { value:m?(c.monthlyValue||0)*m:0, warning:null };
+  }
+  if (c.paymentType==="split") { const inst=getInstallments(c); if(inst.length) return { value:inst.reduce((s,i)=>s+(Number(i.value)||0),0), warning:null }; }
+  return { value:c.contractValue||0, warning:null };
 }
+function contractTotal(c) { return contractTotalWithWarning(c).value; }
+
+// Aggregates data-quality warnings across all contracts
+function contractCalcWarnings(contracts) {
+  return contracts.filter(c=>!c.archived).map(c=>contractTotalWithWarning(c).warning).filter(Boolean);
+}
+
+// Etapa 4: toBRL keeps old behavior (for sum reductions)
 function toBRL(value, currency, rates) {
   if (currency==="BRL"||!currency) return value;
   if (currency==="EUR") return rates.eur>0?value*rates.eur:value;
   if (currency==="USD") return rates.usd>0?value*rates.usd:value;
   return value;
 }
+// Etapa 4: strict version — returns null when rate missing, use for display
+function toBRLStrict(value, currency, rates) {
+  if (currency==="BRL"||!currency) return value;
+  if (currency==="EUR") return rates.eur>0?value*rates.eur:null;
+  if (currency==="USD") return rates.usd>0?value*rates.usd:null;
+  return value;
+}
+
 function calcEngagement(p) {
   const i=(p.likes||0)+(p.comments||0)+(p.shares||0)+(p.saves||0);
-  if (!p.reach) return null;
+  if (!p.reach) return null; // Etapa 4: null means "no data", not 0%
   return i/p.reach*100;
 }
 function postRepostCount(p) {
   if (p.type==="repost") return 1;
   return Math.max(0,(p.networks||[]).length-1);
 }
+
+// Etapa 4: getCommEntries respects per-contract commissionRate
 function getCommEntries(c) {
   if (!c.hasCommission) return [];
+  const rate = (typeof c.commissionRate==="number" && c.commissionRate>0) ? c.commissionRate : COMM_RATE;
   const paid = c.commPaid||{};
   if (c.paymentType==="monthly") {
     if (!c.contractStart||!c.contractDeadline) return [];
     const entries=[]; const s=new Date(c.contractStart),e=new Date(c.contractDeadline);
     const cur=new Date(s.getFullYear(),s.getMonth(),1);
-    while(cur<=e){const key=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`;entries.push({key,label:`${MONTHS_SH[cur.getMonth()]} ${cur.getFullYear()}`,amount:(c.monthlyValue||0)*COMM_RATE,currency:c.currency,isPaid:!!paid[key]});cur.setMonth(cur.getMonth()+1);}
+    while(cur<=e){const key=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`;entries.push({key,label:`${MONTHS_SH[cur.getMonth()]} ${cur.getFullYear()}`,amount:(c.monthlyValue||0)*rate,currency:c.currency,isPaid:!!paid[key]});cur.setMonth(cur.getMonth()+1);}
     return entries;
   }
   const totalCosts=(c.costs||[]).reduce((s,x)=>s+(Number(x.value)||0),0);
@@ -144,12 +177,12 @@ function getCommEntries(c) {
     const O=["1ª","2ª","3ª","4ª","5ª","6ª"];
     const insts=getInstallments(c);
     const costPerInst=insts.length?totalCosts/insts.length:0;
-    return insts.map((inst,i)=>({key:`parc${i+1}`,label:`${O[i]||`${i+1}ª`} Parcela`,amount:Math.max(0,(Number(inst.value)||0)-costPerInst)*COMM_RATE,currency:c.currency,date:inst.date,isPaid:!!paid[`parc${i+1}`]}));
+    return insts.map((inst,i)=>({key:`parc${i+1}`,label:`${O[i]||`${i+1}ª`} Parcela`,amount:Math.max(0,(Number(inst.value)||0)-costPerInst)*rate,currency:c.currency,date:inst.date,isPaid:!!paid[`parc${i+1}`]}));
   }
   const total=contractTotal(c);
   const costs=(c.costs||[]).reduce((s,x)=>s+(Number(x.value)||0),0);
   const netTotal=Math.max(0,total-costs);
-  return [{key:"single",label:"Pagamento Único",amount:netTotal*COMM_RATE,currency:c.currency,date:c.paymentDeadline,isPaid:!!paid["single"]}];
+  return [{key:"single",label:"Pagamento Único",amount:netTotal*rate,currency:c.currency,date:c.paymentDeadline,isPaid:!!paid["single"]}];
 }
 function getNFEntries(c) {
   const nf=c.nfEmitted||{};
@@ -168,10 +201,12 @@ function getNFEntries(c) {
   return [{key:"single",label:"NF Única",amount:total,currency:c.currency,date:c.paymentDeadline,isEmitted:!!nf["single"]}];
 }
 function dlColor(d) { return d==null?TX:d<=7?RED:d<=14?AMB:GRN; }
-function currBadge(cur) {
+function currBadge(cur, rates) {
   const s = { padding:"1px 6px",fontSize:8,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",borderRadius:3 };
-  if (cur==="EUR") return <span style={{...s,background:"rgba(99,102,241,.18)",border:"1px solid rgba(99,102,241,.3)",color:"#818CF8"}}>EUR</span>;
-  if (cur==="USD") return <span style={{...s,background:"rgba(16,185,129,.18)",border:"1px solid rgba(16,185,129,.3)",color:"#34D399"}}>USD</span>;
+  const missingRate = rates && ((cur==="EUR"&&!rates.eur)||(cur==="USD"&&!rates.usd));
+  const title = missingRate ? "Taxa de câmbio não definida — defina na barra superior" : undefined;
+  if (cur==="EUR") return <span style={{...s,background:"rgba(99,102,241,.18)",border:`1px solid ${missingRate?"#F59E0B":"rgba(99,102,241,.3)"}`,color:missingRate?"#F59E0B":"#818CF8"}} title={title}>EUR{missingRate?" ⚠":""}</span>;
+  if (cur==="USD") return <span style={{...s,background:"rgba(16,185,129,.18)",border:`1px solid ${missingRate?"#F59E0B":"rgba(16,185,129,.3)"}`,color:missingRate?"#F59E0B":"#34D399"}} title={title}>USD{missingRate?" ⚠":""}</span>;
   return null;
 }
 function lsLoad(k, fb) { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):fb; } catch { return fb; } }
@@ -1255,7 +1290,14 @@ function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, 
     sub: postsDue.map(p=>p.title).slice(0,3).join(", "),
     action:"Ver posts", onAction:()=>navigateTo("posts"),
   });
-  // NF and commission moved to Financeiro tab
+  // Etapa 4: data-quality warnings (monthly contracts missing dates)
+  const calcWarnings = contractCalcWarnings(contracts);
+  if (calcWarnings.length > 0) urgency.push({
+    type:"warning", key:"calcwarn",
+    title:`${calcWarnings.length} contrato${calcWarnings.length>1?"s":""} com valor incalculável`,
+    sub: calcWarnings.slice(0,2).join(" · "),
+    action:"Ver contratos", onAction:()=>navigateTo("contratos"),
+  });
   if (urgency.length === 0) urgency.push({ type:"success", key:"ok", title:"Tudo em dia", sub:"Nenhuma ação urgente. Bom trabalho!" });
 
   // Upcoming payments
@@ -1476,7 +1518,7 @@ Responda APENAS com o JSON, sem markdown.`
         <DashKpi label="Entregáveis ativos" value={allDeliverables.filter(d=>d.stage!=="done").length} sub={`${allDeliverables.filter(d=>d.stage==="done").length} concluídos`}/>
         <MonthDeliverables deliverables={allDeliverables} contracts={contracts}/>
         <DashKpi label="Atrasados" value={lateDeliverables.length} sub="no pipeline" accent={lateDeliverables.length>0?RED:GRN}/>
-        <DashKpi label="Engajamento" value={stats.avgEng!=null?stats.avgEng.toFixed(2)+"%":"—"} sub="média das publis" accent={stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2}/>
+        <DashKpi label="Engajamento" value={fmtEng(stats.avgEng)} sub="média das publis" accent={stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2}/>
       </div>
 
       {/* Production Rules & Slots */}
@@ -2725,7 +2767,7 @@ Responda APENAS com o JSON.` }]
               { label:"Valor total",    value:total>0?fmtMoney(total,c.currency):"TBD" },
               { label:"Entregas concluídas", value:`${doneDels}/${totalDels}` },
               { label:"Comissão Ranked (a pagar)", value:fmtMoney(commPending,c.currency), accent:commPending>0?AMB:GRN, sub:commPending>0?"pendente":"pago" },
-              { label:"Engajamento",     value:avgEng!=null?avgEng.toFixed(2)+"%":"—", accent:avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX2):TX2 },
+              { label:"Engajamento",     value:fmtEng(avgEng), accent:avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX2):TX2 },
             ].map((k,i) => (
               <div key={i} style={{ ...G, padding:"16px 18px" }}>
                 <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>{k.label}</div>
@@ -2801,7 +2843,7 @@ Responda APENAS com o JSON.` }]
                     <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.reach||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.likes||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.comments||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{ fontWeight:700,color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3 }}>{eng!=null?eng.toFixed(1)+"%":"—"}</div>
+                    <div style={{ fontWeight:700,color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3 }}>{fmtEng(eng)}</div>
                     <div>{p.link?<a href={p.link} target="_blank" rel="noreferrer" style={{color:RED,fontSize:11}}>↗</a>:<span style={{color:TX3}}>—</span>}</div>
                   </div>
                 );
@@ -3572,8 +3614,33 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
   const months=f.paymentType==="monthly"?monthsBetween(f.contractStart,f.contractDeadline):null;
   const liveTotal=f.paymentType==="monthly"?(months?(Number(f.monthlyValue)||0)*months:0):f.paymentType==="split"?(f.installments||[]).reduce((s,i)=>s+(Number(i.value)||0),0):Number(f.contractValue)||0;
   const ORDINALS=["1ª","2ª","3ª","4ª","5ª","6ª"];
+
+  // ── Etapa 4: live validations (non-blocking warnings) ──
+  const valWarnings = useMemo(() => {
+    const w = [];
+    if (!f.company?.trim()) w.push({ field:"company", msg:"Nome é obrigatório." });
+    if (f.paymentType==="monthly") {
+      if (Number(f.monthlyValue) < 0) w.push({ field:"monthlyValue", msg:"Valor mensal não pode ser negativo." });
+      if (f.contractStart && f.contractDeadline && f.contractStart > f.contractDeadline)
+        w.push({ field:"dates", msg:"Data de início deve ser anterior ao término." });
+      if (!f.contractStart || !f.contractDeadline)
+        w.push({ field:"dates", msg:"Contrato mensal precisa de datas de início e fim para calcular o valor total.", soft:true });
+    }
+    if (f.paymentType==="single" && Number(f.contractValue) < 0)
+      w.push({ field:"contractValue", msg:"Valor não pode ser negativo." });
+    if (f.paymentType==="split") {
+      const instSum = (f.installments||[]).reduce((s,i)=>s+(Number(i.value)||0),0);
+      const declared = Number(f.contractValue)||0;
+      if (declared > 0 && Math.abs(instSum - declared) > 1)
+        w.push({ field:"split", msg:`Soma das parcelas (${fmtMoney(instSum)}) difere do valor declarado (${fmtMoney(declared)}).`, soft:true });
+    }
+    return w;
+  }, [f]);
+  const hardErrors  = valWarnings.filter(w=>!w.soft);
+  const softWarnings = valWarnings.filter(w=>w.soft);
+
   const handleSave=async()=>{
-    if(!f.company) return alert("Preencha o nome.");
+    if(hardErrors.length>0) return; // blocked by hard errors shown inline
     const entry={...f,id:f.id||uid(),contractValue:f.paymentType==="monthly"?0:Number(f.contractValue)||0,monthlyValue:Number(f.monthlyValue)||0,
       numPosts:Number(f.numPosts)||0,numStories:Number(f.numStories)||0,numCommunityLinks:Number(f.numCommunityLinks)||0,numReposts:Number(f.numReposts)||0,
       installments:f.paymentType==="split"?(f.installments||[]).map(i=>({value:Number(i.value)||0,date:i.date||""})):[],
@@ -3583,7 +3650,6 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
       await saveC(contracts.map(c=>c.id===entry.id?entry:c));
     } else {
       await saveC([...contracts,entry]);
-      // Auto-create deliverables in Briefing stage
       const TYPE_MAP = [
         {key:"numPosts",    type:"reel",    label:"Reel"},
         {key:"numStories",  type:"story",   label:"Story"},
@@ -3608,12 +3674,34 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
     }
     setModal(null);
   };
+
+  // Inline warning banner component
+  const WarnBanner = ({ field }) => {
+    const hard = hardErrors.find(w=>w.field===field);
+    const soft = softWarnings.find(w=>w.field===field);
+    const item = hard || soft;
+    if (!item) return null;
+    return (
+      <div style={{ fontSize:11, color:hard?RED:AMB, background:hard?`${RED}08`:`${AMB}08`, border:`1px solid ${hard?RED:AMB}30`, borderRadius:6, padding:"5px 10px", marginTop:4 }}>
+        {hard?"⛔":"⚠"} {item.msg}
+      </div>
+    );
+  };
+
   return (
     <Modal title={isEdit?"Editar Contrato":"Novo Contrato"} onClose={()=>setModal(null)}
-      footer={<><Btn onClick={()=>setModal(null)} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={handleSave} variant="primary" size="sm">{isEdit?"Salvar":"Criar"}</Btn></>}>
+      footer={<>
+        <Btn onClick={()=>setModal(null)} variant="ghost" size="sm">Cancelar</Btn>
+        <Btn onClick={handleSave} variant="primary" size="sm" disabled={hardErrors.length>0}>
+          {isEdit?"Salvar":"Criar"}
+        </Btn>
+      </>}>
       <SRule>Empresa</SRule>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <Field label="Nome" full><Input value={f.company} onChange={e=>set("company",e.target.value)} placeholder="ex: Netshoes"/></Field>
+        <Field label="Nome" full>
+          <Input value={f.company} onChange={e=>set("company",e.target.value)} placeholder="ex: Netshoes"/>
+          <WarnBanner field="company"/>
+        </Field>
         <Field label="CNPJ"><Input value={f.cnpj} onChange={e=>set("cnpj",e.target.value)} placeholder="00.000.000/0001-00"/></Field>
         <Field label="Cor"><input type="color" value={f.color} onChange={e=>set("color",e.target.value)} style={{width:"100%",height:36,padding:2,background:B2,border:`1px solid ${LN}`,borderRadius:6,cursor:"pointer"}}/></Field>
         <Field label="Obs." full><Textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2}/></Field>
@@ -3636,6 +3724,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
           <Field label="Término"><Input type="date" value={f.contractDeadline} onChange={e=>set("contractDeadline",e.target.value)}/></Field>
           <Field label="Total"><input readOnly value={liveTotal>0&&months?`${months}m = ${fmtMoney(liveTotal,f.currency)}`:"—"} style={{width:"100%",padding:"8px 12px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:GRN,fontSize:12,fontFamily:"inherit",outline:"none",fontWeight:700}}/></Field>
           <div style={{gridColumn:"1/-1",display:"flex",alignItems:"center",gap:8}}><CommToggle on={f.hasCommission} onToggle={()=>set("hasCommission",!f.hasCommission)} label/></div>
+          <div style={{gridColumn:"1/-1"}}><WarnBanner field="dates"/></div>
         </div>
       ):f.paymentType==="split"?(
         <>
@@ -3653,6 +3742,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
             </div>
           ))}
           <Btn onClick={addInst} variant="ghost" size="sm" icon={Plus} style={{marginBottom:12}}>Parcela</Btn>
+          <WarnBanner field="split"/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <Field label="Prazo Final"><Input type="date" value={f.contractDeadline} onChange={e=>set("contractDeadline",e.target.value)}/></Field>
           </div>
@@ -3827,7 +3917,7 @@ function PostModal({ modal, setModal, contracts, posts, saveP, toast }) {
       </div>
       <div style={{marginTop:12,padding:"10px 14px",background:B2,border:`1px solid ${LN}`,borderRadius:8}}>
         <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4}}>Engajamento calculado</div>
-        <div style={{fontSize:18,fontWeight:700,color:liveEng!=null?(liveEng>=3?GRN:liveEng>=1?AMB:TX2):TX3}}>{liveEng!=null?liveEng.toFixed(2)+"%":"— preencha alcance e interações"}</div>
+        <div style={{fontSize:18,fontWeight:700,color:liveEng!=null?(liveEng>=3?GRN:liveEng>=1?AMB:TX2):TX3}}>{fmtEng(liveEng)||"— preencha alcance e interações"}</div>
       </div>
     </Modal>
   );
@@ -3995,7 +4085,8 @@ function ClientReport({ contract: c, posts, deliverables, rates, onClose }) {
   const totalEngagements = totalLikes + totalComments + totalSaves;
   const avgEngRate = totalReach > 0 ? (totalEngagements / totalReach * 100) : null;
   const contractValue = contractTotal(c);
-  const contractBRL   = toBRL(contractValue, c.currency, rates);
+  // Etapa 4: use strict conversion — null when rate missing, shows "—" in KPIs
+  const contractBRL   = toBRLStrict(contractValue, c.currency, rates);
 
   // Brand KPIs
   const CPM  = totalViews > 0   ? (contractBRL / totalViews * 1000) : null;
@@ -4083,7 +4174,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
           <MetricCard label="Visualizações" value={totalViews>0?totalViews.toLocaleString("pt-BR"):"—"} sub="total acumulado"/>
           <MetricCard label="Alcance" value={totalReach>0?totalReach.toLocaleString("pt-BR"):"—"} sub="pessoas únicas"/>
-          <MetricCard label="Engajamento" value={avgEngRate!=null?avgEngRate.toFixed(2)+"%":"—"} sub="média geral" color={avgEngRate!=null?(avgEngRate>=3?GRN:avgEngRate>=1?AMB:TX2):TX2}/>
+          <MetricCard label="Engajamento" value={fmtEng(avgEngRate)} sub="média geral" color={avgEngRate!=null?(avgEngRate>=3?GRN:avgEngRate>=1?AMB:TX2):TX2}/>
           <MetricCard label="Interações" value={totalEngagements>0?totalEngagements.toLocaleString("pt-BR"):"—"} sub="likes+comentários"/>
         </div>
 
@@ -4134,7 +4225,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
                     <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"reach")||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"likes")||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"comments")||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{fontWeight:700,color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3}}>{eng!=null?eng.toFixed(1)+"%":"—"}</div>
+                    <div style={{fontWeight:700,color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3}}>{fmtEng(eng)}</div>
                   </div>
                 );
               })}

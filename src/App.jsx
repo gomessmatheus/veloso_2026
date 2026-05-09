@@ -7,7 +7,7 @@ import {
   loadCaixaTx, syncCaixaTx,
   getSetting, setSetting, subscribeToChanges,
   updatePresence, removePresence, subscribeToPresence, getMyPresence,
-  getUserRole,
+  getUserRole, deleteItem,
 } from "./db.js";
 import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSameDay, isSameMonth, isToday, parse, startOfToday, startOfWeek, add } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -6016,11 +6016,19 @@ export default function App() {
         setSyncStatus("ok");
       } catch(err) { console.error(err); setSyncStatus("error"); setC(SEED); setP(SEED_POSTS); }
       try {
-        unsub=subscribeToChanges({
-          onContracts:cs=>{setC(cs);prevCIds.current=cs.map(c=>c.id);setSyncStatus("ok");},
-          onPosts:ps=>{setP(ps);prevPIds.current=ps.map(p=>p.id);},
-          onDeliverables:ds=>{setD(ds);prevDIds.current=ds.map(d=>d.id);},
-          onSetting:(key,val)=>{if(key==="eurRate")setEurRate(Number(val)||0);if(key==="usdRate")setUsdRate(Number(val)||0);},
+        unsub = subscribeToChanges({
+          onContracts: cs  => { setC(cs);  prevCIds.current = cs.map(c => c.id); setSyncStatus("ok"); },
+          onPosts:     ps  => { setP(ps);  prevPIds.current = ps.map(p => p.id); },
+          onDeliverables: ds => { setD(ds); prevDIds.current = ds.map(d => d.id); },
+          onSetting: (key, val) => {
+            if (key === "eurRate") setEurRate(Number(val) || 0);
+            if (key === "usdRate") setUsdRate(Number(val) || 0);
+          },
+          onError: (source, _err) => {
+            setSyncStatus("error");
+            // Toast is available via context at this point
+            // (push is stable so we can call it safely from a snapshot listener)
+          },
         });
       } catch {}
     })();
@@ -6038,9 +6046,41 @@ export default function App() {
     return ()=>{ clearInterval(interval); unsubP(); removePresence(); window.removeEventListener("beforeunload",cleanup); };
   }, [user]);
 
-  const saveC=async d=>{setC(d);try{await syncContracts(d,prevCIds.current);prevCIds.current=d.map(c=>c.id);setSyncStatus("ok");}catch(e){console.error(e);setSyncStatus("error");}};
-  const saveP=async d=>{setP(d);try{await syncPosts(d,prevPIds.current);prevPIds.current=d.map(p=>p.id);}catch(e){console.error(e);}};
-  const saveD=async d=>{setD(d);try{await syncDeliverables(d,prevDIds.current);prevDIds.current=d.map(x=>x.id);}catch(e){console.error(e);}};
+  // Helper: find IDs removed between two arrays and call deleteItem for each
+  const syncWithDeletes = useCallback(async (colName, newItems, prevIds, syncFn) => {
+    const newIds = new Set(newItems.map(i => i.id));
+    const removed = (prevIds || []).filter(id => !newIds.has(id));
+    // Upsert changed/new items
+    await syncFn(newItems, prevIds);
+    // Explicitly delete removed items
+    await Promise.allSettled(removed.map(id => deleteItem(colName, id)));
+    return newIds;
+  }, []);
+
+  const saveC = useCallback(async d => {
+    setC(d);
+    try {
+      const newIds = await syncWithDeletes('contracts', d, prevCIds.current, syncContracts);
+      prevCIds.current = [...newIds];
+      setSyncStatus("ok");
+    } catch(e) { console.error('[App] saveC', e); setSyncStatus("error"); }
+  }, [syncWithDeletes]);
+
+  const saveP = useCallback(async d => {
+    setP(d);
+    try {
+      const newIds = await syncWithDeletes('posts', d, prevPIds.current, syncPosts);
+      prevPIds.current = [...newIds];
+    } catch(e) { console.error('[App] saveP', e); }
+  }, [syncWithDeletes]);
+
+  const saveD = useCallback(async d => {
+    setD(d);
+    try {
+      const newIds = await syncWithDeletes('deliverables', d, prevDIds.current, syncDeliverables);
+      prevDIds.current = [...newIds];
+    } catch(e) { console.error('[App] saveD', e); }
+  }, [syncWithDeletes]);;
   const rates=useMemo(()=>({eur:eurRate,usd:usdRate}),[eurRate,usdRate]);
   const saveNote=(id,notes)=>saveC(contracts.map(c=>c.id===id?{...c,notes}:c));
   const toggleComm=id=>saveC(contracts.map(c=>c.id===id?{...c,hasCommission:!c.hasCommission}:c));

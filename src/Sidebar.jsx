@@ -64,16 +64,20 @@ export function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers,
       </div>
 
       {/* Nav */}
-      <nav style={{ padding:"12px 8px", flex:1, overflowY:"auto" }}>
-        <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, padding:"4px 8px", marginBottom:4 }}>Navegação</div>
+      <nav style={{ padding: "12px 8px", flex: 1, overflowY: "auto" }}>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX3, padding: "4px 8px", marginBottom: 4 }}>Navegação</div>
         {NAV_ITEMS.filter(item => allowedNav.includes(item.id)).map(item => {
           const active = view === item.id;
           return (
-            <div key={item.id} onClick={() => setView(item.id)}
-              style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:active ? 600 : 400, color:active ? TX : TX2, background:active ? B3 : "transparent", marginBottom:2, transition:TRANS, boxShadow:active ? "0 1px 3px rgba(0,0,0,0.06)" : "none" }}
+            <div
+              key={item.id}
+              onClick={() => setView(item.id)}
+              className={`nav-item${active ? " active" : ""}`}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", paddingLeft: active ? 14 : 10, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: active ? 600 : 400, color: active ? TX : TX2, background: active ? B3 : "transparent", marginBottom: 2, boxShadow: active ? "0 1px 3px rgba(0,0,0,0.06)" : "none" }}
               onMouseEnter={e => { if (!active) { e.currentTarget.style.background = B2; e.currentTarget.style.color = TX; } }}
-              onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = TX2; } }}>
-              <item.icon size={14} style={{ color: active ? RED : TX3, flexShrink:0 }} />
+              onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = TX2; } }}
+              aria-current={active ? "page" : undefined}>
+              <item.icon size={14} style={{ color: active ? RED : TX3, flexShrink: 0 }} />
               {item.label}
             </div>
           );
@@ -111,9 +115,9 @@ export function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers,
           <div style={{ fontSize:11, color:TX2, fontWeight:500 }}>{userName || user?.email?.split("@")[0]}</div>
           <div style={{ display:"flex", gap:4 }}>
             {role === "admin" && (
-              <button onClick={onInvite} title="Convidar usuário" style={{ background:"none", border:"none", color:TX3, cursor:"pointer", padding:4, fontSize:12 }}>👤+</button>
+              <button onClick={onInvite} title="Convidar usuário" aria-label="Convidar usuário" style={{ background:"none", border:"none", color:TX3, cursor:"pointer", padding:4, fontSize:12 }}>👤+</button>
             )}
-            <button onClick={onSignOut} title="Sair" style={{ background:"none", border:"none", color:TX3, cursor:"pointer", padding:4 }}>
+            <button onClick={onSignOut} title="Sair da conta" aria-label="Sair da conta" style={{ background:"none", border:"none", color:TX3, cursor:"pointer", padding:4 }}>
               <LogOut size={14} />
             </button>
           </div>

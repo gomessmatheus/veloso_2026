@@ -1,26 +1,92 @@
 /* ─── Google Fonts ──────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
-/* ─── Scrollbar ─────────────────────────────────────────── */
-::-webkit-scrollbar        { width: 5px; height: 5px; }
-::-webkit-scrollbar-track  { background: transparent; }
-::-webkit-scrollbar-thumb  { background: #D1D5DB; border-radius: 99px; }
+/* ─── Reset ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+button, a, [role="button"] { cursor: pointer; }
+input, select, textarea { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+input[type="date"]::-webkit-calendar-picker-indicator { opacity: .5; }
+select option { background: #FEFEFE; color: #000; }
+a { color: #C8102E; }
 
 /* ─── Focus ring ─────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid rgba(200, 16, 46, 0.45);
+  outline: 2px solid rgba(200, 16, 46, 0.5);
   outline-offset: 2px;
+  border-radius: 4px;
 }
+/* Remove default focus for mouse users */
+:focus:not(:focus-visible) { outline: none; }
 
-/* ─── Input placeholder ─────────────────────────────────── */
+/* ─── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: rgba(0,0,0,.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,.25); }
 ::placeholder { color: #ABABAB; }
 
-/* ─── Animations ─────────────────────────────────────────── */
-@keyframes toastIn  { from { opacity: 0; transform: translateX(20px); }  to { opacity: 1; transform: translateX(0); } }
+/* ─── Modal transitions ──────────────────────────────────── */
+@keyframes modalBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+@keyframes modalSheetUp {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.modal-backdrop { animation: modalBackdropIn 0.18s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.modal-dialog   { animation: modalSlideUp   0.18s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.modal-sheet    { animation: modalSheetUp   0.20s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+/* ─── Toast ──────────────────────────────────────────────── */
+@keyframes toastInRight { from { opacity: 0; transform: translateX(20px); }  to { opacity: 1; transform: translateX(0); } }
+@keyframes toastInTop   { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastOut     { from { opacity: 1; } to { opacity: 0; transform: scale(0.96); } }
+
+/* ─── Other animations ───────────────────────────────────── */
 @keyframes floatIn  { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin     { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes fadeIn   { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scaleIn  { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+
+/* ─── Skeleton loader ────────────────────────────────────── */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+.skeleton {
+  background: #EFEFEF;
+  border-radius: 6px;
+  animation: skeletonPulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ─── Sidebar nav item hover ─────────────────────────────── */
+.nav-item {
+  position: relative;
+  transition: all 0.12s ease;
+}
+.nav-item:hover   { transform: translateX(2px); }
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: #C8102E;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ─── Table responsive wrapper ───────────────────────────── */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
 
 /* ─── Utility classes ────────────────────────────────────── */
 .hover-lift {
@@ -31,14 +97,18 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
 }
+.hover-row { transition: background 0.15s; }
+.hover-row:hover { background: #F7F7F7 !important; }
 
-.hover-row {
-  transition: background 0.15s;
-}
-.hover-row:hover {
-  background: #F7F7F7;
-}
-
-/* ─── Hide scrollbar but keep scrollable ────────────────── */
+/* ─── No scrollbar (keep scrollable) ────────────────────── */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Motion-safe media query ────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

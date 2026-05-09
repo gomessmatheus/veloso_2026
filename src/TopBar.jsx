@@ -54,8 +54,9 @@ export function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewCo
         <span style={{ fontSize:9, fontWeight:700, color:TX3 }}>R$</span>
       </div>
 
-      {/* Sync status */}
-      <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 10px", background:`${statusColor}12`, border:`1px solid ${statusColor}30`, borderRadius:99 }}>
+      {/* Sync status with tooltip */}
+      <div title={statusLabel}
+        style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 10px", background:`${statusColor}12`, border:`1px solid ${statusColor}30`, borderRadius:99, cursor:"default" }}>
         <div style={{ width:6, height:6, borderRadius:"50%", background:statusColor }} />
         <span style={{ fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:statusColor }}>{statusLabel}</span>
       </div>

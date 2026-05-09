@@ -134,13 +134,19 @@ export function Modal({ title, onClose, children, footer, width = 640 }) {
   const mob = typeof window !== "undefined" && window.innerWidth < 768;
   return (
     <div
+      className="modal-backdrop"
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 200, display: "flex", alignItems: mob ? "flex-end" : "flex-start", justifyContent: "center", padding: mob ? 0 : "48px 16px", overflowY: mob ? "hidden" : "auto", backdropFilter: "blur(4px)" }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: B1, borderRadius: mob ? "20px 20px 0 0" : "14px", border: `1px solid ${LN}`, width: "100%", maxWidth: mob ? "100%" : width, flexShrink: 0, maxHeight: mob ? "92vh" : "none", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
+      <div
+        className={mob ? "modal-sheet" : "modal-dialog"}
+        style={{ background: B1, borderRadius: mob ? "20px 20px 0 0" : "14px", border: `1px solid ${LN}`, width: "100%", maxWidth: mob ? "100%" : width, flexShrink: 0, maxHeight: mob ? "92vh" : "none", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
         {mob && <div style={{ width: 40, height: 4, background: LN2, borderRadius: 2, margin: "12px auto 0", flexShrink: 0 }} />}
         <div style={{ padding: mob ? "12px 20px 14px" : "16px 20px", borderBottom: `1px solid ${LN}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: TX }}>{title}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: TX2, cursor: "pointer", padding: 6, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button
+            onClick={onClose}
+            aria-label="Fechar modal"
+            style={{ background: "none", border: "none", color: TX2, cursor: "pointer", padding: 6, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <X size={16} />
           </button>
         </div>

@@ -14,6 +14,9 @@ import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSa
 import { ptBR } from "date-fns/locale";
 import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote, Landmark, Tag, Building2 } from "lucide-react";
 
+// ─── Design System Ranked ─────────────────────────────────
+import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard } from './ui/index.js';
+
 // ─── Dashboard libs & sub-components ──────────────────────
 import { startOfWeek as sowLib, endOfWeek as eowLib, weekDays, isInCurrentWeek, daysBetween, toDateStr } from "./lib/dates.js";
 import { topPriorityItems } from "./lib/priority.js";
@@ -72,11 +75,15 @@ const ROLE_NAMES = {
   "thiago@rnkd.com.br":         "Thiago",
   "matheussgbf@gmail.com":      "Matheus",
 };
+// WhatsApp brand colors — cor de marca externa, exceção à regra de hex
+const WA_GREEN = '#25D366';
+const WA_DARK  = '#128C7E';
+
 const ROLE_META = {
-  admin:       { label:"Admin",          color:RED,       badge:"👑" },
-  agente:      { label:"Agente Ranked",  color:"#7C3AED", badge:"📊" },
-  atendimento: { label:"Atendimento",    color:"#2563EB", badge:"🤝" },
-  influencer:  { label:"Influenciador",  color:"#059669", badge:"🎬" },
+  admin:       { label:"Admin",          color: ds.color.brand[500]   },
+  agente:      { label:"Agente Ranked",  color: ds.color.copilot[500] },
+  atendimento: { label:"Atendimento",    color: ds.color.info[500]    },
+  influencer:  { label:"Influenciador",  color: ds.color.success[500] },
 };
 const ROLE_NAV = {
   admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa"],
@@ -789,72 +796,93 @@ function Modal({ title, onClose, children, footer, width=640 }) {
 // ─── Login Page ───────────────────────────────────────────
 function LoginPage() {
   const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
+  const [pass,  setPass]  = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError]     = useState("");
 
   const handleLogin = async e => {
     e.preventDefault();
-    if (!email||!pass) return setError("Preencha email e senha.");
+    if (!email || !pass) return setError("Preencha email e senha.");
     setLoading(true); setError("");
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-    } catch(err) {
+    } catch {
       setError("Email ou senha inválidos.");
     } finally { setLoading(false); }
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F7F6EF", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Plus Jakarta Sans,system-ui,sans-serif", position:"relative", overflow:"hidden" }}>
-      {/* Background orbs */}
-      <div style={{ position:"absolute", top:-200, left:-200, width:600, height:600, borderRadius:"50%", background:"radial-gradient(circle, rgba(200,16,46,.08) 0%, transparent 70%)", pointerEvents:"none" }}/>
-      <div style={{ position:"absolute", bottom:-150, right:-100, width:500, height:500, borderRadius:"50%", background:"radial-gradient(circle, rgba(29,78,216,.06) 0%, transparent 70%)", pointerEvents:"none" }}/>
-      {/* Grid lines */}
-      <div style={{ position:"absolute", inset:0, backgroundImage:`linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)`, backgroundSize:"60px 60px", opacity:.5, pointerEvents:"none" }}/>
+    <div style={{
+      minHeight:      '100vh',
+      background:     ds.color.neutral[50],
+      display:        'flex', flexDirection:'column',
+      alignItems:     'center', justifyContent:'center',
+      fontFamily:     ds.font.sans,
+      position:       'relative', overflow:'hidden',
+    }}>
+      {/* Grid */}
+      <div style={{ position:'absolute', inset:0,
+        backgroundImage:`linear-gradient(${ds.color.neutral[200]} 1px, transparent 1px), linear-gradient(90deg, ${ds.color.neutral[200]} 1px, transparent 1px)`,
+        backgroundSize:'64px 64px', opacity:.4, pointerEvents:'none' }}/>
 
       {/* Logo */}
-      <div style={{ marginBottom:40, textAlign:"center", position:"relative" }}>
-        <div style={{ fontSize:13, fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:TX }}>
-          ENTRE<span style={{color:RED}}>GAS</span>
+      <div style={{ marginBottom:ds.space[10], textAlign:'center', position:'relative' }}>
+        <div style={{ fontSize:ds.font.size.sm, fontWeight:ds.font.weight.semibold, letterSpacing:'0.2em', textTransform:'uppercase', color:ds.color.neutral[900] }}>
+          ENTRE<span style={{ color:ds.color.brand[500] }}>GAS</span>
         </div>
-        <div style={{ fontSize:12, color:TX2, marginTop:6, letterSpacing:".04em" }}>Gestão de contratos e entregas · Ranked</div>
+        <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:ds.space[2], letterSpacing:'0.04em' }}>
+          Gestão de contratos e entregas · Ranked
+        </div>
       </div>
 
       {/* Card */}
-      <div style={{ background:"#FEFEFE", border:"1px solid #F0F0F2", borderRadius:16, width:"100%", maxWidth:380, padding:window.innerWidth<768?20:36, margin:window.innerWidth<768?"0 12px":"0", position:"relative", boxShadow:"0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.04)" }}>
-        <h2 style={{ fontSize:18, fontWeight:700, color:TX, marginBottom:6, letterSpacing:"-.01em" }}>Entrar na plataforma</h2>
-        <p style={{ fontSize:12, color:TX2, marginBottom:24 }}>Acesso restrito à equipe Ranked</p>
+      <DsCard padding="lg" elevation="sm" bordered={false}
+        style={{ width:'100%', maxWidth:380, margin:`0 ${ds.space[3]}` }}>
+        <div style={{ marginBottom:ds.space[6] }}>
+          <div style={{ fontSize:ds.font.size.xl, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:'-0.02em', marginBottom:ds.space[1] }}>
+            Entrar na plataforma
+          </div>
+          <div style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>
+            Acesso restrito à equipe Ranked
+          </div>
+        </div>
 
-        <form onSubmit={handleLogin} style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <Field label="Email">
-            <Input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="matheus@standproducoes.com"/>
-          </Field>
-          <Field label="Senha">
-            <Input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••"/>
-          </Field>
-          {error && <div style={{ fontSize:11, color:RED, background:"rgba(200,16,46,.1)", border:"1px solid rgba(200,16,46,.2)", borderRadius:6, padding:"8px 12px" }}>{error}</div>}
-          <button type="submit" disabled={loading}
-            style={{ width:"100%", padding:"11px", background:RED, color:"#fff", border:"none", borderRadius:6, fontSize:12, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", cursor:loading?"wait":"pointer", marginTop:4, opacity:loading?.7:1 }}>
-            {loading ? "Entrando…" : "Entrar"}
-          </button>
+        <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:ds.space[4] }}>
+          <DsInput label="Email" type="email" value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="matheus@standproducoes.com"/>
+          <DsInput label="Senha" type="password" value={pass}
+            onChange={e => setPass(e.target.value)}
+            placeholder="••••••••"/>
+          {error && (
+            <div style={{ fontSize:ds.font.size.xs, color:ds.color.danger[500],
+              background:ds.color.danger[50], border:`1px solid ${ds.color.brand[100]}`,
+              borderRadius:ds.radius.md, padding:`${ds.space[2]} ${ds.space[3]}` }}>
+              {error}
+            </div>
+          )}
+          <DsButton type="submit" variant="primary" size="lg" fullWidth loading={loading}>
+            {loading ? 'Entrando…' : 'Entrar'}
+          </DsButton>
         </form>
 
-        <div style={{ marginTop:20, paddingTop:20, borderTop:`1px solid ${LN}`, fontSize:10, color:TX3, textAlign:"center" }}>
+        <div style={{ marginTop:ds.space[5], paddingTop:ds.space[5], borderTop:ds.border.thin,
+          fontSize:ds.font.size.xs, color:ds.color.neutral[400], textAlign:'center' }}>
           Lucas Veloso @veloso.lucas_
         </div>
-      </div>
+      </DsCard>
     </div>
   );
 }
 
 // ─── App shell ────────────────────────────────────────────
 const NAV_ITEMS = [
-  { id:"dashboard",      label:"Dashboard",       icon:LayoutDashboard },
-  { id:"acompanhamento", label:"Produção",         icon:KanbanSquare },
-  { id:"contratos",      label:"Contratos",        icon:FileText },
-  { id:"marcas",         label:"Marcas",           icon:Tag },
-  { id:"financeiro",     label:"Financeiro",       icon:Banknote },
-  { id:"caixa",          label:"Caixa",            icon:Landmark },
+  { id:"dashboard",      label:"Dashboard",  icon:"layoutDashboard" },
+  { id:"acompanhamento", label:"Produção",   icon:"kanban"          },
+  { id:"contratos",      label:"Contratos",  icon:"fileText"        },
+  { id:"marcas",         label:"Marcas",     icon:"tag"             },
+  { id:"financeiro",     label:"Financeiro", icon:"banknote"        },
+  { id:"caixa",          label:"Caixa",      icon:"landmark"        },
 ];
 
 function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts, role, userName, deliverables }) {
@@ -906,69 +934,103 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
   };
 
   return (
-    <div style={{ width:220, background:B0, borderRight:`1px solid ${LN}`, display:"flex", flexDirection:"column", height:"100vh", flexShrink:0, position:"sticky", top:0 }}>
+    <div style={{
+      width:220, flexShrink:0, position:'sticky', top:0,
+      height:'100vh', display:'flex', flexDirection:'column',
+      background:ds.color.neutral[0], borderRight:ds.border.thin,
+    }}>
       {/* Logo */}
-      <div style={{ padding:"20px 16px", borderBottom:`1px solid ${LN}` }}>
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:".18em", textTransform:"uppercase", color:TX }}>
-          ENTRE<span style={{color:RED}}>GAS</span>
+      <div style={{ padding:`${ds.space[5]} ${ds.space[4]}`, borderBottom:ds.border.thin, flexShrink:0 }}>
+        <div style={{ fontSize:ds.font.size.sm, fontWeight:ds.font.weight.semibold, letterSpacing:'0.16em', textTransform:'uppercase', color:ds.color.neutral[900] }}>
+          ENTRE<span style={{ color:ds.color.brand[500] }}>GAS</span>
         </div>
-        <div style={{ fontSize:10, color:TX3, marginTop:3, letterSpacing:".03em" }}>Ranked</div>
+        <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:ds.space[1] }}>
+          Ranked
+        </div>
       </div>
 
       {/* Nav */}
-      <nav style={{ padding:"12px 8px", flex:1, overflowY:"auto" }}>
-        <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, padding:"4px 8px", marginBottom:4 }}>Navegação</div>
+      <nav aria-label="Navegação principal" style={{ padding:`${ds.space[3]} ${ds.space[2]}`, flex:1, overflowY:'auto' }}>
+        <div style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:'0.12em', textTransform:'uppercase', color:ds.color.neutral[400], padding:`${ds.space[1]} ${ds.space[2]}`, marginBottom:ds.space[1] }}>
+          Navegação
+        </div>
         {NAV_ITEMS.filter(item => allowedNav.includes(item.id)).map(item => {
           const active = view===item.id;
           return (
             <div key={item.id} onClick={()=>setView(item.id)}
-              style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:active?600:400, color:active?TX:TX2, background:active?B3:"transparent", marginBottom:2, transition:"all 0.18s cubic-bezier(0.4,0,0.2,1)", boxShadow:active?"0 1px 3px rgba(0,0,0,0.06)":"none" }}
-            onMouseEnter={e=>{ if(!active){e.currentTarget.style.background=B2;e.currentTarget.style.color=TX;}}}
-            onMouseLeave={e=>{ if(!active){e.currentTarget.style.background="transparent";e.currentTarget.style.color=TX2;}}}>
-              <item.icon size={14} style={{ color:active?RED:TX3, flexShrink:0 }}/>
+              role="button" tabIndex={0} aria-current={active?"page":undefined}
+              onKeyDown={e=>e.key==="Enter"&&setView(item.id)}
+              style={{ display:'flex', alignItems:'center', gap:ds.space[2], padding:`${ds.space[2]} ${ds.space[3]}`,
+                borderRadius:ds.radius.md, cursor:'pointer', marginBottom:2, outline:'none',
+                fontSize:ds.font.size.sm,
+                fontWeight:active?ds.font.weight.semibold:ds.font.weight.regular,
+                color:active?ds.color.neutral[900]:ds.color.neutral[500],
+                background:active?ds.color.neutral[100]:'transparent',
+                transition:`background ${ds.motion.fast}, color ${ds.motion.fast}` }}
+              onMouseEnter={e=>{ if(!active){e.currentTarget.style.background=ds.color.neutral[50];e.currentTarget.style.color=ds.color.neutral[700];} }}
+              onMouseLeave={e=>{ if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.color=ds.color.neutral[500];} }}>
+              <DsIcon name={item.icon} size={15} color={active?ds.color.neutral[900]:ds.color.neutral[400]}/>
               {item.label}
             </div>
           );
         })}
       </nav>
 
-      {/* WhatsApp summary button */}
-      <div style={{ padding:"8px 8px 0" }}>
-        <button onClick={sendWhatsApp}
-          style={{ width:"100%", padding:"8px 10px", borderRadius:8, border:`1px solid ${isSunday?"#25D366":"rgba(37,211,102,.3)"}`,
-            background:isSunday?"rgba(37,211,102,.12)":"transparent",
-            color:isSunday?"#128C7E":TX2, fontSize:11, fontWeight:isSunday?700:500,
-            cursor:"pointer", display:"flex", alignItems:"center", gap:7, transition:"all .2s",
-            boxShadow:isSunday?"0 0 0 2px rgba(37,211,102,.2)":"none" }}>
-          <span style={{fontSize:14}}>📱</span>
-          <span>{isSunday?"📤 Enviar resumo da semana":"Resumo WhatsApp"}</span>
+      {/* WhatsApp button */}
+      <div style={{ padding:`0 ${ds.space[2]} ${ds.space[2]}`, flexShrink:0 }}>
+        <button onClick={sendWhatsApp} style={{ width:'100%', padding:`${ds.space[2]} ${ds.space[3]}`,
+          borderRadius:ds.radius.md, fontFamily:'inherit', cursor:'pointer',
+          border:`1px solid ${isSunday?WA_GREEN:`${WA_GREEN}40`}`,
+          background:isSunday?`${WA_GREEN}12`:'transparent',
+          color:isSunday?WA_DARK:ds.color.neutral[500],
+          fontSize:ds.font.size.xs,
+          fontWeight:isSunday?ds.font.weight.semibold:ds.font.weight.regular,
+          display:'flex', alignItems:'center', gap:ds.space[2],
+          transition:`all ${ds.motion.fast}` }}>
+          <DsIcon name="phone" size={13} color={isSunday?WA_DARK:ds.color.neutral[400]}/>
+          <span>{isSunday?'Enviar resumo da semana':'Resumo WhatsApp'}</span>
         </button>
       </div>
 
-      {/* Online + user */}
-      <div style={{ padding:"12px 16px", borderTop:`1px solid ${LN}`, marginTop:8 }}>
+      {/* User footer */}
+      <div style={{ padding:`${ds.space[3]} ${ds.space[4]}`, borderTop:ds.border.thin, flexShrink:0 }}>
         {onlineUsers.length > 0 && (
-          <div style={{ display:"flex", alignItems:"center", gap:-4, marginBottom:10 }}>
+          <div style={{ display:'flex', alignItems:'center', marginBottom:ds.space[3] }}>
             {[...onlineUsers.filter(u=>u.sessionId!==my.sessionId), {...my,isMe:true}].slice(0,5).map((u,i) => (
               <div key={u.sessionId||i} title={u.isMe?`${u.name} (você)`:u.name}
-                style={{ width:24, height:24, borderRadius:"50%", background:u.color, border:`2px solid ${B0}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:700, color:"#fff", marginLeft:i>0?-8:0, zIndex:10-i, position:"relative" }}>
+                style={{ width:22, height:22, borderRadius:'50%', background:u.color,
+                  border:`2px solid ${ds.color.neutral[0]}`,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:9, fontWeight:700, color:'#fff',
+                  marginLeft:i>0?-6:0, zIndex:10-i, position:'relative', flexShrink:0 }}>
                 {u.name?.charAt(0).toUpperCase()}
-                {u.isMe && <div style={{ position:"absolute", bottom:-1, right:-1, width:7, height:7, borderRadius:"50%", background:GRN, border:`1px solid ${B0}` }}/>}
+                {u.isMe && <div style={{ position:'absolute', bottom:-1, right:-1, width:6, height:6, borderRadius:'50%', background:ds.color.success[500], border:`1px solid ${ds.color.neutral[0]}` }}/>}
               </div>
             ))}
-            <span style={{ fontSize:10, color:TX2, marginLeft:12 }}>{onlineUsers.length} online</span>
+            <span style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[500], marginLeft:ds.space[3] }}>
+              {onlineUsers.length} online
+            </span>
           </div>
         )}
-        {/* Role badge */}
-        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
-          <span style={{ fontSize:10 }}>{roleMeta.badge}</span>
-          <span style={{ fontSize:10, fontWeight:700, color:roleMeta.color, padding:"1px 7px", borderRadius:99, background:`${roleMeta.color}14` }}>{roleMeta.label}</span>
+        {/* Role — colored dot, sem emoji */}
+        <div style={{ display:'flex', alignItems:'center', gap:ds.space[2], marginBottom:ds.space[2] }}>
+          <div style={{ width:6, height:6, borderRadius:'50%', background:roleMeta.color, flexShrink:0 }}/>
+          <span style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.medium, color:roleMeta.color }}>
+            {roleMeta.label}
+          </span>
         </div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ fontSize:11, color:TX2, fontWeight:500 }}>{userName || user?.email?.split("@")[0]}</div>
-          <div style={{display:"flex",gap:4}}>
-            {role==="admin" && <button onClick={onInvite} title="Convidar usuário" style={{background:"none",border:"none",color:TX3,cursor:"pointer",padding:4,fontSize:12}}>👤+</button>}
-            <button onClick={onSignOut} style={{ background:"none", border:"none", color:TX3, cursor:"pointer", padding:4 }} title="Sair"><LogOut size={14}/></button>
+        {/* Name + actions */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:ds.space[1] }}>
+          <div style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[700], fontWeight:ds.font.weight.medium, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
+            {userName || user?.email?.split('@')[0]}
+          </div>
+          <div style={{ display:'flex', gap:2, flexShrink:0 }}>
+            {role==="admin" && (
+              <DsIconButton size="sm" variant="ghost" ariaLabel="Convidar usuário" onClick={onInvite}
+                icon={<DsIcon name="userPlus" size={14} color={ds.color.neutral[400]}/>}/>
+            )}
+            <DsIconButton size="sm" variant="ghost" ariaLabel="Sair" onClick={onSignOut}
+              icon={<DsIcon name="logOut" size={14} color={ds.color.neutral[400]}/>}/>
           </div>
         </div>
       </div>
@@ -978,58 +1040,74 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
 
 function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract, onNewPost, onNewTask, syncStatus, isMobile, role, userName }) {
   const title = NAV_ITEMS.find(i=>i.id===view)?.label || view;
-  const statusColor = { loading:AMB, ok:GRN, error:RED }[syncStatus]||GRN;
-  const statusLabel = { loading:"Sincronizando", ok:"Ao Vivo", error:"Offline" }[syncStatus]||"Ao Vivo";
-  const roleMeta = ROLE_META[role] || ROLE_META.admin;
 
+  // Mobile header
   if (isMobile) return (
-    <div style={{ height:56, borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", paddingLeft:16, paddingRight:16, gap:10, background:B1, flexShrink:0, position:"sticky", top:0, zIndex:50, boxShadow:"0 1px 8px rgba(0,0,0,0.06)" }}>
+    <div style={{ height:56, borderBottom:ds.border.thin, display:'flex', alignItems:'center',
+      padding:`0 ${ds.space[4]}`, gap:ds.space[3],
+      background:ds.color.neutral[0], flexShrink:0,
+      position:'sticky', top:0, zIndex:ds.z.sticky, boxShadow:ds.shadow.xs }}>
       <div style={{ flex:1 }}>
-        <div style={{ fontWeight:800, fontSize:13, letterSpacing:".12em", textTransform:"uppercase", color:TX, lineHeight:1 }}>
-          ENTRE<span style={{color:RED}}>GAS</span>
+        <div style={{ fontWeight:ds.font.weight.semibold, fontSize:ds.font.size.sm, letterSpacing:'0.14em', textTransform:'uppercase', color:ds.color.neutral[900], lineHeight:1 }}>
+          ENTRE<span style={{ color:ds.color.brand[500] }}>GAS</span>
         </div>
-        {userName && <div style={{ fontSize:10, color:TX3, marginTop:1 }}>{roleMeta.badge} {userName}</div>}
+        {userName && <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:2 }}>{userName}</div>}
       </div>
-      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-        <div style={{ width:6, height:6, borderRadius:"50%", background:syncStatus==="ok"?GRN:syncStatus==="loading"?AMB:RED, flexShrink:0 }}/>
-        <button onClick={onNewContract}
-          style={{ background:RED, border:"none", borderRadius:10, padding:"9px 18px", color:"white", fontSize:12, fontWeight:700, cursor:"pointer", boxShadow:"0 2px 8px rgba(200,16,46,.25)" }}>
-          + Novo
-        </button>
+      <div style={{ display:'flex', alignItems:'center', gap:ds.space[2] }}>
+        <div style={{ width:6, height:6, borderRadius:'50%', flexShrink:0,
+          background: syncStatus==='ok' ? ds.color.success[500] : syncStatus==='loading' ? ds.color.warning[500] : ds.color.danger[500] }}/>
+        <DsButton variant="primary" size="sm" onClick={onNewContract}>+ Novo</DsButton>
       </div>
     </div>
   );
 
+  // Desktop header
+  const statusColor = { loading:ds.color.warning[500], ok:ds.color.success[500], error:ds.color.danger[500] }[syncStatus] || ds.color.success[500];
+  const statusLabel = { loading:'Sincronizando', ok:'Ao vivo', error:'Offline' }[syncStatus] || 'Ao vivo';
+
   return (
-    <div style={{ height:48, background:B0, borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", padding:"0 20px", gap:12, flexShrink:0, position:"sticky", top:0, zIndex:50 }}>
-      <div style={{ fontSize:13, fontWeight:700, color:TX, letterSpacing:"-.01em" }}>{title}</div>
+    <div style={{ height:48, background:ds.color.neutral[0], borderBottom:ds.border.thin,
+      display:'flex', alignItems:'center', padding:`0 ${ds.space[5]}`, gap:ds.space[3],
+      flexShrink:0, position:'sticky', top:0, zIndex:ds.z.sticky }}>
+      <div style={{ fontSize:ds.font.size.md, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:'-0.01em' }}>
+        {title}
+      </div>
       <div style={{ flex:1 }}/>
-      {/* EUR */}
-      <div style={{ display:isMobile?"none":"flex", alignItems:"center", gap:4, background:B2, border:`1px solid ${LN}`, borderRadius:6, padding:"3px 8px" }}>
-        <span style={{ fontSize:9, fontWeight:700, color:TX3 }}>€1=</span>
+
+      {/* EUR rate */}
+      <div style={{ display:'flex', alignItems:'center', gap:ds.space[1], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, padding:`3px ${ds.space[2]}` }}>
+        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[400], letterSpacing:'0.04em' }}>€1=</span>
         <input type="number" step="0.05" value={eurRate||""} placeholder="—"
           onChange={e=>setEurRate(Number(e.target.value)||0)}
           onBlur={e=>setSetting("eurRate",Number(e.target.value)||0).catch(()=>{})}
-          style={{ width:52, background:"none", border:"none", color:TX, fontSize:11, fontWeight:700, fontFamily:"inherit", outline:"none", textAlign:"right" }}/>
-        <span style={{ fontSize:9, fontWeight:700, color:TX3 }}>R$</span>
+          style={{ width:48, background:'none', border:'none', color:ds.color.neutral[900], fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, fontFamily:'inherit', outline:'none', textAlign:'right', fontVariantNumeric:'tabular-nums' }}/>
+        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[400] }}>R$</span>
       </div>
-      {/* USD */}
-      <div style={{ display:isMobile?"none":"flex", alignItems:"center", gap:4, background:B2, border:`1px solid ${LN}`, borderRadius:6, padding:"3px 8px" }}>
-        <span style={{ fontSize:9, fontWeight:700, color:TX3 }}>$1=</span>
+
+      {/* USD rate */}
+      <div style={{ display:'flex', alignItems:'center', gap:ds.space[1], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, padding:`3px ${ds.space[2]}` }}>
+        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[400], letterSpacing:'0.04em' }}>$1=</span>
         <input type="number" step="0.05" value={usdRate||""} placeholder="—"
           onChange={e=>setUsdRate(Number(e.target.value)||0)}
           onBlur={e=>setSetting("usdRate",Number(e.target.value)||0).catch(()=>{})}
-          style={{ width:52, background:"none", border:"none", color:TX, fontSize:11, fontWeight:700, fontFamily:"inherit", outline:"none", textAlign:"right" }}/>
-        <span style={{ fontSize:9, fontWeight:700, color:TX3 }}>R$</span>
+          style={{ width:48, background:'none', border:'none', color:ds.color.neutral[900], fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, fontFamily:'inherit', outline:'none', textAlign:'right', fontVariantNumeric:'tabular-nums' }}/>
+        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[400] }}>R$</span>
       </div>
-      {/* Status */}
-      <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 10px", background:`${statusColor}12`, border:`1px solid ${statusColor}30`, borderRadius:99 }}>
-        <div style={{ width:6, height:6, borderRadius:"50%", background:statusColor }}/>
-        <span style={{ fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:statusColor }}>{statusLabel}</span>
+
+      {/* Sync status pill */}
+      <div style={{ display:'flex', alignItems:'center', gap:ds.space[1], padding:`3px ${ds.space[3]}`, background:`${statusColor}12`, border:`1px solid ${statusColor}30`, borderRadius:ds.radius.full }}>
+        <div style={{ width:6, height:6, borderRadius:'50%', background:statusColor }}/>
+        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:'0.08em', textTransform:'uppercase', color:statusColor }}>{statusLabel}</span>
       </div>
+
       {/* CTA */}
-      {view==="contratos"      && <Btn onClick={onNewContract}    variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
-      {view==="dashboard"      && <Btn onClick={onNewContract}    variant="primary" size="sm" icon={Plus}>Contrato</Btn>}
+      {(view==="contratos"||view==="dashboard") && (
+        <DsButton variant="primary" size="sm"
+          leftIcon={<DsIcon name="plus" size={13} color={ds.color.neutral[0]}/>}
+          onClick={onNewContract}>
+          Contrato
+        </DsButton>
+      )}
     </div>
   );
 }
@@ -4084,17 +4162,7 @@ function UserInviteModal({ onClose }) {
 
 
 // ─── Mobile Bottom Nav ────────────────────────────────────
-function NavIcon({ type, active }) {
-  const c = active ? RED : "#ABABAB";
-  const s = { width:22, height:22, display:"block" };
-  if (type==="home")      return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
-  if (type==="prod")      return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
-  if (type==="contracts") return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
-  if (type==="posts")     return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>;
-  if (type==="calendar")  return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
-  if (type==="money")     return <svg style={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
-  return null;
-}
+// NavIcon removido — MobileNav agora usa <DsIcon name="..."/> diretamente.
 
 function MobileNav({ view, setView, role, userName, deliverables, contracts }) {
   const allowedNav = ROLE_NAV[role] || ROLE_NAV.admin;
@@ -4102,11 +4170,11 @@ function MobileNav({ view, setView, role, userName, deliverables, contracts }) {
   const isSunday = today.getDay() === 0;
 
   const ALL_MOB = [
-    { id:"dashboard",      label:"Home",      icon:"home" },
-    { id:"acompanhamento", label:"Calendário", icon:"prod" },
-    { id:"contratos",      label:"Contratos", icon:"contracts" },
-    { id:"financeiro",     label:"Financeiro", icon:"money" },
-    { id:"caixa",          label:"Caixa",      icon:"money" },
+    { id:"dashboard",      label:"Home",       icon:"layoutDashboard" },
+    { id:"acompanhamento", label:"Produção",   icon:"kanban"          },
+    { id:"contratos",      label:"Contratos",  icon:"fileText"        },
+    { id:"financeiro",     label:"Financeiro", icon:"banknote"        },
+    { id:"caixa",          label:"Caixa",      icon:"landmark"        },
   ];
 
   const NAV_MOB = ALL_MOB.filter(item => allowedNav.includes(item.id)).slice(0, 4);
@@ -4121,26 +4189,37 @@ function MobileNav({ view, setView, role, userName, deliverables, contracts }) {
   };
 
   return (
-    <div style={{ position:"fixed", bottom:0, left:0, right:0, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"stretch", zIndex:100, boxShadow:"0 -1px 0 rgba(0,0,0,0.06), 0 -4px 16px rgba(0,0,0,0.06)", paddingBottom:"env(safe-area-inset-bottom,0px)", minHeight:58 }}>
+    <div style={{ position:'fixed', bottom:0, left:0, right:0,
+      background:ds.color.neutral[0], borderTop:ds.border.thin,
+      display:'flex', alignItems:'stretch', zIndex:ds.z.sticky,
+      boxShadow:`0 -1px 0 ${ds.color.neutral[200]}, 0 -4px 16px rgba(15,23,42,0.06)`,
+      paddingBottom:'env(safe-area-inset-bottom,0px)', minHeight:58 }}>
       {NAV_MOB.map(item => {
         const active = view === item.id;
         return (
           <div key={item.id} onClick={()=>setView(item.id)}
-            style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, cursor:"pointer", padding:"10px 0 8px", position:"relative",
-              borderTop: active ? `2px solid ${RED}` : "2px solid transparent",
-              transition:"all .15s" }}>
-            <NavIcon type={item.icon} active={active}/>
-            <span style={{ fontSize:9, fontWeight:active?700:400, color:active?RED:"#ABABAB", letterSpacing:".02em" }}>{item.label}</span>
+            style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+              gap:3, cursor:'pointer', padding:'10px 0 8px',
+              borderTop: active ? `2px solid ${ds.color.neutral[900]}` : '2px solid transparent',
+              transition:`border-color ${ds.motion.fast}` }}>
+            <DsIcon name={item.icon} size={20}
+              color={active ? ds.color.neutral[900] : ds.color.neutral[400]}/>
+            <span style={{ fontSize:9, fontWeight:active?ds.font.weight.semibold:ds.font.weight.regular,
+              color:active?ds.color.neutral[900]:ds.color.neutral[400], letterSpacing:'0.02em' }}>
+              {item.label}
+            </span>
           </div>
         );
       })}
-      {/* WhatsApp button — always last */}
+      {/* WhatsApp — sempre o último */}
       <div onClick={sendWA}
-        style={{ width:52, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, cursor:"pointer", padding:"10px 0 8px",
-          borderTop: isSunday ? `2px solid #25D366` : "2px solid transparent",
-          background: isSunday ? "rgba(37,211,102,.05)" : "transparent" }}>
-        <span style={{ fontSize:18, lineHeight:1 }}>📱</span>
-        <span style={{ fontSize:9, fontWeight:isSunday?700:400, color:isSunday?"#128C7E":"#ABABAB" }}>WA</span>
+        style={{ width:52, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          gap:3, cursor:'pointer', padding:'10px 0 8px',
+          borderTop: isSunday ? `2px solid ${WA_GREEN}` : '2px solid transparent',
+          background: isSunday ? `${WA_GREEN}08` : 'transparent' }}>
+        <DsIcon name="phone" size={20} color={isSunday ? WA_DARK : ds.color.neutral[400]}/>
+        <span style={{ fontSize:9, fontWeight:isSunday?ds.font.weight.semibold:ds.font.weight.regular,
+          color:isSunday?WA_DARK:ds.color.neutral[400] }}>WA</span>
       </div>
     </div>
   );
@@ -5213,18 +5292,8 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
 // ─── Caixa (Controle Financeiro Administrativo) ───────────
 /**
  * CaixaPasswordGate — prova de conceito do design system Ranked.
- *
- * Antes: emoji 🔐 como ícone funcional, 👁/🙈 para toggle, hex soltos.
- * Depois: Icon primitivo, Input com error state, Button variants,
- *         Card elevation, tokens do theme.
- *
- * Imports locais (não afetam o restante do app ainda):
+ * Imports agora via top-level import em linha 15+.
  */
-import { theme as ds } from './lib/theme.js';
-import { Button as DsButton } from './ui/Button.jsx';
-import { Input as DsInput } from './ui/Input.jsx';
-import { Card as DsCard } from './ui/Card.jsx';
-import { Icon as DsIcon } from './ui/Icon.jsx';
 
 function CaixaPasswordGate({ onUnlock }) {
   const [pw, setPw] = useState("");
@@ -7019,7 +7088,7 @@ export default function App() {
   // App
   return (
     <ToastProvider>
-      <div style={{ display:"flex", minHeight:"100vh", background:B0, fontFamily:"Plus Jakarta Sans,system-ui,sans-serif", fontSize:13, color:TX }}>
+      <div style={{ display:"flex", minHeight:"100vh", background:ds.color.neutral[50], fontFamily:ds.font.sans, fontSize:ds.font.size.base, color:ds.color.neutral[900] }}>
         {/* Globals CSS is imported via src/styles/globals.css → main.jsx */}
         {!isMobile && <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts} role={role} userName={userName} deliverables={deliverables}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>

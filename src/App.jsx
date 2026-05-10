@@ -3818,7 +3818,8 @@ function EmptyState({ icon:Icon, title, sub, action, actionLabel }) {
 function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, saveNote, toggleComm,
   toggleCommPaid, toggleNF, setModal, setView, saveC, saveP, saveD,
   calEvents, calMonth, setCal, calFilter, setCalF,
-  triggerNewTask, setTriggerNewTask, role, userName, syncStatus }) {
+  triggerNewTask, setTriggerNewTask, role, userName, syncStatus,
+  brands=[], saveBrands, setSelectedBrand }) {
   const [err, setErr] = useState(null);
   useEffect(() => { setErr(null); }, [view]);
   const activeContracts = contracts.filter(c=>!c.archived);
@@ -6232,7 +6233,9 @@ export default function App() {
               calEvents={calEvents} calMonth={calMonth} setCal={setCal}
               calFilter={calFilter} setCalF={setCalF}
               triggerNewTask={triggerNewTask} setTriggerNewTask={setTriggerNewTask}
-              role={role} userName={userName} syncStatus={syncStatus}/>
+              role={role} userName={userName} syncStatus={syncStatus}
+              brands={brands} saveBrands={saveBrands}
+              setSelectedBrand={setSelectedBrand}/>
           </div>
         </div>
         {modal && (

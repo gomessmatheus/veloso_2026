@@ -6014,7 +6014,7 @@ function CopilotButton({ onClick, hasAlert, isMobile }) {
   );
 }
 
-function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliverables=[], posts=[], brands=[], transactions=[], role="admin", today=new Date(), signals=[] }) {
+function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliverables=[], posts=[], brands=[], transactions=[], role="admin", today=new Date(), signals=[], onSaveMetrics }) {
   const isMobile = useIsMobile();
   const [tab, setTab]               = useState("suggestions");
   const [messages, setMessages]     = useState(() => loadHistory());
@@ -6023,8 +6023,107 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
   const [results, setResults]       = useState({});   // { [suggId]: { content, type, title } }
   const [reports, setReports]       = useState(() => { try { return JSON.parse(localStorage.getItem("copilot_reports_v1")||"[]"); } catch { return []; } });
   const [warnOk, setWarnOk]         = useState({});
-  const inputRef = useRef(null);
-  const chatRef  = useRef(null);
+  const inputRef  = useRef(null);
+  const chatRef   = useRef(null);
+  const fileRef   = useRef(null); // for metrics image upload
+
+  // ── Metrics extraction state ────────────────────────────
+  const [mxState, setMxState] = useState("idle"); // idle | loading | preview | saved | error
+  const [mxImage, setMxImage] = useState(null);   // { base64, type, url }
+  const [mxResult, setMxResult] = useState(null); // parsed { platform, metrics, confidence, notes }
+  const [mxEdited, setMxEdited] = useState({});   // user-edited values
+  const [mxDelivId, setMxDelivId] = useState(""); // selected deliverable id
+  const [mxError, setMxError]  = useState(null);
+
+  const PLATFORM_COLOR = { Instagram:"#E1306C", TikTok:"#000000", YouTube:"#FF0000" };
+  const PLATFORM_ICON  = { Instagram:"📸", TikTok:"🎵", YouTube:"▶️" };
+
+  // Field labels per platform
+  const METRIC_LABELS = {
+    views:           "Visualizações",
+    likes:           "Curtidas",
+    comments:        "Comentários",
+    shares:          "Compartilhamentos / Envios",
+    saves:           "Salvamentos",
+    reach:           "Alcance / Espectadores únicos",
+    reposts:         "Reposts",
+    avgWatchTimeSec: "Tempo médio (seg)",
+    retentionPct:    "Retenção (%)",
+    newFollowers:    "Novos seguidores",
+    skipRatePct:     "Taxa de skip (%)",
+    totalWatchTimeHrs: "Tempo total (horas)",
+  };
+
+  // Fields actually used per platform (based on your screenshots)
+  const PLATFORM_FIELDS = {
+    Instagram: ["views","likes","comments","shares","saves","reposts","avgWatchTimeSec","skipRatePct","newFollowers"],
+    TikTok:    ["views","likes","comments","shares","saves","avgWatchTimeSec","retentionPct","newFollowers","totalWatchTimeHrs"],
+    YouTube:   ["views","reach","avgWatchTimeSec","retentionPct","newFollowers","totalWatchTimeHrs"],
+  };
+
+  const handleImageSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset state
+    setMxState("loading");
+    setMxResult(null);
+    setMxEdited({});
+    setMxError(null);
+
+    // Read as base64
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target.result; // "data:image/jpeg;base64,..."
+      const [header, base64] = dataUrl.split(",");
+      const imageType = header.match(/:(.*?);/)?.[1] || "image/jpeg";
+      const previewUrl = dataUrl;
+      setMxImage({ base64, type: imageType, url: previewUrl });
+
+      try {
+        const result = await runAction("extract-metrics", { imageBase64: base64, imageType });
+        if (result.type !== "metrics_extraction") throw new Error("Resposta inesperada");
+        const parsed = result.content;
+        setMxResult(parsed);
+        // Pre-fill edited values with extracted metrics (only non-null)
+        const initial = {};
+        Object.entries(parsed.metrics || {}).forEach(([k, v]) => {
+          if (v !== null) initial[k] = String(v);
+        });
+        setMxEdited(initial);
+        // Auto-select deliverable if context has one
+        if (context.deliverableId) setMxDelivId(context.deliverableId);
+        setMxState("preview");
+      } catch(err) {
+        setMxError(String(err.message || err));
+        setMxState("error");
+      }
+    };
+    reader.readAsDataURL(file);
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  };
+
+  const handleSaveMetrics = async () => {
+    if (!mxDelivId || !mxResult) return;
+    const platform = mxResult.platform;
+    // Build metrics object from edited values
+    const metrics = {};
+    Object.entries(mxEdited).forEach(([k, v]) => {
+      const num = parseFloat(String(v).replace(",", "."));
+      if (!isNaN(num)) metrics[k] = num;
+    });
+    await onSaveMetrics?.(mxDelivId, platform, metrics);
+    setMxState("saved");
+  };
+
+  const resetMetrics = () => {
+    setMxState("idle");
+    setMxImage(null);
+    setMxResult(null);
+    setMxEdited({});
+    setMxError(null);
+    setMxDelivId("");
+  };
 
   // Switch to conversa tab and focus input when ask-financial is selected
   useEffect(() => {
@@ -6213,12 +6312,139 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
               <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, marginBottom:12 }}>
                 Sugestões para agora
               </div>
+
+              {/* ── Metrics extraction card — always at top ── */}
+              <div style={{ ...G, padding:"14px 16px", marginBottom:14, border:`1.5px dashed ${COPILOT_PURPLE}40` }}>
+                {/* Hidden file input */}
+                <input ref={fileRef} type="file" accept="image/*" style={{ display:"none" }} onChange={handleImageSelect}/>
+
+                {mxState === "idle" && (
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:22 }}>📸</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:TX }}>Extrair métricas de print</div>
+                      <div style={{ fontSize:11, color:TX2 }}>Instagram · TikTok · YouTube</div>
+                    </div>
+                    <button onClick={()=>fileRef.current?.click()}
+                      style={{ padding:"5px 14px", fontSize:10, fontWeight:700, color:"#fff", background:COPILOT_PURPLE, border:"none", borderRadius:6, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+                      Enviar print
+                    </button>
+                  </div>
+                )}
+
+                {mxState === "loading" && (
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    {mxImage && <img src={mxImage.url} style={{ width:48, height:72, objectFit:"cover", borderRadius:6 }} alt="print"/>}
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:600, color:TX, marginBottom:4 }}>Analisando o print…</div>
+                      <div style={{ fontSize:11, color:TX2 }}>Identificando plataforma e extraindo métricas ✨</div>
+                      <div style={{ height:4, background:LN, borderRadius:2, marginTop:8, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:"60%", background:COPILOT_PURPLE, borderRadius:2, animation:"copilot-slide-in .6s ease infinite alternate" }}/>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {mxState === "error" && (
+                  <div>
+                    <div style={{ fontSize:11, color:RED, fontWeight:600, marginBottom:8 }}>⚠️ {mxError}</div>
+                    <button onClick={()=>fileRef.current?.click()}
+                      style={{ padding:"4px 12px", fontSize:10, fontWeight:700, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                      Tentar outro print
+                    </button>
+                  </div>
+                )}
+
+                {mxState === "saved" && (
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:700, color:GRN }}>✅ Métricas salvas!</div>
+                      <div style={{ fontSize:11, color:TX2 }}>
+                        {mxResult?.platform} → {deliverables.find(d=>d.id===mxDelivId)?.title||"entregável"}
+                      </div>
+                    </div>
+                    <button onClick={resetMetrics}
+                      style={{ padding:"4px 12px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                      Novo print
+                    </button>
+                  </div>
+                )}
+
+                {mxState === "preview" && mxResult && (
+                  <div>
+                    {/* Platform badge + image */}
+                    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+                      {mxImage && <img src={mxImage.url} style={{ width:40, height:60, objectFit:"cover", borderRadius:6, flexShrink:0 }} alt="print"/>}
+                      <div>
+                        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                          <span style={{ fontSize:14 }}>{PLATFORM_ICON[mxResult.platform]||"📊"}</span>
+                          <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${PLATFORM_COLOR[mxResult.platform]||COPILOT_PURPLE}18`, color:PLATFORM_COLOR[mxResult.platform]||COPILOT_PURPLE }}>
+                            {mxResult.platform}
+                          </span>
+                          <span style={{ fontSize:10, color:TX3 }}>
+                            {mxResult.confidence==="high"?"✓ Alta confiança":mxResult.confidence==="medium"?"⚠ Confiança média":"⚠ Baixa confiança"}
+                          </span>
+                        </div>
+                        {mxResult.notes && <div style={{ fontSize:10, color:TX2, lineHeight:1.4 }}>{mxResult.notes}</div>}
+                      </div>
+                    </div>
+
+                    {/* Metrics table — editable */}
+                    <div style={{ background:B2, borderRadius:8, padding:"10px 12px", marginBottom:10 }}>
+                      <div style={{ fontSize:9, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".1em", marginBottom:8 }}>Métricas extraídas (edite se necessário)</div>
+                      {(PLATFORM_FIELDS[mxResult.platform] || Object.keys(mxResult.metrics || {})).map(key => {
+                        const raw = mxResult.metrics?.[key];
+                        if (raw === null || raw === undefined) return null;
+                        return (
+                          <div key={key} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                            <div style={{ fontSize:11, color:TX2, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {METRIC_LABELS[key] || key}
+                            </div>
+                            <input
+                              type="number"
+                              value={mxEdited[key] ?? ""}
+                              onChange={e => setMxEdited(prev => ({ ...prev, [key]: e.target.value }))}
+                              style={{ width:90, padding:"3px 7px", fontSize:11, fontWeight:600, color:TX, background:B1, border:`1px solid ${LN}`, borderRadius:6, fontFamily:"inherit", outline:"none", textAlign:"right" }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Deliverable selector */}
+                    <div style={{ marginBottom:10 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:TX2, marginBottom:4 }}>Salvar em qual entregável?</div>
+                      <select value={mxDelivId} onChange={e=>setMxDelivId(e.target.value)}
+                        style={{ width:"100%", padding:"7px 10px", fontSize:11, background:B2, border:`1px solid ${LN}`, borderRadius:8, color:TX, fontFamily:"inherit", outline:"none" }}>
+                        <option value="">— Selecione o entregável —</option>
+                        {deliverables.filter(d=>d.title).map(d => {
+                          const c = contracts.find(x=>x.id===d.contractId);
+                          return <option key={d.id} value={d.id}>{d.title}{c?` · ${c.company}`:""}</option>;
+                        })}
+                      </select>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button onClick={handleSaveMetrics} disabled={!mxDelivId}
+                        style={{ flex:1, padding:"8px 0", fontSize:11, fontWeight:700, color:"#fff", background:mxDelivId?GRN:"#94A3B8", border:"none", borderRadius:8, cursor:mxDelivId?"pointer":"not-allowed", fontFamily:"inherit" }}>
+                        ✓ Confirmar e salvar
+                      </button>
+                      <button onClick={resetMetrics}
+                        style={{ padding:"8px 12px", fontSize:11, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:8, cursor:"pointer", fontFamily:"inherit" }}>
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {suggestions.length === 0 && (
                 <div style={{ textAlign:"center", padding:"40px 0", color:TX3, fontSize:12 }}>
                   Nenhuma sugestão disponível para esta tela.
                 </div>
               )}
-              {suggestions.map(s => {
+              {suggestions.filter(s => s.actionId !== "extract-metrics").map(s => {
                 const result   = results[s.id];
                 const isGen    = generating === s.id;
                 const isHighlight = context.actionId && context.actionId === s.actionId;
@@ -6551,6 +6777,17 @@ export default function App() {
     setCopilotContext(ctx);
     setCopilotOpen(true);
   }, []);
+
+  // Save metrics from a screenshot extraction to a deliverable's networkMetrics
+  const handleSaveMetrics = useCallback(async (deliverableId, platform, metrics) => {
+    const updated = deliverables.map(d => {
+      if (d.id !== deliverableId) return d;
+      const existing = d.networkMetrics || {};
+      const platformMetrics = { ...(existing[platform] || {}), ...metrics };
+      return { ...d, networkMetrics: { ...existing, [platform]: platformMetrics } };
+    });
+    await saveD(updated);
+  }, [deliverables, saveD]);
   const rates=useMemo(()=>({eur:eurRate,usd:usdRate}),[eurRate,usdRate]);
   const saveNote=(id,notes)=>saveC(contracts.map(c=>c.id===id?{...c,notes}:c));
   const toggleComm=id=>saveC(contracts.map(c=>c.id===id?{...c,hasCommission:!c.hasCommission}:c));
@@ -6725,6 +6962,7 @@ export default function App() {
           role={role}
           today={new Date()}
           signals={detectRiskSignals({deliverables,contracts},new Date())}
+          onSaveMetrics={handleSaveMetrics}
         />
       </div>
     </ToastProvider>

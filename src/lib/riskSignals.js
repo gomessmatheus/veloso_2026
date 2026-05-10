@@ -38,7 +38,7 @@ export function detectRiskSignals({ deliverables = [], contracts = [] }, today =
   if (withoutScript.length > 0) {
     signals.push({
       severity: "HIGH",
-      icon:     "🟥",
+      iconName: "alertTriangle",
       title:    "Sem roteiro a menos de 3 dias do prazo",
       count:    withoutScript.length,
       ids:      withoutScript.map(d => d.id),
@@ -83,7 +83,7 @@ export function detectRiskSignals({ deliverables = [], contracts = [] }, today =
   if (emptiBriefings.length > 0) {
     signals.push({
       severity: "MEDIUM",
-      icon:     "🟨",
+      iconName: "alertCircle",
       title:    "Briefing vazio em contrato ativo",
       count:    emptiBriefings.length,
       ids:      emptiBriefings.map(c => c.id),
@@ -109,7 +109,7 @@ export function detectRiskSignals({ deliverables = [], contracts = [] }, today =
       .map(d => d.id);
     signals.push({
       severity: "MEDIUM",
-      icon:     "🟨",
+      iconName: "alertCircle",
       title:    `Conflito de marca em ${conflictDays.length} dia${conflictDays.length > 1 ? "s" : ""}`,
       count:    conflictDays.length,
       ids:      conflictIds,
@@ -131,7 +131,7 @@ export function detectRiskSignals({ deliverables = [], contracts = [] }, today =
   if (noMetrics.length > 0) {
     signals.push({
       severity: "LOW",
-      icon:     "🟦",
+      iconName: "info",
       title:    "Posts entregues sem métricas",
       count:    noMetrics.length,
       ids:      noMetrics.map(d => d.id),

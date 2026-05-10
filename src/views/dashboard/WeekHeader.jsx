@@ -16,7 +16,21 @@
  */
 
 import { fmtDayMonth, fmtDayLong, dayIndex } from "../../lib/dates.js";
-import { B1, B2, B3, LN, LN2, TX, TX2, TX3, RED, GRN, AMB, BLU, G, TRANS } from "../../constants/tokens.js";
+// ─── Tokens inline (sem dependência de src/constants/) ──────
+const B1   = "#FEFEFE";
+const B2   = "#F7F7F7";
+const B3   = "#EFEFEF";
+const LN   = "#F0F0F2";
+const LN2  = "#D8D8D8";
+const TX   = "#000000";
+const TX2  = "#6E6E6E";
+const TX3  = "#ABABAB";
+const RED  = "#C8102E";
+const GRN  = "#16A34A";
+const AMB  = "#D97706";
+const BLU  = "#2563EB";
+const G    = { background:"#FEFEFE", border:"1px solid #F0F0F2", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06)" };
+const TRANS = "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)";
 
 const CHIP_DEFS = [
   {

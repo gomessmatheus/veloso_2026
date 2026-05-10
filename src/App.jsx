@@ -3819,7 +3819,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
   toggleCommPaid, toggleNF, setModal, setView, saveC, saveP, saveD,
   calEvents, calMonth, setCal, calFilter, setCalF,
   triggerNewTask, setTriggerNewTask, role, userName, syncStatus,
-  brands=[], saveBrands, setSelectedBrand }) {
+  brands=[], saveBrands, setSelectedBrand, selectedBrand }) {
   const [err, setErr] = useState(null);
   useEffect(() => { setErr(null); }, [view]);
   const activeContracts = contracts.filter(c=>!c.archived);
@@ -6235,6 +6235,7 @@ export default function App() {
               triggerNewTask={triggerNewTask} setTriggerNewTask={setTriggerNewTask}
               role={role} userName={userName} syncStatus={syncStatus}
               brands={brands} saveBrands={saveBrands}
+              selectedBrand={selectedBrand}
               setSelectedBrand={setSelectedBrand}/>
           </div>
         </div>

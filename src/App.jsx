@@ -27,6 +27,12 @@ import { WeekTimeline }   from "./views/dashboard/WeekTimeline.jsx";
 import { BRAND_CATEGORIES, slugify, inferCategory, runBrandsMigration } from "./lib/brands.js";
 import { detectConflicts, buildConflictDateMap } from "./lib/conflicts.js";
 
+// ─── Copiloto Ranked ───────────────────────────────────────
+import { getSuggestions }         from "./lib/copilot/suggestions.js";
+import { runAction, ACTIONS }     from "./lib/copilot/actions.js";
+import { detectIntent }           from "./lib/copilot/intents.js";
+import { loadHistory, saveHistory, appendMessage, clearHistory } from "./lib/copilot/history.js";
+
 // ─── Design tokens ────────────────────────────────────────
 const B0  = "#FEFEFE";           // background (oklch 0.9940 0 0)
 const B1  = "#FEFEFE";           // card
@@ -1919,7 +1925,7 @@ function CostsSection({ contract: c, saveC, contracts }) {
 }
 
 
-function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, saveP, saveDeliverables, toggleComm, toggleCommPaid, toggleNF, rates, onBack, setModal, brands=[], navigateTo, setSelectedBrand }) {
+function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, saveP, saveDeliverables, toggleComm, toggleCommPaid, toggleNF, rates, onBack, setModal, brands=[], navigateTo, setSelectedBrand, openCopilot }) {
   const [tab, setTab]         = useState("overview");
   const [aiReport, setAiReport] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -2017,7 +2023,6 @@ Responda APENAS com o JSON.` }]
     { id:"deliveries",  label:`Entregas (${cDeliverables.length})` },
     { id:"financial",   label:"Financeiro" },
     { id:"briefing",    label:"Briefing" },
-    { id:"report",      label:"Relatório IA" },
   ];
 
   const scoreColor = aiReport?.performance?.score >= 70 ? GRN : aiReport?.performance?.score >= 40 ? AMB : RED;
@@ -2079,9 +2084,9 @@ Responda APENAS com o JSON.` }]
             </div>
           </div>
           <Btn onClick={()=>setModal({type:"contract",data:c})} variant="default" size="sm">✎ Editar</Btn>
-          <Btn onClick={()=>setShowClientReport(true)} variant="default" size="sm">📊 Relatório Cliente</Btn>
-          <Btn onClick={generateReport} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
-            {aiLoading ? "Gerando…" : "Gerar Relatório IA"}
+          <Btn onClick={()=>openCopilot?.({contractId:c.id,actionId:"generate-client-report"})} variant="default" size="sm">📊 Relatório Cliente</Btn>
+          <Btn onClick={()=>openCopilot?.({contractId:c.id,actionId:"generate-contract-report"})} variant="primary" size="sm" icon={Zap}>
+            ✨ Copiloto
           </Btn>
         </div>
       )}
@@ -2289,37 +2294,7 @@ Responda APENAS com o JSON.` }]
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
               <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Notas do Briefing</div>
-              <Btn onClick={async()=>{
-                const [genLoading, setGenLoading] = [setBriefingNote, setBriefingNote]; // placeholder
-                const btn = document.getElementById("briefing-ai-btn");
-                if(btn) btn.textContent="Gerando…";
-                try {
-                  const cDels = deliverables?.filter(d=>d.contractId===c.id)||[];
-                  const res = await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({max_tokens:1000,messages:[{role:"user",content:`Você é especialista em briefing para criadores de conteúdo digital. Com base nos dados abaixo, gere um briefing completo e estruturado para o criador @veloso.lucas_ sobre a parceria com ${c.company}.
-
-Inclua:
-- **Sobre a marca**: contexto e posicionamento
-- **Objetivo da campanha**: o que a marca quer comunicar
-- **Dos (obrigatório)**: o que DEVE aparecer no conteúdo
-- **Don'ts (proibido)**: o que NÃO pode aparecer
-- **Tom de voz**: como se comunicar
-- **Pontos de atenção**: detalhes críticos para aprovação
-- **Entregáveis**: resumo do que foi contratado
-
-Dados do contrato:
-- Empresa: ${c.company}
-- Valor: ${contractTotal(c)} ${c.currency}
-- Entregas: ${c.numPosts} reels, ${c.numStories} stories, ${c.numReposts} tiktoks, ${c.numCommunityLinks} links
-- Observações existentes: ${c.notes||"nenhuma"}
-- Entregáveis no pipeline: ${cDels.map(d=>d.title).join(", ")||"nenhum"}
-
-Escreva em português, de forma direta e prática. Use marcadores claros.`}]})});
-                  const data = await res.json();
-                  const text = data.text||"";
-                  if(text) { setBriefingNote(text); await saveNote(text); }
-                } catch(e) { console.error(e); }
-                if(btn) btn.textContent="✨ Gerar com IA";
-              }} variant="primary" size="sm" id="briefing-ai-btn">✨ Gerar com IA</Btn>
+              <Btn onClick={()=>openCopilot?.({contractId:c.id, actionId:"generate-briefing-structure"})} variant="primary" size="sm">✨ Copiloto</Btn>
             </div>
             <textarea value={briefingNote} onChange={e=>setBriefingNote(e.target.value)} onBlur={()=>saveNote(briefingNote)}
               rows={12} placeholder="Cole aqui o briefing da marca, ou use ✨ Gerar com IA para criar automaticamente com os principais pontos, dos & don'ts e tom de voz…"
@@ -2848,7 +2823,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
 }
 
 // ─── Contratos list ────────────────────────────────────────
-function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates, role, brands=[], navigateTo, setSelectedBrand }) {
+function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates, role, brands=[], navigateTo, setSelectedBrand, openCopilot }) {
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -2881,6 +2856,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
       toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF}
       rates={rates} onBack={()=>setSelectedId(null)} setModal={setModal}
       brands={brands} navigateTo={navigateTo} setSelectedBrand={setSelectedBrand}
+      openCopilot={(ctx)=>openCopilot?.({...ctx,contractId:selected.id})}
     />
   );
 
@@ -3819,7 +3795,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
   toggleCommPaid, toggleNF, setModal, setView, saveC, saveP, saveD,
   calEvents, calMonth, setCal, calFilter, setCalF,
   triggerNewTask, setTriggerNewTask, role, userName, syncStatus,
-  brands=[], saveBrands, setSelectedBrand, selectedBrand }) {
+  brands=[], saveBrands, setSelectedBrand, selectedBrand, openCopilot }) {
   const [err, setErr] = useState(null);
   useEffect(() => { setErr(null); }, [view]);
   const activeContracts = contracts.filter(c=>!c.archived);
@@ -3842,10 +3818,10 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
   try {
     if (view==="dashboard")      return <Dashboard contracts={activeContracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView} role={role} userName={userName}/>;
     if (view==="acompanhamento") return <Acompanhamento contracts={activeContracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} role={role} brands={brands}/>;
-    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role} brands={brands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand}/>;
-    if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role}/>;
-    if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand}/>;
-    if (view==="caixa")          return <Caixa contracts={activeContracts}/>;
+    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role} brands={brands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
+    if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role} openCopilot={openCopilot}/>;
+    if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
+    if (view==="caixa")          return <Caixa contracts={activeContracts} openCopilot={openCopilot}/>;
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
     return null;
   } catch(e) {
@@ -5572,7 +5548,7 @@ ${Object.entries(cats).map(([cat,items])=>`
 }
 
 
-function Caixa({ contracts }) {
+function Caixa({ contracts, openCopilot }) {
   const [unlocked, setUnlocked] = useState(false);
   const [tab, setTab] = useState("dash");
   const [transactions, setTransactions] = useState([]);
@@ -5658,7 +5634,7 @@ function Caixa({ contracts }) {
     { id:"lancamentos", label:"Lançamentos" },
     { id:"dre",         label:"DRE" },
     { id:"indicadores", label:"Indicadores" },
-    { id:"ia",          label:"⚡ Consulta IA" },
+    { id:"ia",          label:"⚡ Consulta IA", hidden:true },
   ];
 
   return (
@@ -5699,13 +5675,18 @@ function Caixa({ contracts }) {
       <SaldoBaseEditor baseBalance={baseBalance} baseDate={baseDate} onSave={updateBase}/>
 
       {/* Tabs */}
-      <div style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20,marginTop:16 }}>
-        {TABS.map(t=>(
+      <div style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20,marginTop:16,alignItems:"center" }}>
+        {TABS.filter(t=>!t.hidden).map(t=>(
           <div key={t.id} onClick={()=>setTab(t.id)}
             style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`,transition:TRANS,marginBottom:-1 }}>
             {t.label}
           </div>
         ))}
+        <div style={{ flex:1 }}/>
+        <button onClick={()=>openCopilot?.({actionId:"ask-financial"})}
+          style={{ padding:"5px 12px",fontSize:11,fontWeight:600,color:"#7C3AED",background:"rgba(124,58,237,.08)",border:"1px solid rgba(124,58,237,.25)",borderRadius:6,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,marginBottom:1 }}>
+          ✨ Copiloto
+        </button>
       </div>
 
       {/* Dashboard */}
@@ -5971,6 +5952,469 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
 }
 
 
+// ─── Copiloto Ranked ──────────────────────────────────────
+
+const COPILOT_PURPLE = "#7C3AED";
+
+function MarkdownText({ content }) {
+  // Simple markdown renderer — bold, lists, headers, code
+  if (!content) return null;
+  const lines = String(content).split("\n");
+  const elems = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith("## "))    { elems.push(<div key={i} style={{ fontSize:14,fontWeight:800,color:TX,marginTop:14,marginBottom:6 }}>{line.slice(3)}</div>); }
+    else if (line.startsWith("### ")) { elems.push(<div key={i} style={{ fontSize:12,fontWeight:700,color:TX,marginTop:10,marginBottom:4 }}>{line.slice(4)}</div>); }
+    else if (line.startsWith("- ") || line.startsWith("• ")) {
+      const text = line.slice(2);
+      elems.push(<div key={i} style={{ fontSize:12,color:TX,paddingLeft:12,marginBottom:2,display:"flex",gap:6 }}><span style={{color:TX3}}>•</span><span dangerouslySetInnerHTML={{__html:text.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/`(.+?)`/g,"<code style='background:#F1F5F9;padding:1px 4px;borderRadius:3px;fontSize:11px'>$1</code>")}}/></div>);
+    }
+    else if (line.startsWith("> ")) { elems.push(<div key={i} style={{ fontSize:11,color:TX2,background:`${COPILOT_PURPLE}08`,borderLeft:`3px solid ${COPILOT_PURPLE}`,padding:"6px 10px",borderRadius:"0 6px 6px 0",margin:"6px 0",fontStyle:"italic" }}>{line.slice(2)}</div>); }
+    else if (line.startsWith("|")) { /* table row — simplified */ elems.push(<div key={i} style={{ fontSize:11,color:TX,fontFamily:"monospace",padding:"1px 0" }}>{line}</div>); }
+    else if (line.startsWith("---")) { elems.push(<div key={i} style={{ height:1,background:LN,margin:"8px 0" }}/>); }
+    else if (line.trim() === "") { elems.push(<div key={i} style={{ height:6 }}/>); }
+    else { elems.push(<div key={i} style={{ fontSize:12,color:TX,lineHeight:1.6,marginBottom:2 }} dangerouslySetInnerHTML={{__html:line.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/`(.+?)`/g,"<code style='background:#F1F5F9;padding:1px 4px;borderRadius:3px;fontSize:11px'>$1</code>")}}/>); }
+    i++;
+  }
+  return <div>{elems}</div>;
+}
+
+function CopilotButton({ onClick, hasAlert, isMobile }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      aria-label="Abrir Copiloto Ranked"
+      style={{
+        position:"fixed",
+        bottom: isMobile ? 76 : 24,
+        right: 24,
+        zIndex: 150,
+        display:"flex", alignItems:"center", gap:8,
+        padding:"10px 20px",
+        background: COPILOT_PURPLE,
+        color:"#fff",
+        border:"none",
+        borderRadius:999,
+        fontSize:13, fontWeight:700,
+        cursor:"pointer",
+        boxShadow: hov ? "0 8px 30px rgba(124,58,237,0.45)" : "0 4px 20px rgba(124,58,237,0.3)",
+        transform: hov ? "scale(1.03)" : "scale(1)",
+        transition:"all .15s ease",
+        fontFamily:"inherit",
+      }}>
+      <span style={{ fontSize:15 }}>✨</span>
+      Copiloto
+      {hasAlert && (
+        <span style={{ position:"absolute", top:-4, right:-4, width:16, height:16, background:RED, borderRadius:"50%", border:"2px solid #fff", fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff" }}>!</span>
+      )}
+    </button>
+  );
+}
+
+function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliverables=[], posts=[], brands=[], transactions=[], role="admin", today=new Date(), signals=[] }) {
+  const isMobile = useIsMobile();
+  const [tab, setTab]               = useState("suggestions");
+  const [messages, setMessages]     = useState(() => loadHistory());
+  const [input, setInput]           = useState("");
+  const [generating, setGenerating] = useState(null); // actionId
+  const [results, setResults]       = useState({});   // { [suggId]: { content, type, title } }
+  const [reports, setReports]       = useState(() => { try { return JSON.parse(localStorage.getItem("copilot_reports_v1")||"[]"); } catch { return []; } });
+  const [warnOk, setWarnOk]         = useState({});
+  const inputRef = useRef(null);
+  const chatRef  = useRef(null);
+
+  // Switch to conversa tab and focus input when ask-financial is selected
+  useEffect(() => {
+    if (context.actionId === "ask-financial") setTab("conversa");
+  }, [context.actionId]);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    if (tab === "conversa" && chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [messages, tab]);
+
+  // Focus input when conversa tab opens
+  useEffect(() => {
+    if (tab === "conversa") setTimeout(() => inputRef.current?.focus(), 100);
+  }, [tab]);
+
+  // Esc to close
+  useEffect(() => {
+    const fn = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  const data = { contracts, deliverables, posts, brands, transactions, signals };
+
+  const suggestions = useMemo(
+    () => getSuggestions({ view, data: { contracts, deliverables, posts, brands, signals }, today, context }),
+    [view, contracts, deliverables, posts, brands, signals, today, context]
+  );
+
+  // Pre-select action from context
+  useEffect(() => {
+    if (!isOpen || !context.actionId) return;
+    const match = suggestions.find(s => s.actionId === context.actionId);
+    if (match) { setTab("suggestions"); }
+  }, [isOpen, context.actionId]);
+
+  const handleRunAction = async (suggestion) => {
+    const sid = suggestion.id;
+    setGenerating(sid);
+    try {
+      const result = await runAction(suggestion.actionId, {
+        data,
+        today,
+        role,
+        contractId: suggestion.contextData?.contractId || context.contractId,
+        brandId:    suggestion.contextData?.brandId    || context.brandId,
+      });
+      setResults(r => ({ ...r, [sid]: result }));
+      // If result is chat_ready, seed the chat
+      if (result.type === "chat_ready") {
+        setTab("conversa");
+      }
+    } catch(e) {
+      setResults(r => ({ ...r, [sid]: { type:"text", content:`Erro: ${String(e)}`, title:"Erro" } }));
+    }
+    setGenerating(null);
+  };
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const q = input.trim();
+    setInput("");
+    const next = appendMessage("user", q, messages);
+    setMessages(next);
+
+    // Detect intent
+    const intent = detectIntent(q, context);
+    if (intent && intent.actionId !== "ask-financial") {
+      setGenerating("chat");
+      try {
+        const result = await runAction(intent.actionId, { data, today, role, contractId: context.contractId, brandId: context.brandId });
+        const m2 = appendMessage("assistant", result.content, next);
+        setMessages(m2);
+      } catch(e) {
+        const m2 = appendMessage("assistant", `Erro: ${String(e)}`, next);
+        setMessages(m2);
+      }
+      setGenerating(null);
+      return;
+    }
+
+    // Default: financial chat or general
+    setGenerating("chat");
+    try {
+      const result = await runAction("ask-financial", { data, today, role, question: q, history: messages.map(m=>({role:m.role,content:m.text})) });
+      const reply = result.type === "chat_ready" ? "Pode perguntar à vontade sobre suas finanças!" : result.content;
+      const m2 = appendMessage("assistant", reply, next);
+      setMessages(m2);
+    } catch(e) {
+      const m2 = appendMessage("assistant", `Erro: ${String(e)}`, next);
+      setMessages(m2);
+    }
+    setGenerating(null);
+  };
+
+  const saveReport = (result, title) => {
+    const rep = {
+      id: "rep_" + Math.random().toString(36).substr(2,8),
+      title: title || result.title || "Relatório",
+      contextLabel: view,
+      actionId: result.actionId || "",
+      contentMarkdown: result.content,
+      createdAt: new Date().toISOString(),
+      pinned: false,
+    };
+    const next = [rep, ...reports].slice(0, 100);
+    setReports(next);
+    try { localStorage.setItem("copilot_reports_v1", JSON.stringify(next)); } catch {}
+  };
+
+  const deleteReport = (id) => {
+    const next = reports.filter(r => r.id !== id);
+    setReports(next);
+    try { localStorage.setItem("copilot_reports_v1", JSON.stringify(next)); } catch {}
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
+  };
+
+  const openWhatsApp = (text) => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
+  const VIEW_LABELS = {
+    dashboard:"Dashboard", acompanhamento:"Produção", contratos:"Contratos",
+    marcas:"Marcas", financeiro:"Financeiro", caixa:"Caixa",
+    "marca-detalhe":"Detalhe da Marca",
+  };
+  const contextLabel = context.contractId
+    ? `Contrato · ${contracts.find(c=>c.id===context.contractId)?.company||""}`
+    : context.brandId
+    ? `Marca · ${brands.find(b=>b.id===context.brandId)?.name||""}`
+    : VIEW_LABELS[view] || view;
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Backdrop on mobile */}
+      {isMobile && (
+        <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.35)", zIndex:179 }}/>
+      )}
+
+      {/* Panel */}
+      <div style={{
+        position:"fixed", top:0, right:0, bottom:0,
+        width: isMobile ? "100%" : 420,
+        background:B1,
+        boxShadow:"-8px 0 32px rgba(15,23,42,0.10)",
+        zIndex: 180,
+        display:"flex", flexDirection:"column",
+        animation:"copilot-slide-in .2s ease-out",
+      }}>
+        {/* Header */}
+        <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${LN}`, flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+            <span style={{ fontSize:18 }}>✨</span>
+            <span style={{ fontSize:14, fontWeight:800, color:COPILOT_PURPLE, letterSpacing:"-.01em" }}>Copiloto Ranked</span>
+            <div style={{ flex:1 }}/>
+            <button onClick={onClose} aria-label="Fechar copiloto"
+              style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, width:28, height:28, cursor:"pointer", color:TX2, fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              ×
+            </button>
+          </div>
+          <div style={{ fontSize:10, color:TX3, marginLeft:28 }}>Contexto: {contextLabel}</div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display:"flex", borderBottom:`1px solid ${LN}`, flexShrink:0 }}>
+          {[["suggestions","Sugestões"],["conversa","Conversa"],["relatorios","Relatórios"]].map(([id,label]) => (
+            <button key={id} onClick={()=>setTab(id)}
+              style={{ flex:1, padding:"9px 4px", fontSize:11, fontWeight:tab===id?700:400, color:tab===id?COPILOT_PURPLE:TX2, background:"none", border:"none", borderBottom:`2px solid ${tab===id?COPILOT_PURPLE:"transparent"}`, cursor:"pointer", transition:TRANS, fontFamily:"inherit" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex:1, overflowY:"auto", padding:"14px 16px" }}>
+
+          {/* ── Sugestões ── */}
+          {tab === "suggestions" && (
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, marginBottom:12 }}>
+                Sugestões para agora
+              </div>
+              {suggestions.length === 0 && (
+                <div style={{ textAlign:"center", padding:"40px 0", color:TX3, fontSize:12 }}>
+                  Nenhuma sugestão disponível para esta tela.
+                </div>
+              )}
+              {suggestions.map(s => {
+                const result   = results[s.id];
+                const isGen    = generating === s.id;
+                const isHighlight = context.actionId && context.actionId === s.actionId;
+                return (
+                  <div key={s.id} style={{
+                    ...G,
+                    padding:"14px 16px",
+                    marginBottom:10,
+                    cursor:"pointer",
+                    border: isHighlight ? `1.5px solid ${COPILOT_PURPLE}` : `1px solid ${LN}`,
+                    transition:TRANS,
+                  }}
+                    onMouseEnter={e=>{ e.currentTarget.style.borderColor=COPILOT_PURPLE; }}
+                    onMouseLeave={e=>{ e.currentTarget.style.borderColor=isHighlight?COPILOT_PURPLE:LN; }}>
+                    <div style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom: result ? 10 : 0 }}>
+                      <span style={{ fontSize:18, flexShrink:0 }}>{s.icon}</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:2 }}>{s.title}</div>
+                        <div style={{ fontSize:11, color:TX2 }}>{s.description}</div>
+                      </div>
+                      {!result && (
+                        <button onClick={()=>handleRunAction(s)} disabled={!!generating}
+                          style={{ padding:"5px 12px", fontSize:10, fontWeight:700, color: isGen?"#fff":COPILOT_PURPLE, background: isGen?COPILOT_PURPLE:"none", border:`1.5px solid ${COPILOT_PURPLE}`, borderRadius:6, cursor:generating?"wait":"pointer", flexShrink:0, fontFamily:"inherit", whiteSpace:"nowrap", transition:TRANS }}>
+                          {isGen ? "⏳ Gerando…" : "Gerar"}
+                        </button>
+                      )}
+                    </div>
+
+                    {result && (
+                      <div>
+                        <div style={{ background:B2, borderRadius:8, padding:"12px 14px", marginBottom:8, maxHeight:280, overflowY:"auto" }}>
+                          {result.type === "whatsapp" ? (
+                            <pre style={{ fontSize:11, color:TX, whiteSpace:"pre-wrap", fontFamily:"inherit", margin:0 }}>{result.content}</pre>
+                          ) : (
+                            <MarkdownText content={result.content}/>
+                          )}
+                        </div>
+                        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                          <button onClick={()=>copyToClipboard(result.content)}
+                            style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                            📋 Copiar
+                          </button>
+                          {result.type === "report" && (
+                            <button onClick={()=>saveReport(result, s.title)}
+                              style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}40`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                              💾 Salvar
+                            </button>
+                          )}
+                          {result.type === "whatsapp" && (
+                            <button onClick={()=>openWhatsApp(result.content)}
+                              style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:"#128C7E", background:"none", border:"1px solid rgba(37,211,102,.4)", borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                              📱 Abrir WhatsApp
+                            </button>
+                          )}
+                          <button onClick={()=>handleRunAction(s)} disabled={!!generating}
+                            style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX3, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:generating?"wait":"pointer", fontFamily:"inherit" }}>
+                            ↺ Regenerar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Conversa ── */}
+          {tab === "conversa" && (
+            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0 }}>
+              <div ref={chatRef} style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:10, paddingBottom:4 }}>
+                {messages.length === 0 && (
+                  <div style={{ textAlign:"center", padding:"40px 0 20px" }}>
+                    <div style={{ fontSize:32, marginBottom:10 }}>✨</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:TX }}>Copiloto Ranked</div>
+                    <div style={{ fontSize:11, color:TX2, marginTop:4 }}>Pergunte sobre contratos, entregas, finanças…</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6, justifyContent:"center", marginTop:14 }}>
+                      {["Qual o status desta semana?","Resumo para WhatsApp","Tem algo atrasado?","Como está minha margem?"].map(q=>(
+                        <div key={q} onClick={()=>setInput(q)}
+                          style={{ padding:"5px 12px", fontSize:10, background:B2, border:`1px solid ${LN}`, borderRadius:99, cursor:"pointer", color:TX2, transition:TRANS }}
+                          onMouseEnter={e=>e.currentTarget.style.borderColor=COPILOT_PURPLE}
+                          onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>
+                          {q}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {messages.map((m,i) => (
+                  <div key={m.id||i} style={{ display:"flex", gap:8, flexDirection:m.role==="user"?"row-reverse":"row", alignItems:"flex-start" }}>
+                    <div style={{ width:26, height:26, borderRadius:"50%", background:m.role==="user"?COPILOT_PURPLE:`${COPILOT_PURPLE}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, flexShrink:0, color:m.role==="user"?"#fff":COPILOT_PURPLE, fontWeight:700 }}>
+                      {m.role==="user"?"M":"✨"}
+                    </div>
+                    <div style={{ maxWidth:"80%", padding:"9px 13px", borderRadius:m.role==="user"?"12px 12px 0 12px":"12px 12px 12px 0", background:m.role==="user"?COPILOT_PURPLE:B2, color:m.role==="user"?"#fff":TX, fontSize:12, lineHeight:1.6, whiteSpace:"pre-wrap" }}>
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+                {generating === "chat" && (
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    <div style={{ width:26, height:26, borderRadius:"50%", background:`${COPILOT_PURPLE}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:COPILOT_PURPLE }}>✨</div>
+                    <div style={{ padding:"9px 13px", borderRadius:"12px 12px 12px 0", background:B2, fontSize:12, color:TX2 }}>Pensando…</div>
+                  </div>
+                )}
+              </div>
+              <div style={{ display:"flex", gap:6, marginTop:10, padding:"10px 0 0", borderTop:`1px solid ${LN}`, flexShrink:0 }}>
+                <button onClick={()=>{ clearHistory(); setMessages([]); }} title="Limpar conversa"
+                  style={{ padding:"8px 10px", background:"none", border:`1px solid ${LN}`, borderRadius:8, color:TX3, cursor:"pointer", fontSize:12 }}>
+                  🗑
+                </button>
+                <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); handleSend(); }}}
+                  placeholder="Pergunte alguma coisa… (Enter para enviar)"
+                  style={{ flex:1, padding:"9px 12px", fontSize:12, background:B2, border:`1px solid ${LN}`, borderRadius:8, color:TX, fontFamily:"inherit", outline:"none", transition:TRANS }}
+                  onFocus={e=>e.currentTarget.style.borderColor=COPILOT_PURPLE}
+                  onBlur={e=>e.currentTarget.style.borderColor=LN}/>
+                <button onClick={handleSend} disabled={!input.trim()||generating==="chat"}
+                  style={{ padding:"8px 16px", background:COPILOT_PURPLE, border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:!input.trim()||generating==="chat"?"not-allowed":"pointer", opacity:!input.trim()||generating==="chat"?0.6:1, fontFamily:"inherit" }}>
+                  →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Relatórios ── */}
+          {tab === "relatorios" && (
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, marginBottom:12 }}>
+                Relatórios salvos ({reports.length})
+              </div>
+              {reports.length === 0 && (
+                <div style={{ textAlign:"center", padding:"40px 0", color:TX3, fontSize:12 }}>
+                  Nenhum relatório salvo ainda.<br/>
+                  <span style={{ fontSize:11 }}>Gere um relatório na aba Sugestões e clique em "Salvar".</span>
+                </div>
+              )}
+              {reports.map(r => (
+                <div key={r.id} style={{ ...G, padding:"12px 14px", marginBottom:8 }}>
+                  <div style={{ display:"flex", alignItems:"flex-start", gap:8, marginBottom:8 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:TX }}>{r.title}</div>
+                      <div style={{ fontSize:10, color:TX3, marginTop:2 }}>
+                        {r.contextLabel} · {new Date(r.createdAt).toLocaleDateString("pt-BR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}
+                      </div>
+                    </div>
+                    <button onClick={()=>deleteReport(r.id)}
+                      style={{ background:"none", border:"none", cursor:"pointer", color:TX3, fontSize:14, padding:"2px 4px" }}>
+                      ×
+                    </button>
+                  </div>
+                  <div style={{ background:B2, borderRadius:6, padding:"10px 12px", maxHeight:200, overflowY:"auto", marginBottom:8 }}>
+                    <MarkdownText content={r.contentMarkdown}/>
+                  </div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <button onClick={()=>copyToClipboard(r.contentMarkdown)}
+                      style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                      📋 Copiar
+                    </button>
+                    <button onClick={()=>{
+                      const blob = new Blob([r.contentMarkdown], {type:"text/markdown"});
+                      const a = document.createElement("a");
+                      a.href = URL.createObjectURL(blob);
+                      a.download = `${r.title.replace(/[^a-z0-9]/gi,"_")}.md`;
+                      a.click();
+                    }}
+                      style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                      ⬇ .md
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Sticky footer: WhatsApp shortcut */}
+        {tab === "suggestions" && (
+          <div style={{ padding:"10px 16px 14px", borderTop:`1px solid ${LN}`, flexShrink:0 }}>
+            <button onClick={()=>{ const s=suggestions.find(x=>x.actionId==="whatsapp-daily"); if(s) handleRunAction(s); }}
+              style={{ width:"100%", padding:"8px 0", fontSize:11, fontWeight:600, color:"#128C7E", background:"rgba(37,211,102,.06)", border:"1px solid rgba(37,211,102,.3)", borderRadius:8, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+              <span>📱</span> Resumo do dia para WhatsApp
+            </button>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes copilot-slide-in {
+          from { transform: translateX(100%); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+      `}</style>
+    </>
+  );
+}
+
 // ─── App Root ─────────────────────────────────────────────
 export default function App() {
   const isMobile = useIsMobile();
@@ -5983,6 +6427,8 @@ export default function App() {
   const [deliverables, setD] = useState([]);
   const [brands, setBrands] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null); // id
+  const [copilotOpen, setCopilotOpen]     = useState(false);
+  const [copilotContext, setCopilotContext] = useState({});  // { actionId?, contractId?, brandId? }
   const [modal, setModal]   = useState(null);
   const [eurRate, setEurRate] = useState(0);
   const [usdRate, setUsdRate] = useState(0);
@@ -6099,6 +6545,11 @@ export default function App() {
     setBrands(b);
     try { await syncBrands(b, []); }
     catch(e) { console.error('[App] saveBrands', e); }
+  }, []);
+
+  const openCopilot = useCallback((ctx = {}) => {
+    setCopilotContext(ctx);
+    setCopilotOpen(true);
   }, []);
   const rates=useMemo(()=>({eur:eurRate,usd:usdRate}),[eurRate,usdRate]);
   const saveNote=(id,notes)=>saveC(contracts.map(c=>c.id===id?{...c,notes}:c));
@@ -6244,7 +6695,8 @@ export default function App() {
               role={role} userName={userName} syncStatus={syncStatus}
               brands={brands} saveBrands={saveBrands}
               selectedBrand={selectedBrand}
-              setSelectedBrand={setSelectedBrand}/>
+              setSelectedBrand={setSelectedBrand}
+              openCopilot={openCopilot}/>
           </div>
         </div>
         {modal && (
@@ -6255,6 +6707,25 @@ export default function App() {
         )}
         {showInvite && <UserInviteModal onClose={()=>setShowInvite(false)}/>}
         {isMobile && <MobileNav view={view} setView={setView} role={role} userName={userName} deliverables={deliverables} contracts={contracts}/>}
+
+        {/* ── Copiloto Ranked ── */}
+        {!copilotOpen && (
+          <CopilotButton onClick={()=>setCopilotOpen(true)} isMobile={isMobile}
+            hasAlert={detectRiskSignals({deliverables,contracts},new Date()).some(s=>s.severity==="HIGH")}/>
+        )}
+        <CopilotPanel
+          isOpen={copilotOpen}
+          onClose={()=>{ setCopilotOpen(false); setCopilotContext({}); }}
+          view={view}
+          context={copilotContext}
+          contracts={contracts}
+          deliverables={deliverables}
+          posts={posts}
+          brands={brands}
+          role={role}
+          today={new Date()}
+          signals={detectRiskSignals({deliverables,contracts},new Date())}
+        />
       </div>
     </ToastProvider>
   );

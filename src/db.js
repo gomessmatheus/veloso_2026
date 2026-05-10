@@ -1,16 +1,8 @@
 /**
  * db.js — Firebase Firestore data layer
  *
- * Collections (schema unchanged):
- *   contracts, posts, deliverables, caixa_tx, settings, presence
- *
- * Etapa 2 changes:
- *  - syncCollection: only writes changed items (changedIds opt-in), no implicit deletions
- *  - deleteItem: explicit single-doc deletion (replaces previousIds-based deletes)
- *  - getMyPresence: uses auth.currentUser before falling back to localStorage
- *  - subscribeToChanges: limit(500) + orderBy('updatedAt','desc') on every query
- *  - All catch blocks now log with console.error('[db] ...')
- *  - onError callback in subscribeToChanges surfaces Firestore errors
+ * Collections:
+ *   contracts, posts, deliverables, caixa_tx, settings, presence, brands
  */
 
 import {
@@ -126,7 +118,24 @@ export async function syncCaixaTx(items, previousIds = [], changedIds) {
   } catch (err) { dbErr('syncCaixaTx', err); throw err }
 }
 
-// ─── Settings ─────────────────────────────────────────────
+// ─── Brands ───────────────────────────────────────────────
+export async function loadBrands() {
+  try {
+    const snap = await getDocs(query(collection(db, 'brands'), orderBy('updatedAt', 'desc'), limit(500)))
+    return snap.docs.map(d => d.data().data).filter(Boolean)
+  } catch (err) { dbErr('loadBrands', err); return [] }
+}
+
+export async function syncBrands(brands, previousIds, changedIds) {
+  try {
+    await syncCollection('brands', brands, previousIds, () => ({}), changedIds)
+  } catch (err) { dbErr('syncBrands', err); throw err }
+}
+
+/** Explicit brand deletion — wraps the generic deleteItem. */
+export async function deleteBrand(id) {
+  return deleteItem('brands', id)
+}
 export async function getSetting(key) {
   try {
     const snap = await getDoc(doc(db, 'settings', key))

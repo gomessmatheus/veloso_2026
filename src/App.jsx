@@ -1143,7 +1143,7 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
   // (Handled by ViewRenderer — this component only renders when data is ready)
 
   return (
-    <div style={{ padding: isMobile ? "12px" : "20px 24px", maxWidth: 1320, margin: "0 auto" }}>
+    <div style={{ padding: isMobile ? "12px 12px 88px" : "20px 24px", maxWidth: 1320, margin: "0 auto" }}>
 
       {/* BLOCO 1 — Cabeçalho da semana */}
       <WeekHeader
@@ -1389,7 +1389,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
   const conflicts = Object.entries(postDateCounts).filter(([, count]) => count > 1);
 
   return (
-    <div style={{ padding: isMobile ? "12px 12px 80px" : 24, maxWidth:1600 }}>
+    <div style={{ padding: isMobile ? "12px 12px 88px" : 24, maxWidth:1600 }}>
       {/* Conflict summary — replaces the old "Conflito de postagem detectado" banner */}
       {(() => {
         const allConflicts = buildConflictDateMap(deliverables, brands, contracts);
@@ -2025,7 +2025,7 @@ Responda APENAS com o JSON.` }]
   const isMob = window.innerWidth < 768;
   return (
     <>
-    <div style={{ padding: isMob?"12px 12px 80px":24, maxWidth: 1100 }}>
+    <div style={{ padding: isMob?"12px 12px 88px":24, maxWidth: 1100 }}>
       {/* Mobile header */}
       {isMob ? (
         <div style={{ marginBottom:16 }}>
@@ -2099,17 +2099,17 @@ Responda APENAS com o JSON.` }]
       {/* ── Tab: Visão Geral ── */}
       {tab==="overview" && (
         <div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:24 }}>
+          <div style={{ display:"grid", gridTemplateColumns: isMob ? "1fr 1fr" : "repeat(4,1fr)", gap: isMob ? 8 : 12, marginBottom:24 }}>
             {[
               { label:"Valor total",    value:total>0?fmtMoney(total,c.currency):"TBD" },
-              { label:"Entregas concluídas", value:`${doneDels}/${totalDels}` },
-              { label:"Comissão Ranked (a pagar)", value:fmtMoney(commPending,c.currency), accent:commPending>0?AMB:GRN, sub:commPending>0?"pendente":"pago" },
-              { label:"Engajamento",     value:fmtEng(avgEng), accent:avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX2):TX2 },
+              { label:"Entregas",       value:`${doneDels}/${totalDels}`, sub:totalDels>0?`${Math.round(doneDels/totalDels*100)}% concluído`:undefined },
+              { label:"Comissão",       value:fmtMoney(commPending,c.currency), accent:commPending>0?AMB:GRN, sub:commPending>0?"a pagar Ranked":"quitado" },
+              { label:"Engajamento",    value:fmtEng(avgEng), accent:avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX2):TX2 },
             ].map((k,i) => (
-              <div key={i} style={{ ...G, padding:"16px 18px" }}>
-                <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>{k.label}</div>
-                <div style={{ fontSize:20,fontWeight:700,color:k.accent||TX,lineHeight:1 }}>{k.value}</div>
-                {k.sub&&<div style={{fontSize:11,color:TX2,marginTop:4}}>{k.sub}</div>}
+              <div key={i} style={{ ...G, padding: isMob ? "12px 14px" : "16px 18px" }}>
+                <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>{k.label}</div>
+                <div style={{ fontSize: isMob ? 16 : 20, fontWeight:700,color:k.accent||TX,lineHeight:1 }}>{k.value}</div>
+                {k.sub&&<div style={{fontSize:10,color:TX2,marginTop:4}}>{k.sub}</div>}
               </div>
             ))}
           </div>
@@ -2498,7 +2498,7 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
   };
 
   return (
-    <div style={{ padding: isMobile ? "12px 12px 80px" : "24px" }}>
+    <div style={{ padding: isMobile ? "12px 12px 88px" : "24px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         <div style={{ flex: 1 }}>
@@ -2648,7 +2648,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
   const TABS = [{ id:"contratos", label:"Contratos" }, { id:"performance", label:"Performance" }, { id:"briefing", label:"Briefing Recorrente" }];
 
   return (
-    <div style={{ padding: isMobile ? "12px 12px 80px" : "24px" }}>
+    <div style={{ padding: isMobile ? "12px 12px 88px" : "24px" }}>
       {/* Back */}
       <button onClick={onBack}
         style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"6px 12px", cursor:"pointer", fontSize:11, color:TX2, marginBottom:20, fontFamily:"inherit" }}>
@@ -2886,7 +2886,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
 
   // ── Mobile card view ──
   if (isMobile) return (
-    <div style={{ padding:"12px 12px 80px" }}>
+    <div style={{ padding:"12px 12px 88px" }}>
       {/* Archive toggle */}
       <div style={{ display:"flex", background:B2, border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", marginBottom:12 }}>
         <div onClick={()=>setShowArchived(false)}
@@ -4145,7 +4145,7 @@ function MobileNav({ view, setView, role, userName, deliverables, contracts }) {
   };
 
   return (
-    <div style={{ position:"fixed", bottom:0, left:0, right:0, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"stretch", zIndex:100, boxShadow:"0 -2px 16px rgba(0,0,0,0.1)", paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
+    <div style={{ position:"fixed", bottom:0, left:0, right:0, background:B1, borderTop:`1px solid ${LN}`, display:"flex", alignItems:"stretch", zIndex:100, boxShadow:"0 -1px 0 rgba(0,0,0,0.06), 0 -4px 16px rgba(0,0,0,0.06)", paddingBottom:"env(safe-area-inset-bottom,0px)", minHeight:58 }}>
       {NAV_MOB.map(item => {
         const active = view === item.id;
         return (
@@ -4323,7 +4323,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
   ];
 
   return (
-    <div style={{ padding:isMobile?"16px 16px 80px":"24px 28px", maxWidth:1100 }}>
+    <div style={{ padding: isMobile ? "0 0 88px" : "24px 28px", maxWidth:1100 }}>
       {/* Header */}
       {!isMobile && (
         <div style={{ marginBottom:24 }}>
@@ -4331,28 +4331,36 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
           <p style={{ fontSize:13, color:TX2 }}>Gestão de NFs, comissões Ranked e pagamentos</p>
         </div>
       )}
+      {isMobile && (
+        <div style={{ padding:"12px 16px 8px", borderBottom:`1px solid ${LN}`, background:B1 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:TX }}>Financeiro</div>
+        </div>
+      )}
 
       {/* Summary KPIs — horizontal scroll on mobile */}
-      <div style={{ display:"flex", gap:10, overflowX:"auto", paddingBottom:4, marginBottom:20, scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
+      <div style={{ display:"flex", gap:10, overflowX:"auto", padding: isMobile?"12px 16px 4px":"0 0 4px 0", marginBottom:isMobile?8:20, scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
         {[
           { label:"Volume bruto", value:fmtMoney(totalBRL), sub:`${contracts.length} contratos` },
-          { label:"Custos deduzidos", value:fmtMoney(totalCosts), sub:"passagens, equipe, etc.", accent:totalCosts>0?AMB:TX2 },
-          { label:"Comissão a pagar", value:fmtMoney(commPend), sub:"pendente à Ranked", accent:commPend>0?RED:GRN },
-          { label:"NFs a emitir", value:nfPending.length, sub:`de ${contracts.length} contratos`, accent:nfPending.length>0?AMB:GRN },
+          { label:"Custos", value:fmtMoney(totalCosts), sub:"deduzidos", accent:totalCosts>0?AMB:TX2 },
+          { label:"Comissão", value:fmtMoney(commPend), sub:"a pagar Ranked", accent:commPend>0?RED:GRN },
+          { label:"NFs a emitir", value:nfPending.length, sub:`de ${contracts.length}`, accent:nfPending.length>0?AMB:GRN },
         ].map((k,i) => (
-          <div key={i} style={{ ...G, padding:"16px 18px", flexShrink:0, minWidth:isMobile?160:undefined, flex:isMobile?"none":"1" }}>
-            <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:8 }}>{k.label}</div>
-            <div style={{ fontSize:isMobile?20:22,fontWeight:800,color:k.accent||TX,lineHeight:1,letterSpacing:"-.02em" }}>{k.value}</div>
-            <div style={{ fontSize:11,color:TX3,marginTop:5 }}>{k.sub}</div>
+          <div key={i} style={{ ...G, padding: isMobile?"12px 14px":"16px 18px", flexShrink:0, minWidth:isMobile?140:undefined, flex:isMobile?"none":"1" }}>
+            <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:6 }}>{k.label}</div>
+            <div style={{ fontSize:isMobile?18:22,fontWeight:800,color:k.accent||TX,lineHeight:1,letterSpacing:"-.02em" }}>{k.value}</div>
+            <div style={{ fontSize:10,color:TX3,marginTop:4 }}>{k.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Tabs — horizontal scroll on mobile */}
-      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
+      {/* Tabs — sticky on mobile */}
+      <div style={{
+        display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:16, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch",
+        ...(isMobile ? { position:"sticky", top:0, zIndex:10, background:B1, paddingLeft:16, paddingRight:16 } : {}),
+      }}>
         {TABS.map(t => (
           <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 16px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
+            style={{ padding:"10px 14px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
             {t.label}
           </div>
         ))}
@@ -4360,7 +4368,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
 
       {/* Visão Geral */}
       {tab==="visao" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:10, padding: isMobile ? "0 16px" : 0 }}>
           {contracts.map(c => {
             const gross = contractTotal(c);
             const costs = (c.costs||[]).reduce((s,x)=>s+(Number(x.value)||0),0);
@@ -6225,7 +6233,7 @@ export default function App() {
             onNewPost={()=>setModal({type:"post",data:null})}
             onNewTask={()=>setTriggerNewTask(true)}
             syncStatus={syncStatus} isMobile={isMobile} role={role} userName={userName}/>
-          <div style={{ flex:1, overflowY:"auto", paddingBottom:isMobile?84:0 }}>
+          <div style={{ flex:1, overflowY:"auto", paddingBottom:isMobile?0:0 }}>
             <ViewRenderer view={view} contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates}
               saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid}
               toggleNF={toggleNF} setModal={setModal} setView={setView}

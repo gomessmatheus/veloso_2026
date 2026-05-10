@@ -1482,7 +1482,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
         if (!blockDates.length && !warnDates.length) return null;
         return (
           <div style={{ background:`${AMB}08`, border:`1px solid ${AMB}30`, borderLeft:`3px solid ${AMB}`, borderRadius:8, padding:"10px 14px", marginBottom:16, display:"flex", alignItems:"flex-start", gap:10 }}>
-            <span style={{ fontSize:16, flexShrink:0 }}>📋</span>
+            <DsIcon name="alertTriangle" size={16} color={AMB}/>
             <div>
               <div style={{ fontSize:12, fontWeight:700, color:AMB, marginBottom:4 }}>
                 Conflitos de agenda abertos —&nbsp;
@@ -2397,9 +2397,9 @@ Responda APENAS com o JSON.` }]
               </DsButton>
             </div>
             <textarea value={briefingNote} onChange={e=>setBriefingNote(e.target.value)} onBlur={()=>saveNote(briefingNote)}
-              rows={12} placeholder="Cole aqui o briefing da marca, ou use ✨ Gerar com IA para criar automaticamente com os principais pontos, dos & don'ts e tom de voz…"
+              rows={12} placeholder="Cole aqui o briefing da marca, ou use o Copiloto para criar automaticamente com os principais pontos, dos & don'ts e tom de voz…"
               style={{ width:"100%",padding:"12px",background:B2,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontSize:13,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none" }}/>
-            <div style={{ fontSize:10,color:TX3,marginTop:6 }}>Auto-salvo ao sair do campo · ✨ IA gera estrutura completa baseada no contrato</div>
+            <div style={{ fontSize:10,color:TX3,marginTop:6 }}>Auto-salvo ao sair do campo · Copiloto gera estrutura baseada no contrato</div>
           </div>
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Arquivo do Briefing</div>
@@ -2772,7 +2772,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
       <div style={{ display:"flex", borderBottom:`1px solid ${LN}`, marginBottom:20 }}>
         {TABS.map(t => (
           <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, color:tab===t.id?TX:TX2, background:"none", border:"none", borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, cursor:"pointer", fontFamily:"inherit", transition:TRANS }}>
+            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, color:tab===t.id?TX:TX2, background:"none", border:"none", borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`, cursor:"pointer", fontFamily:"inherit", transition:TRANS }}>
             {t.label}
           </button>
         ))}
@@ -4175,7 +4175,7 @@ function UserInviteModal({ onClose }) {
       </>}>
       {done ? (
         <div style={{textAlign:"center",padding:"20px 0"}}>
-          <div style={{fontSize:32,marginBottom:12}}>✅</div>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:12}}><DsIcon name="checkCircle" size={32} color={ds.color.success[500]}/></div>
           <div style={{fontSize:14,fontWeight:700,color:TX,marginBottom:8}}>Conta criada!</div>
           <div style={{fontSize:12,color:TX2,marginBottom:16}}>Compartilhe as credenciais abaixo:</div>
           <div style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:16,textAlign:"left"}}>
@@ -4460,7 +4460,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
       }}>
         {TABS.map(t => (
           <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 14px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
+            style={{ padding:"10px 14px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
             {t.label}
           </div>
         ))}
@@ -4714,11 +4714,11 @@ const CAIXA_PASSWORD   = "ranked2026";
 const BALANCE_PASSWORD = "Theus123";
 
 const TX_TYPES = [
-  { id:"entrada",       label:"Entrada",        emoji:"↓", color:"#16A34A" },
-  { id:"saida",         label:"Saída",           emoji:"↑", color:"#C8102E" },
-  { id:"dividendos",    label:"Dividendos",      emoji:"💰", color:"#7C3AED" },
-  { id:"imposto",       label:"Imposto",         emoji:"🏛", color:"#EA580C" },
-  { id:"transferencia", label:"Transferência",   emoji:"⇄", color:"#2563EB" },
+  { id:"entrada",       label:"Entrada",        iconName:"arrowDown",  color:ds.color.success[500]  },
+  { id:"saida",         label:"Saída",           iconName:"arrowUp",    color:ds.color.brand[500]    },
+  { id:"dividendos",    label:"Dividendos",      iconName:"zap",        color:ds.color.copilot[500]  },
+  { id:"imposto",       label:"Imposto",         iconName:"landmark",   color:ds.color.warning[500]  },
+  { id:"transferencia", label:"Transferência",   iconName:"arrowRight", color:ds.color.info[500]     },
 ];
 
 const EXPENSE_CATS = {
@@ -4776,8 +4776,9 @@ const DRE_MAP = {
   "Outros Dividendos":                "dividendos",
 };
 
-function txColor(type) { return TX_TYPES.find(t=>t.id===type)?.color || "#6E6E6E"; }
-function txEmoji(type) { return TX_TYPES.find(t=>t.id===type)?.emoji || "·"; }
+function txColor(type)    { return TX_TYPES.find(t=>t.id===type)?.color    || ds.color.neutral[500]; }
+function txIconName(type) { return TX_TYPES.find(t=>t.id===type)?.iconName || "minus"; }
+function txEmoji(type)    { return TX_TYPES.find(t=>t.id===type)?.iconName || "minus"; }
 
 // ─── Balance Password Button ───────────────────────────────
 function EditBalanceButton({ acc, accounts, index, saveAcc }) {
@@ -5139,7 +5140,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
               <div style={{ fontSize:22,fontWeight:800,color:RED }}>{fmtMoney(totalFutureDebt)}</div>
               <div style={{ fontSize:11,color:TX3,marginTop:2 }}>total comprometido em parcelas futuras</div>
             </div>
-            <span style={{ fontSize:22 }}>📋</span>
+            <DsIcon name="calendar" size={20} color={ds.color.neutral[400]}/>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {futureInstallments.map(([key, val]) => {
@@ -5714,7 +5715,7 @@ ${Object.entries(cats).map(([cat,items])=>`
     <Modal title="Exportar para Contador" onClose={onClose} width={560}
       footer={<>
         <Btn onClick={onClose} variant="ghost" size="sm">Fechar</Btn>
-        <Btn onClick={generateReport} variant="primary" size="sm">🖨️ Gerar relatório PDF</Btn>
+        <DsButton variant="secondary" size="sm" onClick={generateReport} leftIcon={<DsIcon name="printer" size={13} color={ds.color.neutral[600]}/>}>Gerar relatório PDF</DsButton>
       </>}>
 
       <SRule>Período</SRule>
@@ -5855,7 +5856,7 @@ function Caixa({ contracts, openCopilot }) {
     { id:"lancamentos", label:"Lançamentos" },
     { id:"dre",         label:"DRE" },
     { id:"indicadores", label:"Indicadores" },
-    { id:"ia",          label:"⚡ Consulta IA", hidden:true },
+    { id:"ia",          label:"Consulta IA", hidden:true },
   ];
 
   return (
@@ -5865,7 +5866,7 @@ function Caixa({ contracts, openCopilot }) {
           <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
           <span style={{ fontSize:10,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
           <button onClick={()=>setShowExport(true)} style={{ marginLeft:"auto",padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:8,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",gap:6 }}>
-            📤 Exportar para contador
+            Exportar para contador
           </button>
         </div>
         <p style={{ fontSize:13,color:TX2 }}>Lançamentos, saldo e DRE</p>
@@ -5899,15 +5900,17 @@ function Caixa({ contracts, openCopilot }) {
       <div style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20,marginTop:16,alignItems:"center" }}>
         {TABS.filter(t=>!t.hidden).map(t=>(
           <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`,transition:TRANS,marginBottom:-1 }}>
+            style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`,transition:TRANS,marginBottom:-1 }}>
             {t.label}
           </div>
         ))}
         <div style={{ flex:1 }}/>
-        <button onClick={()=>openCopilot?.({actionId:"ask-financial"})}
-          style={{ padding:"5px 12px",fontSize:11,fontWeight:600,color:"#7C3AED",background:"rgba(124,58,237,.08)",border:"1px solid rgba(124,58,237,.25)",borderRadius:6,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,marginBottom:1 }}>
-          ✨ Copiloto
-        </button>
+        <DsButton variant="secondary" size="sm"
+          onClick={()=>openCopilot?.({actionId:"ask-financial"})}
+          leftIcon={<DsIcon name="sparkles" size={13} color={ds.color.copilot[500]}/>}
+          style={{ color:ds.color.copilot[500], borderColor:`${ds.color.copilot[500]}40`, marginBottom:1 }}>
+          Copiloto
+        </DsButton>
       </div>
 
       {/* Dashboard */}
@@ -5918,7 +5921,7 @@ function Caixa({ contracts, openCopilot }) {
         <div>
           {/* Filters */}
           <div style={{ display:"flex",gap:8,marginBottom:12,flexWrap:"wrap" }}>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar descrição, categoria..."
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar descrição, categoria..."
               style={{ flex:1,minWidth:180,padding:"7px 12px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontFamily:"inherit",outline:"none" }}/>
             {/* Value range filter */}
             <div style={{ display:"flex",alignItems:"center",gap:4,background:B1,border:`1px solid ${LN}`,borderRadius:8,padding:"0 10px" }}>
@@ -5934,7 +5937,7 @@ function Caixa({ contracts, openCopilot }) {
               )}
             </div>
             <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
-              {[{id:"all",label:"Todos"},{id:"entrada",label:"↓ Entradas"},{id:"saida",label:"↑ Saídas"},{id:"dividendos",label:"💰 Dividendos"},{id:"imposto",label:"🏛 Impostos"},{id:"transferencia",label:"⇄ Trans."}].map(f=>(
+              {[{id:"all",label:"Todos"},{id:"entrada",label:"↓ Entradas"},{id:"saida",label:"↑ Saídas"},{id:"dividendos",label:"Dividendos"},{id:"imposto",label:"Impostos"},{id:"transferencia",label:"Trans."}].map(f=>(
                 <div key={f.id} onClick={()=>setFilterType2(f.id)}
                   style={{ padding:"6px 12px",fontSize:11,fontWeight:filterType2===f.id?700:400,cursor:"pointer",borderRadius:99,border:`1px solid ${filterType2===f.id?TX:LN}`,background:filterType2===f.id?TX:"none",color:filterType2===f.id?"white":TX2,transition:TRANS,whiteSpace:"nowrap" }}>
                   {f.label}
@@ -5958,13 +5961,13 @@ function Caixa({ contracts, openCopilot }) {
             </div>
             <button onClick={()=>setMonthOffset(o=>o+1)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,width:32,height:32,cursor:"pointer",color:TX2,fontSize:16 }}>›</button>
             <button onClick={()=>setMonthOffset(0)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,padding:"0 12px",height:32,cursor:"pointer",color:TX2,fontSize:11,fontWeight:600 }}>Hoje</button>
-            <Btn onClick={()=>setTxModal({})} variant="primary" size="sm" icon={Plus}>Lançamento</Btn>
+            <DsButton variant="primary" size="sm" onClick={()=>setTxModal({})} leftIcon={<DsIcon name="plus" size={13} color={ds.color.neutral[0]}/>}>Lançamento</DsButton>
           </div>
 
           {monthTx.length===0 ? (
             <div style={{ textAlign:"center",padding:"48px 0",color:TX3 }}>
               Nenhum lançamento em {monthLabel}.
-              <br/><button onClick={()=>setTxModal({})} style={{ marginTop:12,padding:"8px 16px",background:RED,border:"none",borderRadius:8,color:"white",fontSize:12,fontWeight:700,cursor:"pointer" }}>+ Adicionar</button>
+              <br/><DsButton variant="primary" size="sm" style={{marginTop:12}} onClick={()=>setTxModal({})}>+ Adicionar</DsButton>
             </div>
           ) : (
             <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
@@ -5972,8 +5975,8 @@ function Caixa({ contracts, openCopilot }) {
                 const tc = txColor(tx.type);
                 return (
                   <div key={tx.id} style={{ ...G,padding:"12px 16px",display:"flex",alignItems:"center",gap:14 }}>
-                    <div style={{ width:36,height:36,borderRadius:8,background:tc+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0 }}>
-                      {txEmoji(tx.type)}
+                    <div style={{ width:36,height:36,borderRadius:ds.radius.md,background:tc+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                      <DsIcon name={txIconName(tx.type)} size={16} color={tc}/>
                     </div>
                     <div style={{ flex:1,minWidth:0 }}>
                       <div style={{ fontWeight:600,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
@@ -5982,9 +5985,9 @@ function Caixa({ contracts, openCopilot }) {
                         {tx.category&&<span>· {tx.category}</span>}
                         {tx.beneficiario&&<span style={{fontWeight:600,color:"#7C3AED"}}>· {tx.beneficiario}</span>}
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
-                        {tx.installmentNum&&tx.installmentTotal&&<span style={{color:BLU,fontWeight:700,fontSize:10,padding:"1px 6px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}20`}}>📋 {tx.installmentNum}/{tx.installmentTotal}x</span>}
+                        {tx.installmentNum&&tx.installmentTotal&&<span style={{color:BLU,fontWeight:700,fontSize:10,padding:"1px 6px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}20`}}>{tx.installmentNum}/{tx.installmentTotal}x</span>}
                         {tx.parcelaAtual&&tx.parcelaTotal&&<span style={{color:AMB,fontWeight:700}}>· {tx.parcelaAtual}/{tx.parcelaTotal}x</span>}
-                        {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· 📄 NF</span>}
+                        {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· NF</span>}
                       </div>
                       {tx.notes&&<div style={{ fontSize:10,color:TX3,marginTop:2 }}>{tx.notes}</div>}
                     </div>
@@ -5994,8 +5997,10 @@ function Caixa({ contracts, openCopilot }) {
                       </div>
                     </div>
                     <div style={{ display:"flex",gap:4,flexShrink:0 }}>
-                      <button onClick={()=>setTxModal(tx)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"4px 8px",cursor:"pointer",color:TX2,fontSize:11 }}>✎</button>
-                      <button onClick={()=>{if(confirm("Excluir?")) saveTx(transactions.filter(t=>t.id!==tx.id));}} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"4px 8px",cursor:"pointer",color:RED,fontSize:13 }}>×</button>
+                      <DsIconButton size="sm" variant="ghost" ariaLabel="Editar lançamento" onClick={()=>setTxModal(tx)}
+                        icon={<DsIcon name="edit" size={13} color={ds.color.neutral[500]}/>}/>
+                      <DsIconButton size="sm" variant="ghost" ariaLabel="Excluir lançamento" onClick={()=>{if(confirm("Excluir?")) saveTx(transactions.filter(t=>t.id!==tx.id));}}
+                        icon={<DsIcon name="x" size={13} color={ds.color.danger[500]}/>}/>
                     </div>
                   </div>
                 );
@@ -6226,7 +6231,7 @@ function CopilotButton({ onClick, hasAlert, isMobile }) {
         transition:"all .15s ease",
         fontFamily:"inherit",
       }}>
-      <span style={{ fontSize:15 }}>✨</span>
+      <DsIcon name="sparkles" size={15} color="#fff"/>
       Copiloto
       {hasAlert && (
         <span style={{ position:"absolute", top:-4, right:-4, width:16, height:16, background:RED, borderRadius:"50%", border:"2px solid #fff", fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff" }}>!</span>
@@ -6257,7 +6262,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
   const [mxError, setMxError]  = useState(null);
 
   const PLATFORM_COLOR = { Instagram:"#E1306C", TikTok:"#000000", YouTube:"#FF0000" };
-  const PLATFORM_ICON  = { Instagram:"📸", TikTok:"🎵", YouTube:"▶️" };
+  const PLATFORM_ICON  = { Instagram:"upload", TikTok:"zap", YouTube:"arrowRight" };
 
   // Field labels per platform
   const METRIC_LABELS = {
@@ -6503,13 +6508,11 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
         {/* Header */}
         <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${LN}`, flexShrink:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
-            <span style={{ fontSize:18 }}>✨</span>
-            <span style={{ fontSize:14, fontWeight:800, color:COPILOT_PURPLE, letterSpacing:"-.01em" }}>Copiloto Ranked</span>
+            <DsIcon name="sparkles" size={16} color={COPILOT_PURPLE}/>
+            <span style={{ fontSize:14, fontWeight:ds.font.weight.semibold, color:COPILOT_PURPLE, letterSpacing:"-.01em" }}>Copiloto Ranked</span>
             <div style={{ flex:1 }}/>
-            <button onClick={onClose} aria-label="Fechar copiloto"
-              style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, width:28, height:28, cursor:"pointer", color:TX2, fontSize:16, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              ×
-            </button>
+            <DsIconButton size="sm" variant="ghost" ariaLabel="Fechar copiloto" onClick={onClose}
+              icon={<DsIcon name="x" size={15} color={ds.color.neutral[500]}/>}/>
           </div>
           <div style={{ fontSize:10, color:TX3, marginLeft:28 }}>Contexto: {contextLabel}</div>
         </div>
@@ -6541,7 +6544,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
 
                 {mxState === "idle" && (
                   <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <span style={{ fontSize:22 }}>📸</span>
+                    <div style={{ width:36,height:36,borderRadius:ds.radius.md,background:ds.color.neutral[100],display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><DsIcon name="upload" size={18} color={ds.color.neutral[500]}/></div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:12, fontWeight:700, color:TX }}>Extrair métricas de print</div>
                       <div style={{ fontSize:11, color:TX2 }}>Instagram · TikTok · YouTube</div>
@@ -6558,7 +6561,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                     {mxImage && <img src={mxImage.url} style={{ width:48, height:72, objectFit:"cover", borderRadius:6 }} alt="print"/>}
                     <div>
                       <div style={{ fontSize:12, fontWeight:600, color:TX, marginBottom:4 }}>Analisando o print…</div>
-                      <div style={{ fontSize:11, color:TX2 }}>Identificando plataforma e extraindo métricas ✨</div>
+                      <div style={{ fontSize:11, color:TX2 }}>Identificando plataforma e extraindo métricas…</div>
                       <div style={{ height:4, background:LN, borderRadius:2, marginTop:8, overflow:"hidden" }}>
                         <div style={{ height:"100%", width:"60%", background:COPILOT_PURPLE, borderRadius:2, animation:"copilot-slide-in .6s ease infinite alternate" }}/>
                       </div>
@@ -6568,7 +6571,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
 
                 {mxState === "error" && (
                   <div>
-                    <div style={{ fontSize:11, color:RED, fontWeight:600, marginBottom:8 }}>⚠️ {mxError}</div>
+                    <div style={{ fontSize:11, color:ds.color.danger[500], fontWeight:600, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}><DsIcon name="alertTriangle" size={13} color={ds.color.danger[500]}/>{mxError}</div>
                     <button onClick={()=>fileRef.current?.click()}
                       style={{ padding:"4px 12px", fontSize:10, fontWeight:700, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
                       Tentar outro print
@@ -6579,7 +6582,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                 {mxState === "saved" && (
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                     <div>
-                      <div style={{ fontSize:12, fontWeight:700, color:GRN }}>✅ Métricas salvas!</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:ds.color.success[500], display:"flex", alignItems:"center", gap:5 }}><DsIcon name="checkCircle" size={14} color={ds.color.success[500]}/>Métricas salvas!</div>
                       <div style={{ fontSize:11, color:TX2 }}>
                         {mxResult?.platform} → {deliverables.find(d=>d.id===mxDelivId)?.title||"entregável"}
                       </div>
@@ -6598,7 +6601,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                       {mxImage && <img src={mxImage.url} style={{ width:40, height:60, objectFit:"cover", borderRadius:6, flexShrink:0 }} alt="print"/>}
                       <div>
                         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                          <span style={{ fontSize:14 }}>{PLATFORM_ICON[mxResult.platform]||"📊"}</span>
+                          <DsIcon name={PLATFORM_ICON[mxResult.platform]||"info"} size={16} color={PLATFORM_COLOR[mxResult.platform]||COPILOT_PURPLE}/>
                           <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${PLATFORM_COLOR[mxResult.platform]||COPILOT_PURPLE}18`, color:PLATFORM_COLOR[mxResult.platform]||COPILOT_PURPLE }}>
                             {mxResult.platform}
                           </span>
@@ -6689,7 +6692,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                       {!result && (
                         <button onClick={()=>handleRunAction(s)} disabled={!!generating}
                           style={{ padding:"5px 12px", fontSize:10, fontWeight:700, color: isGen?"#fff":COPILOT_PURPLE, background: isGen?COPILOT_PURPLE:"none", border:`1.5px solid ${COPILOT_PURPLE}`, borderRadius:6, cursor:generating?"wait":"pointer", flexShrink:0, fontFamily:"inherit", whiteSpace:"nowrap", transition:TRANS }}>
-                          {isGen ? "⏳ Gerando…" : "Gerar"}
+                          {isGen ? "Gerando…" : "Gerar"}
                         </button>
                       )}
                     </div>
@@ -6705,19 +6708,19 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                         </div>
                         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                           <button onClick={()=>copyToClipboard(result.content)}
-                            style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
-                            📋 Copiar
+                            style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                            <DsIcon name="copy" size={11} color={ds.color.neutral[500]}/> Copiar
                           </button>
                           {result.type === "report" && (
                             <button onClick={()=>saveReport(result, s.title)}
-                              style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}40`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
-                              💾 Salvar
+                              style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}40`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                              <DsIcon name="save" size={11} color={COPILOT_PURPLE}/> Salvar
                             </button>
                           )}
                           {result.type === "whatsapp" && (
                             <button onClick={()=>openWhatsApp(result.content)}
-                              style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:"#128C7E", background:"none", border:"1px solid rgba(37,211,102,.4)", borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
-                              📱 Abrir WhatsApp
+                              style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:WA_DARK, background:"none", border:"1px solid rgba(37,211,102,.4)", borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                              <DsIcon name="phone" size={11} color={WA_DARK}/> WhatsApp
                             </button>
                           )}
                           <button onClick={()=>handleRunAction(s)} disabled={!!generating}
@@ -6739,7 +6742,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
               <div ref={chatRef} style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:10, paddingBottom:4 }}>
                 {messages.length === 0 && (
                   <div style={{ textAlign:"center", padding:"40px 0 20px" }}>
-                    <div style={{ fontSize:32, marginBottom:10 }}>✨</div>
+                    <div style={{ display:"inline-flex",alignItems:"center",justifyContent:"center",width:44,height:44,borderRadius:ds.radius.full,background:`${COPILOT_PURPLE}12`,marginBottom:10 }}><DsIcon name="sparkles" size={20} color={COPILOT_PURPLE}/></div>
                     <div style={{ fontSize:13, fontWeight:600, color:TX }}>Copiloto Ranked</div>
                     <div style={{ fontSize:11, color:TX2, marginTop:4 }}>Pergunte sobre contratos, entregas, finanças…</div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, justifyContent:"center", marginTop:14 }}>
@@ -6757,7 +6760,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                 {messages.map((m,i) => (
                   <div key={m.id||i} style={{ display:"flex", gap:8, flexDirection:m.role==="user"?"row-reverse":"row", alignItems:"flex-start" }}>
                     <div style={{ width:26, height:26, borderRadius:"50%", background:m.role==="user"?COPILOT_PURPLE:`${COPILOT_PURPLE}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, flexShrink:0, color:m.role==="user"?"#fff":COPILOT_PURPLE, fontWeight:700 }}>
-                      {m.role==="user"?"M":"✨"}
+                      {m.role==="user"?"M":<DsIcon name="sparkles" size={11} color={COPILOT_PURPLE}/>}
                     </div>
                     <div style={{ maxWidth:"80%", padding:"9px 13px", borderRadius:m.role==="user"?"12px 12px 0 12px":"12px 12px 12px 0", background:m.role==="user"?COPILOT_PURPLE:B2, color:m.role==="user"?"#fff":TX, fontSize:12, lineHeight:1.6, whiteSpace:"pre-wrap" }}>
                       {m.text}
@@ -6766,16 +6769,15 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                 ))}
                 {generating === "chat" && (
                   <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                    <div style={{ width:26, height:26, borderRadius:"50%", background:`${COPILOT_PURPLE}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, color:COPILOT_PURPLE }}>✨</div>
+                    <div style={{ width:26, height:26, borderRadius:"50%", background:`${COPILOT_PURPLE}18`, display:"flex", alignItems:"center", justifyContent:"center", color:COPILOT_PURPLE }}><DsIcon name="sparkles" size={12} color={COPILOT_PURPLE}/></div>
                     <div style={{ padding:"9px 13px", borderRadius:"12px 12px 12px 0", background:B2, fontSize:12, color:TX2 }}>Pensando…</div>
                   </div>
                 )}
               </div>
               <div style={{ display:"flex", gap:6, marginTop:10, padding:"10px 0 0", borderTop:`1px solid ${LN}`, flexShrink:0 }}>
-                <button onClick={()=>{ clearHistory(); setMessages([]); }} title="Limpar conversa"
-                  style={{ padding:"8px 10px", background:"none", border:`1px solid ${LN}`, borderRadius:8, color:TX3, cursor:"pointer", fontSize:12 }}>
-                  🗑
-                </button>
+                <DsIconButton size="sm" variant="ghost" ariaLabel="Limpar conversa" title="Limpar conversa"
+                  onClick={()=>{ clearHistory(); setMessages([]); }}
+                  icon={<DsIcon name="trash" size={14} color={ds.color.neutral[400]}/>}/>
                 <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
                   onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); handleSend(); }}}
                   placeholder="Pergunte alguma coisa… (Enter para enviar)"
@@ -6811,18 +6813,16 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                         {r.contextLabel} · {new Date(r.createdAt).toLocaleDateString("pt-BR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}
                       </div>
                     </div>
-                    <button onClick={()=>deleteReport(r.id)}
-                      style={{ background:"none", border:"none", cursor:"pointer", color:TX3, fontSize:14, padding:"2px 4px" }}>
-                      ×
-                    </button>
+                    <DsIconButton size="sm" variant="ghost" ariaLabel="Remover relatório" onClick={()=>deleteReport(r.id)}
+                      icon={<DsIcon name="x" size={13} color={ds.color.neutral[400]}/>}/>
                   </div>
                   <div style={{ background:B2, borderRadius:6, padding:"10px 12px", maxHeight:200, overflowY:"auto", marginBottom:8 }}>
                     <MarkdownText content={r.contentMarkdown}/>
                   </div>
                   <div style={{ display:"flex", gap:6 }}>
                     <button onClick={()=>copyToClipboard(r.contentMarkdown)}
-                      style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
-                      📋 Copiar
+                      style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                      <DsIcon name="copy" size={11} color={ds.color.neutral[500]}/> Copiar
                     </button>
                     <button onClick={()=>{
                       const blob = new Blob([r.contentMarkdown], {type:"text/markdown"});
@@ -6832,7 +6832,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                       a.click();
                     }}
                       style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
-                      ⬇ .md
+                      <DsIcon name="download" size={11} color={ds.color.neutral[500]}/> .md
                     </button>
                   </div>
                 </div>
@@ -6846,7 +6846,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
           <div style={{ padding:"10px 16px 14px", borderTop:`1px solid ${LN}`, flexShrink:0 }}>
             <button onClick={()=>{ const s=suggestions.find(x=>x.actionId==="whatsapp-daily"); if(s) handleRunAction(s); }}
               style={{ width:"100%", padding:"8px 0", fontSize:11, fontWeight:600, color:"#128C7E", background:"rgba(37,211,102,.06)", border:"1px solid rgba(37,211,102,.3)", borderRadius:8, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
-              <span>📱</span> Resumo do dia para WhatsApp
+              <DsIcon name="phone" size={13} color={WA_DARK}/> Resumo do dia para WhatsApp
             </button>
           </div>
         )}

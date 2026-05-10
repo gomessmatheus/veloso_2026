@@ -406,10 +406,10 @@ function calcAvailableSlots(deliverables, contracts, weeksAhead = 8) {
 
 
 // ─── CSS ──────────────────────────────────────────────────
-const G  = { background:B1, border:`1px solid ${LN}`, borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06)" };
-const GHV= { background:B2, border:`1px solid ${LN2}`, borderRadius:12, boxShadow:"0 4px 24px rgba(0,0,0,0.1)" };
-const G2 = { background:B2, border:`1px solid ${LN}`, borderRadius:10 };
-const TRANS = "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)";
+const G  = { background:ds.color.neutral[0], border:ds.border.thin, borderRadius:ds.radius.xl, boxShadow:ds.shadow.sm };
+const GHV= { background:ds.color.neutral[50], border:`1px solid ${ds.color.neutral[300]}`, borderRadius:ds.radius.xl, boxShadow:ds.shadow.md };
+const G2 = { background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.lg };
+const TRANS = `all ${ds.motion.base}`;
 
 // ─── Toast ────────────────────────────────────────────────
 const ToastCtx = createContext(null);
@@ -2112,12 +2112,16 @@ Responda APENAS com o JSON.` }]
       {/* Mobile header */}
       {isMob ? (
         <div style={{ marginBottom:16 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-            <button onClick={onBack} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:8, padding:"7px 12px", cursor:"pointer", fontSize:11, color:TX2, flexShrink:0 }}>
-              ← Contratos
-            </button>
+          <div style={{ display:"flex", alignItems:"center", gap:ds.space[2], marginBottom:ds.space[3] }}>
+            <DsButton variant="secondary" size="sm" onClick={onBack}
+              leftIcon={<DsIcon name="chevronLeft" size={14}/>}>
+              Contratos
+            </DsButton>
             <div style={{ flex:1 }}/>
-            <button onClick={()=>setModal({type:"contract",data:c})} style={{ background:B2, border:`1px solid ${LN}`, borderRadius:8, padding:"7px 12px", cursor:"pointer", fontSize:11, color:TX }}>✎ Editar</button>
+            <DsButton variant="secondary" size="sm" onClick={()=>setModal({type:"contract",data:c})}
+              leftIcon={<DsIcon name="edit" size={13}/>}>
+              Editar
+            </DsButton>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
             <div style={{ width:12, height:12, borderRadius:"50%", background:c.color, flexShrink:0 }}/>
@@ -2128,52 +2132,66 @@ Responda APENAS com o JSON.` }]
         </div>
       ) : (
         /* Desktop header */
-        <div style={{ display:"flex", alignItems:"flex-start", gap:16, marginBottom:24 }}>
-          <button onClick={onBack} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"6px 12px", cursor:"pointer", fontSize:11, color:TX2, display:"flex", alignItems:"center", gap:6, transition:TRANS, flexShrink:0 }}
-            onMouseEnter={e=>e.currentTarget.style.background=B2} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-            ← Contratos
-          </button>
-          <button onClick={async()=>{
+        <div style={{ display:"flex", alignItems:"flex-start", gap:ds.space[3], marginBottom:ds.space[6] }}>
+          <DsButton variant="secondary" size="sm" onClick={onBack}
+            leftIcon={<DsIcon name="chevronLeft" size={14} color={ds.color.neutral[600]}/>}>
+            Contratos
+          </DsButton>
+          <DsButton variant="ghost" size="sm" onClick={async()=>{
             if(!confirm("Excluir contrato "+c.company+" e todos os seus entregáveis?")) return;
             await saveC(contracts.filter(x=>x.id!==c.id));
             if(saveDeliverables) await saveDeliverables(deliverables.filter(d=>d.contractId!==c.id));
             onBack();
-          }} style={{ background:"none", border:`1px solid rgba(200,16,46,.3)`, borderRadius:6, padding:"6px 10px", cursor:"pointer", fontSize:11, color:RED, transition:TRANS, flexShrink:0 }}>
-            🗑 Excluir contrato
-          </button>
+          }} leftIcon={<DsIcon name="trash" size={13} color={ds.color.danger[500]}/>}
+            style={{ color:ds.color.danger[500] }}>
+            Excluir
+          </DsButton>
           <div style={{ flex:1 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:ds.space[3], marginBottom:ds.space[1] }}>
               <div style={{ width:10, height:10, borderRadius:"50%", background:c.color }}/>
-              <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{c.company}</h1>
+              <h1 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-.02em" }}>{c.company}</h1>
               {currBadge(c.currency)}
               {c.paymentType==="monthly" && <Badge color={TX2}>Mensal</Badge>}
-              {c.hasTravel && <Badge color={BLU}>✈️ {c.travelDestination||"Viagem"}</Badge>}
-              {/* Brand link — shows only when brandId is set */}
+              {c.hasTravel && <Badge color={BLU}>✈ {c.travelDestination||"Viagem"}</Badge>}
               {c.brandId && brands.find(b=>b.id===c.brandId) && (
                 <button onClick={()=>{ setSelectedBrand&&setSelectedBrand(c.brandId); navigateTo&&navigateTo("marca-detalhe"); }}
-                  style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 8px", borderRadius:99, background:`${BLU}10`, border:`1px solid ${BLU}30`, color:BLU, fontSize:10, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
-                  <Tag size={10}/> {brands.find(b=>b.id===c.brandId).name}
+                  style={{ display:"flex", alignItems:"center", gap:ds.space[1], padding:`2px ${ds.space[2]}`, borderRadius:ds.radius.full, background:`${BLU}10`, border:`1px solid ${BLU}30`, color:BLU, fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, cursor:"pointer", fontFamily:"inherit" }}>
+                  <DsIcon name="tag" size={10} color={BLU}/> {brands.find(b=>b.id===c.brandId).name}
                 </button>
               )}
             </div>
-            <div style={{ display:"flex", gap:16, fontSize:12, color:TX2 }}>
-              <span style={{ fontWeight:700, fontSize:16, color:TX }}>{total>0?fmtMoney(total,c.currency):"Valor TBD"}</span>
+            <div style={{ display:"flex", gap:ds.space[4], fontSize:ds.font.size.sm, color:TX2 }}>
+              <span style={{ fontWeight:ds.font.weight.semibold, fontSize:ds.font.size.lg, color:ds.color.neutral[900] }}>{total>0?fmtMoney(total,c.currency):"Valor TBD"}</span>
               {c.contractDeadline && <span style={{ color:dlColor(dl) }}>prazo {fmtDate(c.contractDeadline)} · {dl}d</span>}
             </div>
           </div>
-          <Btn onClick={()=>setModal({type:"contract",data:c})} variant="default" size="sm">✎ Editar</Btn>
-          <Btn onClick={()=>openCopilot?.({contractId:c.id,actionId:"generate-client-report"})} variant="default" size="sm">📊 Relatório Cliente</Btn>
-          <Btn onClick={()=>openCopilot?.({contractId:c.id,actionId:"generate-contract-report"})} variant="primary" size="sm" icon={Zap}>
-            ✨ Copiloto
-          </Btn>
+          <DsButton variant="secondary" size="sm" onClick={()=>setModal({type:"contract",data:c})}
+            leftIcon={<DsIcon name="edit" size={13} color={ds.color.neutral[600]}/>}>
+            Editar
+          </DsButton>
+          <DsButton variant="secondary" size="sm"
+            onClick={()=>openCopilot?.({contractId:c.id,actionId:"generate-client-report"})}
+            leftIcon={<DsIcon name="download" size={13} color={ds.color.neutral[600]}/>}>
+            Relatório
+          </DsButton>
+          <DsButton variant="primary" size="sm"
+            onClick={()=>openCopilot?.({contractId:c.id,actionId:"generate-contract-report"})}
+            leftIcon={<DsIcon name="sparkles" size={13} color={ds.color.neutral[0]}/>}>
+            Copiloto
+          </DsButton>
         </div>
       )}
 
       {/* Tabs — horizontal scroll on mobile */}
-      <div style={{ display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:20, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
+      <div style={{ display:"flex", gap:0, borderBottom:ds.border.thin, marginBottom:ds.space[5], overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
         {TABS.map(t => (
           <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 16px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
+            style={{ padding:`${ds.space[3]} ${ds.space[4]}`, fontSize:ds.font.size.sm,
+              fontWeight:tab===t.id?ds.font.weight.semibold:ds.font.weight.regular,
+              cursor:"pointer",
+              color:tab===t.id?ds.color.neutral[900]:ds.color.neutral[500],
+              borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`,
+              transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
             {t.label}
           </div>
         ))}
@@ -2372,7 +2390,11 @@ Responda APENAS com o JSON.` }]
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
               <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Notas do Briefing</div>
-              <Btn onClick={()=>openCopilot?.({contractId:c.id, actionId:"generate-briefing-structure"})} variant="primary" size="sm">✨ Copiloto</Btn>
+              <DsButton variant="primary" size="sm"
+                onClick={()=>openCopilot?.({contractId:c.id, actionId:"generate-briefing-structure"})}
+                leftIcon={<DsIcon name="sparkles" size={13} color={ds.color.neutral[0]}/>}>
+                Copiloto
+              </DsButton>
             </div>
             <textarea value={briefingNote} onChange={e=>setBriefingNote(e.target.value)} onBlur={()=>saveNote(briefingNote)}
               rows={12} placeholder="Cole aqui o briefing da marca, ou use ✨ Gerar com IA para criar automaticamente com os principais pontos, dos & don'ts e tom de voz…"
@@ -2553,31 +2575,34 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
   return (
     <div style={{ padding: isMobile ? "12px 12px 88px" : "24px" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: TX, marginBottom: 2 }}>Marcas</h2>
-          <div style={{ fontSize: 12, color: TX2 }}>{brands.filter(b=>!b.archived).length} marcas cadastradas</div>
+      <div style={{ display:"flex", alignItems:"center", gap:ds.space[3], marginBottom:ds.space[5], flexWrap:"wrap" }}>
+        <div style={{ flex:1 }}>
+          <h2 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], marginBottom:ds.space[1], letterSpacing:"-0.02em" }}>Marcas</h2>
+          <div style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>{brands.filter(b=>!b.archived).length} marcas cadastradas</div>
         </div>
-        <Btn onClick={() => setShowNewModal(true)} variant="primary" size="sm" icon={Plus}>Nova marca</Btn>
+        <DsButton variant="primary" size="sm" onClick={()=>setShowNewModal(true)}
+          leftIcon={<DsIcon name="plus" size={13} color={ds.color.neutral[0]}/>}>
+          Nova marca
+        </DsButton>
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {/* Search */}
-        <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
-          <Search size={13} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:TX3 }}/>
+      <div style={{ display:"flex", gap:ds.space[2], marginBottom:ds.space[4], flexWrap:"wrap" }}>
+        <div style={{ position:"relative", flex:1, minWidth:180 }}>
+          <DsIcon name="search" size={13} color={ds.color.neutral[400]}
+            style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar marca…"
-            style={{ width:"100%", padding:"7px 10px 7px 32px", background:B2, border:`1px solid ${LN}`, borderRadius:8, fontSize:12, color:TX, fontFamily:"inherit", outline:"none" }}/>
+            style={{ width:"100%", padding:`${ds.space[2]} ${ds.space[3]} ${ds.space[2]} 32px`,
+              background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md,
+              fontSize:ds.font.size.sm, color:ds.color.neutral[900], fontFamily:"inherit", outline:"none", boxSizing:"border-box" }}/>
         </div>
-        {/* Category filter */}
         <select value={catFilter} onChange={e=>setCatFilter(e.target.value)}
-          style={{ padding:"7px 12px", background:B2, border:`1px solid ${LN}`, borderRadius:8, fontSize:12, color:TX, fontFamily:"inherit", outline:"none" }}>
+          style={{ padding:`${ds.space[2]} ${ds.space[3]}`, background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, fontSize:ds.font.size.sm, color:ds.color.neutral[900], fontFamily:"inherit", outline:"none" }}>
           <option value="all">Todas as categorias</option>
           {Object.entries(BRAND_CATEGORIES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
         </select>
-        {/* Sort */}
         <select value={sort} onChange={e=>setSort(e.target.value)}
-          style={{ padding:"7px 12px", background:B2, border:`1px solid ${LN}`, borderRadius:8, fontSize:12, color:TX, fontFamily:"inherit", outline:"none" }}>
+          style={{ padding:`${ds.space[2]} ${ds.space[3]}`, background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, fontSize:ds.font.size.sm, color:ds.color.neutral[900], fontFamily:"inherit", outline:"none" }}>
           <option value="ltv">Ordenar: LTV</option>
           <option value="alpha">Ordenar: A-Z</option>
           <option value="recent">Ordenar: Recente</option>
@@ -2586,10 +2611,10 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
 
       {/* Grid */}
       {filtered.length === 0 ? (
-        <div style={{ textAlign:"center", padding:"60px 0", color:TX3 }}>
-          <Building2 size={40} strokeWidth={1} style={{ marginBottom:12 }}/>
-          <div style={{ fontSize:14, fontWeight:600, color:TX }}>Nenhuma marca encontrada</div>
-          <div style={{ fontSize:12, color:TX2, marginTop:4 }}>Crie uma nova marca ou ajuste os filtros.</div>
+        <div style={{ textAlign:"center", padding:`${ds.space[16]} 0`, color:ds.color.neutral[400] }}>
+          <DsIcon name="building" size={40} color={ds.color.neutral[300]}/>
+          <div style={{ fontSize:ds.font.size.md, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], marginTop:ds.space[3], marginBottom:ds.space[1] }}>Nenhuma marca encontrada</div>
+          <div style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>Crie uma nova marca ou ajuste os filtros.</div>
         </div>
       ) : (
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
@@ -2721,7 +2746,10 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
             {brand.contact?.email && <div style={{ fontSize:11, color:TX2, marginBottom:3 }}>📧 {brand.contact.email}</div>}
             {brand.contact?.phone && <div style={{ fontSize:11, color:TX2 }}>📞 {brand.contact.phone}</div>}
           </div>
-          <Btn onClick={() => { setEditForm({ ...brand }); setEditing(true); }} variant="default" size="sm">✎ Editar</Btn>
+          <DsButton variant="secondary" size="sm" onClick={() => { setEditForm({ ...brand }); setEditing(true); }}
+            leftIcon={<DsIcon name="edit" size={13} color={ds.color.neutral[600]}/>}>
+            Editar
+          </DsButton>
         </div>
 
         {/* 4 KPIs */}
@@ -3007,9 +3035,9 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
         })}
         {displayContracts.length===0&&(
           <EmptyState
-            icon={FileText}
+            iconName="fileText"
             title={showArchived?"Nenhum contrato arquivado":"Nenhum contrato ativo"}
-            sub={showArchived?"Arquive contratos concluídos clicando em 📦 na lista.":"Adicione o primeiro contrato pelo botão + Novo na barra superior."}
+            sub={showArchived?"Arquive contratos concluídos pelo menu de ações.":"Adicione o primeiro contrato pelo botão + Novo na barra superior."}
           />
         )}
       </div>
@@ -3081,20 +3109,36 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
               <div style={{ padding:"0 12px", color:TX2 }}>{cp}/{c.numPosts}</div>
               <div style={{ padding:"0 12px", color:TX2 }}>{cs}/{c.numStories}</div>
               <div style={{ padding:"0 12px", color:TX2 }}>{cl}/{c.numCommunityLinks}</div>
-              <div style={{ padding:"0 8px", display:"flex", gap:4 }} onClick={e=>e.stopPropagation()}>
-                {!c.archived && canEdit && <Btn onClick={()=>setModal({type:"contract",data:c})} variant="ghost" size="sm">✎</Btn>}
-                {!c.archived && canEdit && <Btn onClick={()=>{if(window.confirm(`Arquivar "${c.company}"?`))archive(c.id);}} variant="ghost" size="sm" style={{color:TX2}} title="Arquivar contrato">📦</Btn>}
-                {c.archived && <Btn onClick={()=>unarchive(c.id)} variant="ghost" size="sm" style={{color:GRN}} title="Desarquivar">↩</Btn>}
-                {canEdit && <Btn onClick={()=>del(c.id)} variant="ghost" size="sm" style={{color:RED}}>×</Btn>}
+              <div style={{ padding:`0 ${ds.space[2]}`, display:"flex", gap:2 }} onClick={e=>e.stopPropagation()}>
+                {!c.archived && canEdit && (
+                  <DsIconButton size="sm" variant="ghost" ariaLabel="Editar contrato"
+                    icon={<DsIcon name="edit" size={13} color={ds.color.neutral[500]}/>}
+                    onClick={()=>setModal({type:"contract",data:c})}/>
+                )}
+                {!c.archived && canEdit && (
+                  <DsIconButton size="sm" variant="ghost" ariaLabel="Arquivar contrato"
+                    icon={<DsIcon name="save" size={13} color={ds.color.neutral[500]}/>}
+                    onClick={()=>{if(window.confirm(`Arquivar "${c.company}"?`))archive(c.id);}}/>
+                )}
+                {c.archived && (
+                  <DsIconButton size="sm" variant="ghost" ariaLabel="Desarquivar"
+                    icon={<DsIcon name="refresh" size={13} color={ds.color.success[500]}/>}
+                    onClick={()=>unarchive(c.id)}/>
+                )}
+                {canEdit && (
+                  <DsIconButton size="sm" variant="ghost" ariaLabel="Excluir contrato"
+                    icon={<DsIcon name="x" size={13} color={ds.color.danger[500]}/>}
+                    onClick={()=>del(c.id)}/>
+                )}
               </div>
             </div>
           );
         })}
         {displayContracts.length===0&&(
           <EmptyState
-            icon={FileText}
+            iconName="fileText"
             title={showArchived?"Nenhum contrato arquivado":"Nenhum contrato ativo"}
-            sub={showArchived?"Arquive contratos concluídos clicando em 📦 na tabela.":"Adicione o primeiro contrato pelo botão + Contrato acima."}
+            sub={showArchived?"Arquive contratos concluídos pela tabela.":"Adicione o primeiro contrato pelo botão + Contrato acima."}
           />
         )}
       </div>
@@ -3848,21 +3892,22 @@ function PipelineSkeleton() {
 }
 
 // ─── Empty State ──────────────────────────────────────────
-function EmptyState({ icon:Icon, title, sub, action, actionLabel }) {
+function EmptyState({ icon, iconName, title, sub, action, actionLabel }) {
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"64px 24px", gap:16, textAlign:"center" }}>
-      <div style={{ width:64, height:64, borderRadius:16, background:B2, border:`1.5px solid ${LN}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-        <Icon size={28} color={TX3} strokeWidth={1.5}/>
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      padding:`${ds.space[16]} ${ds.space[6]}`, gap:ds.space[4], textAlign:"center" }}>
+      <div style={{ width:56, height:56, borderRadius:ds.radius.lg, background:ds.color.neutral[100],
+        border:ds.border.thin, display:"flex", alignItems:"center", justifyContent:"center" }}>
+        {iconName
+          ? <DsIcon name={iconName} size={24} color={ds.color.neutral[400]}/>
+          : icon ? (() => { const I = icon; return <I size={24} color={ds.color.neutral[400]} strokeWidth={1.5}/>; })() : null}
       </div>
       <div>
-        <div style={{ fontSize:14, fontWeight:700, color:TX, marginBottom:6 }}>{title}</div>
-        <div style={{ fontSize:12, color:TX2, maxWidth:340, lineHeight:1.6 }}>{sub}</div>
+        <div style={{ fontSize:ds.font.size.md, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], marginBottom:ds.space[2] }}>{title}</div>
+        <div style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500], maxWidth:340, lineHeight:ds.font.lineHeight.relaxed }}>{sub}</div>
       </div>
       {action && (
-        <button onClick={action}
-          style={{ marginTop:4, padding:"8px 20px", background:RED, border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>
-          {actionLabel||"Adicionar"}
-        </button>
+        <DsButton variant="primary" size="sm" onClick={action}>{actionLabel||"Adicionar"}</DsButton>
       )}
     </div>
   );
@@ -3989,7 +4034,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
   return (
     <Modal title={`Relatório de Performance · ${c.company}`} onClose={onClose} width={780}
       footer={<>
-        <Btn onClick={()=>window.print()} variant="default" size="sm">🖨️ Imprimir / PDF</Btn>
+        <Btn onClick={()=>window.print()} variant="default" size="sm">Imprimir / PDF</Btn>
         <div style={{flex:1}}/>
         <Btn onClick={onClose} variant="ghost" size="sm">Fechar</Btn>
       </>}>

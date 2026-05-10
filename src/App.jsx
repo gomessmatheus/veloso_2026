@@ -5211,28 +5211,135 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
 }
 
 // ─── Caixa (Controle Financeiro Administrativo) ───────────
+/**
+ * CaixaPasswordGate — prova de conceito do design system Ranked.
+ *
+ * Antes: emoji 🔐 como ícone funcional, 👁/🙈 para toggle, hex soltos.
+ * Depois: Icon primitivo, Input com error state, Button variants,
+ *         Card elevation, tokens do theme.
+ *
+ * Imports locais (não afetam o restante do app ainda):
+ */
+import { theme as ds } from './lib/theme.js';
+import { Button as DsButton } from './ui/Button.jsx';
+import { Input as DsInput } from './ui/Input.jsx';
+import { Card as DsCard } from './ui/Card.jsx';
+import { Icon as DsIcon } from './ui/Icon.jsx';
+
 function CaixaPasswordGate({ onUnlock }) {
   const [pw, setPw] = useState("");
   const [err, setErr] = useState(false);
   const [show, setShow] = useState(false);
+
   const check = () => {
-    if (pw === CAIXA_PASSWORD) { onUnlock(); }
-    else { setErr(true); setPw(""); setTimeout(()=>setErr(false),2000); }
+    if (pw === CAIXA_PASSWORD) {
+      onUnlock();
+    } else {
+      setErr(true);
+      setPw("");
+      setTimeout(() => setErr(false), 2200);
+    }
   };
+
   return (
-    <div style={{ display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh" }}>
-      <div style={{ ...G,padding:"40px 48px",maxWidth:380,width:"100%",textAlign:"center" }}>
-        <div style={{ fontSize:32,marginBottom:16 }}>🔐</div>
-        <div style={{ fontSize:16,fontWeight:700,color:TX,marginBottom:6 }}>Controle Financeiro</div>
-        <div style={{ fontSize:12,color:TX2,marginBottom:24 }}>Acesso restrito · Administradores Ranked</div>
-        <div style={{ display:"flex",gap:8,marginBottom:16 }}>
-          <input type={show?"text":"password"} value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&check()} placeholder="Senha" autoFocus
-            style={{ flex:1,padding:"10px 14px",fontSize:13,background:err?`${RED}08`:B2,border:`1px solid ${err?RED:LN}`,borderRadius:8,color:TX,fontFamily:"inherit",outline:"none",transition:TRANS }}/>
-          <button onClick={()=>setShow(s=>!s)} style={{ padding:"10px 12px",background:B2,border:`1px solid ${LN}`,borderRadius:8,cursor:"pointer",fontSize:13,color:TX2 }}>{show?"👁":"🙈"}</button>
+    <div style={{
+      display:         'flex',
+      alignItems:      'center',
+      justifyContent:  'center',
+      minHeight:       '60vh',
+      padding:         ds.space[6],
+    }}>
+      <DsCard
+        padding="lg"
+        elevation="sm"
+        bordered={false}
+        style={{ width: '100%', maxWidth: 380, textAlign: 'center' }}
+      >
+        {/* Lock icon — sem emoji */}
+        <div style={{
+          display:        'inline-flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          width:          44,
+          height:         44,
+          borderRadius:   ds.radius.full,
+          background:     ds.color.neutral[100],
+          marginBottom:   ds.space[4],
+        }}>
+          <DsIcon
+            name="lock"
+            size={20}
+            color={ds.color.neutral[700]}
+            ariaLabel="Acesso restrito"
+          />
         </div>
-        {err&&<div style={{ fontSize:11,color:RED,marginBottom:12 }}>Senha incorreta</div>}
-        <button onClick={check} style={{ width:"100%",padding:"11px",background:RED,border:"none",borderRadius:8,color:"white",fontSize:13,fontWeight:700,cursor:"pointer" }}>Acessar</button>
-      </div>
+
+        {/* Heading */}
+        <div style={{
+          fontSize:   ds.font.size['2xl'],
+          fontWeight: ds.font.weight.semibold,
+          color:      ds.color.neutral[900],
+          marginBottom: ds.space[1],
+          letterSpacing: '-0.02em',
+        }}>
+          Controle Financeiro
+        </div>
+        <div style={{
+          fontSize:  ds.font.size.sm,
+          color:     ds.color.neutral[500],
+          marginBottom: ds.space[6],
+          lineHeight: ds.font.lineHeight.normal,
+        }}>
+          Acesso restrito · Administradores Ranked
+        </div>
+
+        {/* Password input + toggle */}
+        <div style={{ marginBottom: ds.space[3] }}>
+          <DsInput
+            label="Senha"
+            type={show ? 'text' : 'password'}
+            value={pw}
+            onChange={e => { setPw(e.target.value); if (err) setErr(false); }}
+            onKeyDown={e => e.key === 'Enter' && check()}
+            placeholder="••••••••"
+            autoFocus
+            error={err ? 'Senha incorreta — tente novamente' : undefined}
+            ariaLabel="Senha de acesso ao Caixa"
+            rightIcon={
+              <button
+                type="button"
+                onClick={() => setShow(s => !s)}
+                aria-label={show ? 'Ocultar senha' : 'Mostrar senha'}
+                style={{
+                  background:  'none',
+                  border:      'none',
+                  cursor:      'pointer',
+                  display:     'flex',
+                  alignItems:  'center',
+                  color:       ds.color.neutral[400],
+                  padding:     0,
+                  transition:  `color ${ds.motion.fast}`,
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = ds.color.neutral[700]}
+                onMouseLeave={e => e.currentTarget.style.color = ds.color.neutral[400]}
+              >
+                <DsIcon name={show ? 'eyeOff' : 'eye'} size={16}/>
+              </button>
+            }
+          />
+        </div>
+
+        {/* Submit */}
+        <DsButton
+          variant="primary"
+          size="lg"
+          fullWidth
+          onClick={check}
+          disabled={!pw.trim()}
+        >
+          Acessar
+        </DsButton>
+      </DsCard>
     </div>
   );
 }

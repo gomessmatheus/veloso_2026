@@ -7039,7 +7039,8 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
 }
 
 // ─── App Root ─────────────────────────────────────────────
-export default function App() {
+// AppContent está DENTRO do FxProvider — pode chamar useFx() com segurança.
+function AppContent() {
   const isMobile = useIsMobile();
   const [user, setUser]     = useState(undefined);
   const [role, setRole]     = useState("admin");
@@ -7303,7 +7304,6 @@ export default function App() {
 
   // App
   return (
-    <FxProvider>
     <ToastProvider>
       <div style={{ display:"flex", minHeight:"100vh", background:ds.color.neutral[50], fontFamily:ds.font.sans, fontSize:ds.font.size.base, color:ds.color.neutral[900] }}>
         {/* Globals CSS is imported via src/styles/globals.css → main.jsx */}
@@ -7359,7 +7359,15 @@ export default function App() {
         />
       </div>
     </ToastProvider>
-    </FxProvider>
   );
 }
 
+// App = FxProvider + AppContent.
+// FxProvider DEVE ser pai de AppContent para que useFx() funcione.
+export default function App() {
+  return (
+    <FxProvider>
+      <AppContent/>
+    </FxProvider>
+  );
+}

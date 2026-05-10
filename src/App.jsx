@@ -1227,7 +1227,7 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
   // (Handled by ViewRenderer — this component only renders when data is ready)
 
   return (
-    <div style={{ padding: isMobile ? "12px 12px 88px" : "20px 24px", maxWidth: 1320, margin: "0 auto" }}>
+    <div style={{ padding: isMobile ? `${ds.space[3]} ${ds.space[3]} 88px` : `${ds.space[5]} ${ds.space[6]}`, maxWidth: 1320, margin: "0 auto" }}>
 
       {/* BLOCO 1 — Cabeçalho da semana */}
       <WeekHeader
@@ -1248,8 +1248,8 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
       <div style={{
         display:             "grid",
         gridTemplateColumns: isMobile ? "1fr" : "60% 1fr",
-        gap:                 16,
-        marginBottom:        16,
+        gap:                 ds.space[4],
+        marginBottom:        ds.space[4],
         alignItems:          "start",
       }}>
         <TodayFocusList

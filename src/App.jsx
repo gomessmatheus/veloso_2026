@@ -17,6 +17,11 @@ import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, C
 // ─── Design System Ranked ─────────────────────────────────
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard } from './ui/index.js';
 
+// ─── FX — cotações cambiais ───────────────────────────────
+import { FxProvider, useFx }                       from './lib/FxContext.jsx';
+import { formatRate, formatRelativeTime, convert, saveManualRates, clearManualRates } from './lib/fx.js';
+import { CurrencyRateBadge }                       from './ui/CurrencyRateBadge.jsx';
+
 // ─── Dashboard libs & sub-components ──────────────────────
 import { startOfWeek as sowLib, endOfWeek as eowLib, weekDays, isInCurrentWeek, daysBetween, toDateStr } from "./lib/dates.js";
 import { topPriorityItems } from "./lib/priority.js";
@@ -163,18 +168,18 @@ function contractCalcWarnings(contracts) {
 }
 
 // Etapa 4: toBRL keeps old behavior (for sum reductions)
+// toBRL — suporta { EUR, USD } (ISO) e { eur, usd } (legado)
 function toBRL(value, currency, rates) {
-  if (currency==="BRL"||!currency) return value;
-  if (currency==="EUR") return rates.eur>0?value*rates.eur:value;
-  if (currency==="USD") return rates.usd>0?value*rates.usd:value;
-  return value;
+  if (!value) return 0;
+  if (currency === "BRL" || !currency) return value;
+  const r = rates?.[currency] || rates?.[currency.toLowerCase()] || 0;
+  return r > 0 ? value * r : value;
 }
-// Etapa 4: strict version — returns null when rate missing, use for display
 function toBRLStrict(value, currency, rates) {
-  if (currency==="BRL"||!currency) return value;
-  if (currency==="EUR") return rates.eur>0?value*rates.eur:null;
-  if (currency==="USD") return rates.usd>0?value*rates.usd:null;
-  return value;
+  if (!value) return 0;
+  if (currency === "BRL" || !currency) return value;
+  const r = rates?.[currency] || rates?.[currency.toLowerCase()] || 0;
+  return r > 0 ? value * r : null;
 }
 
 function calcEngagement(p) {
@@ -1038,7 +1043,7 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
   );
 }
 
-function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract, onNewPost, onNewTask, syncStatus, isMobile, role, userName }) {
+function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobile, role, userName }) {
   const title = NAV_ITEMS.find(i=>i.id===view)?.label || view;
 
   // Mobile header
@@ -1074,25 +1079,8 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
       </div>
       <div style={{ flex:1 }}/>
 
-      {/* EUR rate */}
-      <div style={{ display:'flex', alignItems:'center', gap:ds.space[1], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, padding:`3px ${ds.space[2]}` }}>
-        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[400], letterSpacing:'0.04em' }}>€1=</span>
-        <input type="number" step="0.05" value={eurRate||""} placeholder="—"
-          onChange={e=>setEurRate(Number(e.target.value)||0)}
-          onBlur={e=>setSetting("eurRate",Number(e.target.value)||0).catch(()=>{})}
-          style={{ width:48, background:'none', border:'none', color:ds.color.neutral[900], fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, fontFamily:'inherit', outline:'none', textAlign:'right', fontVariantNumeric:'tabular-nums' }}/>
-        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[400] }}>R$</span>
-      </div>
-
-      {/* USD rate */}
-      <div style={{ display:'flex', alignItems:'center', gap:ds.space[1], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, padding:`3px ${ds.space[2]}` }}>
-        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[400], letterSpacing:'0.04em' }}>$1=</span>
-        <input type="number" step="0.05" value={usdRate||""} placeholder="—"
-          onChange={e=>setUsdRate(Number(e.target.value)||0)}
-          onBlur={e=>setSetting("usdRate",Number(e.target.value)||0).catch(()=>{})}
-          style={{ width:48, background:'none', border:'none', color:ds.color.neutral[900], fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, fontFamily:'inherit', outline:'none', textAlign:'right', fontVariantNumeric:'tabular-nums' }}/>
-        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[400] }}>R$</span>
-      </div>
+      {/* Live FX rates — replaces manual input fields */}
+      <CurrencyRateBadge size="sm" showRefresh/>
 
       {/* Sync status pill */}
       <div style={{ display:'flex', alignItems:'center', gap:ds.space[1], padding:`3px ${ds.space[3]}`, background:`${statusColor}12`, border:`1px solid ${statusColor}30`, borderRadius:ds.radius.full }}>
@@ -2003,6 +1991,48 @@ function CostsSection({ contract: c, saveC, contracts }) {
 }
 
 
+/** Card de cotação FX para contratos em moeda estrangeira */
+function FxContractCard({ contract: c, rates }) {
+  const { fetchedAt, stale, source, refresh, loading } = useFx();
+  const rate = rates?.[c.currency] || rates?.[c.currency?.toLowerCase()] || 0;
+  const brlValue = rate > 0 ? toBRL(contractTotal(c), c.currency, rates) : null;
+
+  if (!rate) return null;
+
+  const variation = c.lockedRate && rate
+    ? ((rate - c.lockedRate) / c.lockedRate * 100).toFixed(1)
+    : null;
+
+  return (
+    <div style={{ ...G2, padding:`${ds.space[3]} ${ds.space[4]}`, display:"flex", alignItems:"center", gap:ds.space[4], flexWrap:"wrap" }}>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[700], marginBottom:2, fontVariantNumeric:"tabular-nums" }}>
+          <span style={{ fontWeight:ds.font.weight.semibold }}>{fmtMoney(contractTotal(c), c.currency)}</span>
+          {brlValue && <span style={{ color:ds.color.neutral[500] }}> ≈ {fmtMoney(brlValue)}</span>}
+        </div>
+        <div style={{ fontSize:9, color:ds.color.neutral[400] }}>
+          Cotação atual: {formatRate(rate)}
+          {stale && <span style={{ color:ds.color.warning[500] }}> · desatualizada</span>}
+          {!stale && <span> · {formatRelativeTime(fetchedAt)}</span>}
+        </div>
+        {c.lockedRate && (
+          <div style={{ fontSize:9, color:ds.color.neutral[400], marginTop:1 }}>
+            Cotação na assinatura: {formatRate(c.lockedRate)}
+            {variation && (
+              <span style={{ color: Number(variation) >= 0 ? ds.color.success[500] : ds.color.danger[500], fontWeight:ds.font.weight.semibold, marginLeft:4 }}>
+                {Number(variation) >= 0 ? '+' : ''}{variation}%
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      <DsIconButton size="sm" variant="ghost" ariaLabel="Atualizar cotação" onClick={refresh}
+        icon={<DsIcon name="refresh" size={13} color={ds.color.neutral[400]}
+          style={{ animation: loading ? 'ranked-spin 0.8s linear infinite' : 'none' }}/>}/>
+    </div>
+  );
+}
+
 function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, saveP, saveDeliverables, toggleComm, toggleCommPaid, toggleNF, rates, onBack, setModal, brands=[], navigateTo, setSelectedBrand, openCopilot }) {
   const [tab, setTab]         = useState("overview");
   const [aiReport, setAiReport] = useState(null);
@@ -2164,6 +2194,8 @@ Responda APENAS com o JSON.` }]
               <span style={{ fontWeight:ds.font.weight.semibold, fontSize:ds.font.size.lg, color:ds.color.neutral[900] }}>{total>0?fmtMoney(total,c.currency):"Valor TBD"}</span>
               {c.contractDeadline && <span style={{ color:dlColor(dl) }}>prazo {fmtDate(c.contractDeadline)} · {dl}d</span>}
             </div>
+            {/* FX card — só aparece para contratos em moeda estrangeira */}
+            {c.currency !== 'BRL' && <FxContractCard contract={c} rates={rates}/>}
           </div>
           <DsButton variant="secondary" size="sm" onClick={()=>setModal({type:"contract",data:c})}
             leftIcon={<DsIcon name="edit" size={13} color={ds.color.neutral[600]}/>}>
@@ -3093,7 +3125,18 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
                 {c.hasTravel&&<Badge color={BLU}>✈️</Badge>}
                 {c.archived&&<Badge color={TX3}>Arquivado</Badge>}
               </div>
-              <div style={{ padding:"0 12px", fontWeight:700, color:TX }}>{seeValues&&total>0?fmtMoney(total,c.currency):"—"}</div>
+              <div style={{ padding:"0 12px" }}>
+                {seeValues && total>0 ? (
+                  <div>
+                    <div style={{ fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], fontVariantNumeric:"tabular-nums" }}>{fmtMoney(total,c.currency)}</div>
+                    {c.currency!=="BRL" && rates?.[c.currency]>0 && (
+                      <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[500], marginTop:1, fontVariantNumeric:"tabular-nums" }}>
+                        ≈ {fmtMoney(toBRL(total,c.currency,rates))} · @ {formatRate(rates[c.currency])}
+                      </div>
+                    )}
+                  </div>
+                ) : "—"}
+              </div>
               <div style={{ padding:"0 12px", color:dlColor(dl), fontWeight:dl!=null&&dl<=14?700:400 }}>{fmtDate(c.contractDeadline)}</div>
               <div style={{ padding:"0 12px", fontSize:11, color:TX2 }}>
                 {c.paymentType==="monthly"&&`${seeValues?fmtMoney(c.monthlyValue):"—"}/mês`}
@@ -3621,6 +3664,11 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
           <Field label="Início"><Input type="date" value={f.contractStart} onChange={e=>set("contractStart",e.target.value)}/></Field>
           <Field label="Término"><Input type="date" value={f.contractDeadline} onChange={e=>set("contractDeadline",e.target.value)}/></Field>
           <Field label="Total"><input readOnly value={liveTotal>0&&months?`${months}m = ${fmtMoney(liveTotal,f.currency)}`:"—"} style={{width:"100%",padding:"8px 12px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:GRN,fontSize:12,fontFamily:"inherit",outline:"none",fontWeight:700}}/></Field>
+          {f.currency!=="BRL"&&(
+            <Field label={`Cotação na assinatura (${f.currency}/BRL)`}>
+              <Input type="number" step="0.01" value={f.lockedRate||""} onChange={e=>set("lockedRate",Number(e.target.value)||null)} placeholder="Ex: 5.80"/>
+            </Field>
+          )}
           <div style={{gridColumn:"1/-1",display:"flex",alignItems:"center",gap:8}}><CommToggle on={f.hasCommission} onToggle={()=>set("hasCommission",!f.hasCommission)} label/></div>
           <div style={{gridColumn:"1/-1"}}><WarnBanner field="dates"/></div>
         </div>
@@ -3946,6 +3994,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
     if (view==="caixa")          return <Caixa contracts={activeContracts} openCopilot={openCopilot}/>;
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
+    if (view==="cotacoes")       return <CotacoesView/>;
     return null;
   } catch(e) {
     setErr(e?.message || String(e));
@@ -4426,9 +4475,14 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
     <div style={{ padding: isMobile ? "0 0 88px" : "24px 28px", maxWidth:1100 }}>
       {/* Header */}
       {!isMobile && (
-        <div style={{ marginBottom:24 }}>
-          <h1 style={{ fontSize:22, fontWeight:700, color:TX, letterSpacing:"-.02em", marginBottom:4 }}>Financeiro</h1>
-          <p style={{ fontSize:13, color:TX2 }}>Gestão de NFs, comissões Ranked e pagamentos</p>
+        <div style={{ marginBottom:ds.space[5] }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:ds.space[4] }}>
+            <div>
+              <h1 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-.02em", marginBottom:ds.space[1] }}>Financeiro</h1>
+              <p style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>Gestão de NFs, comissões Ranked e pagamentos</p>
+            </div>
+            <CurrencyRateBadge size="sm" showRefresh/>
+          </div>
         </div>
       )}
       {isMobile && (
@@ -6206,6 +6260,128 @@ function MarkdownText({ content }) {
   return <div>{elems}</div>;
 }
 
+// ─── Cotações — configurações de FX ───────────────────────
+function CotacoesView() {
+  const { rates, loading, error, stale, fetchedAt, source, isManual, refresh } = useFx();
+  const [manualUSD, setManualUSD] = useState("");
+  const [manualEUR, setManualEUR] = useState("");
+  const [saved, setSaved]         = useState(false);
+
+  const handleSaveManual = () => {
+    if (!manualUSD && !manualEUR) return;
+    saveManualRates(
+      Number(manualUSD) || rates?.USD || 0,
+      Number(manualEUR) || rates?.EUR || 0,
+    );
+    setSaved(true);
+    refresh();
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleClearManual = () => {
+    clearManualRates();
+    setManualUSD(""); setManualEUR("");
+    refresh();
+  };
+
+  return (
+    <div style={{ padding:`${ds.space[6]} ${ds.space[8]}`, maxWidth:680 }}>
+      <div style={{ marginBottom:ds.space[6] }}>
+        <h1 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-.02em", marginBottom:ds.space[1] }}>Cotações cambiais</h1>
+        <p style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>
+          Taxas de câmbio usadas em contratos USD/EUR. Atualização automática a cada 15 min.
+        </p>
+      </div>
+
+      {/* Status atual */}
+      <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}`, marginBottom:ds.space[4] }}>
+        <div style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:"0.12em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[4] }}>
+          Cotação atual
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:ds.space[4], marginBottom:ds.space[4] }}>
+          <CurrencyRateBadge size="md" showRefresh/>
+          {isManual && (
+            <span style={{ fontSize:ds.font.size.xs, padding:`2px ${ds.space[2]}`, borderRadius:ds.radius.full, background:ds.color.info[50], border:`1px solid ${ds.color.info[500]}30`, color:ds.color.info[500] }}>
+              Override manual ativo
+            </span>
+          )}
+          {stale && (
+            <span style={{ fontSize:ds.font.size.xs, color:ds.color.warning[500] }}>
+              ⚠ Desatualizada
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[500] }}>
+          {source && <>Fonte: <strong>{source}</strong> · </>}
+          {fetchedAt && <>Última atualização: {new Date(fetchedAt).toLocaleString("pt-BR")}</>}
+        </div>
+        {error && (
+          <div style={{ fontSize:ds.font.size.xs, color:ds.color.danger[500], marginTop:ds.space[2] }}>
+            Erro: {error}
+          </div>
+        )}
+      </div>
+
+      {/* KPIs das cotações */}
+      {rates && (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:ds.space[3], marginBottom:ds.space[4] }}>
+          {[
+            { label:"USD · Dólar americano", value:rates.USD, symbol:"US$" },
+            { label:"EUR · Euro",            value:rates.EUR, symbol:"€"   },
+          ].map(item => (
+            <div key={item.label} style={{ ...G, padding:`${ds.space[4]} ${ds.space[5]}` }}>
+              <div style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:"0.1em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[2] }}>{item.label}</div>
+              <div style={{ fontSize:ds.font.size['3xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], fontVariantNumeric:"tabular-nums", letterSpacing:"-0.02em" }}>
+                {formatRate(item.value)}
+              </div>
+              <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:ds.space[1] }}>
+                {item.symbol} 1 = R$ {item.value?.toFixed(4).replace(".", ",")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Override manual */}
+      <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}` }}>
+        <div style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:"0.12em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[3] }}>
+          Override manual
+        </div>
+        {isManual && (
+          <div style={{ fontSize:ds.font.size.xs, color:ds.color.warning[700], background:ds.color.warning[50], border:`1px solid ${ds.color.warning[500]}30`, borderRadius:ds.radius.md, padding:`${ds.space[2]} ${ds.space[3]}`, marginBottom:ds.space[3] }}>
+            ⚠ Override manual ativo — auto-fetch desativado até ser removido.
+          </div>
+        )}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:ds.space[3], marginBottom:ds.space[3] }}>
+          <div>
+            <label style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.medium, color:ds.color.neutral[500], letterSpacing:"0.06em", textTransform:"uppercase", display:"block", marginBottom:ds.space[1] }}>USD → BRL</label>
+            <input type="number" step="0.01" value={manualUSD} onChange={e=>setManualUSD(e.target.value)}
+              placeholder={rates?.USD?.toFixed(2) || "Ex: 5.92"}
+              style={{ width:"100%", padding:`0 ${ds.space[3]}`, height:40, fontSize:ds.font.size.base, fontFamily:"inherit", color:ds.color.neutral[900], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, outline:"none", boxSizing:"border-box", fontVariantNumeric:"tabular-nums" }}/>
+          </div>
+          <div>
+            <label style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.medium, color:ds.color.neutral[500], letterSpacing:"0.06em", textTransform:"uppercase", display:"block", marginBottom:ds.space[1] }}>EUR → BRL</label>
+            <input type="number" step="0.01" value={manualEUR} onChange={e=>setManualEUR(e.target.value)}
+              placeholder={rates?.EUR?.toFixed(2) || "Ex: 6.40"}
+              style={{ width:"100%", padding:`0 ${ds.space[3]}`, height:40, fontSize:ds.font.size.base, fontFamily:"inherit", color:ds.color.neutral[900], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, outline:"none", boxSizing:"border-box", fontVariantNumeric:"tabular-nums" }}/>
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:ds.space[2] }}>
+          <DsButton variant="primary" size="sm" onClick={handleSaveManual} disabled={!manualUSD && !manualEUR}>
+            {saved ? "✓ Salvo" : "Salvar override"}
+          </DsButton>
+          {isManual && (
+            <DsButton variant="ghost" size="sm" onClick={handleClearManual}
+              style={{ color:ds.color.danger[500] }}>
+              Remover override
+            </DsButton>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CopilotButton({ onClick, hasAlert, isMobile }) {
   const [hov, setHov] = useState(false);
   return (
@@ -6877,8 +7053,7 @@ export default function App() {
   const [copilotOpen, setCopilotOpen]     = useState(false);
   const [copilotContext, setCopilotContext] = useState({});  // { actionId?, contractId?, brandId? }
   const [modal, setModal]   = useState(null);
-  const [eurRate, setEurRate] = useState(0);
-  const [usdRate, setUsdRate] = useState(0);
+  // FX rates now from useFx() / FxProvider — eurRate/usdRate removed
   const [syncStatus, setSyncStatus] = useState("loading");
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [calMonth, setCal]  = useState(() => { const n=new Date(); return {y:n.getFullYear(),m:n.getMonth()}; });
@@ -6900,7 +7075,7 @@ export default function App() {
     setSyncStatus("loading");
     (async()=>{
       try {
-        const [cs,ps,ds,eur,usd,bs]=await Promise.all([loadContracts(),loadPosts(),loadDeliverables(),getSetting("eurRate"),getSetting("usdRate"),loadBrands()]);
+        const [cs,ps,ds,bs]=await Promise.all([loadContracts(),loadPosts(),loadDeliverables(),loadBrands()]);
         // Load role
         const userRole = USER_ROLES[user.email] || await getUserRole(user.email);
         setRole(userRole);
@@ -6908,8 +7083,6 @@ export default function App() {
         const ic=cs.length>0?cs:SEED; const ip=ps.length>0?ps:SEED_POSTS; const id=ds||[]; const ib=bs||[];
         setC(ic); setP(ip); setD(id); setBrands(ib);
         prevCIds.current=ic.map(c=>c.id); prevPIds.current=ip.map(p=>p.id); prevDIds.current=id.map(d=>d.id);
-        if(eur) setEurRate(Number(eur)||0);
-        if(usd) setUsdRate(Number(usd)||0);
         if(cs.length===0) await syncContracts(ic,[]);
         if(ps.length===0&&SEED_POSTS.length>0) await syncPosts(ip,[]);
         setSyncStatus("ok");
@@ -6927,8 +7100,6 @@ export default function App() {
           onPosts:     ps  => { setP(ps);  prevPIds.current = ps.map(p => p.id); },
           onDeliverables: ds => { setD(ds); prevDIds.current = ds.map(d => d.id); },
           onSetting: (key, val) => {
-            if (key === "eurRate") setEurRate(Number(val) || 0);
-            if (key === "usdRate") setUsdRate(Number(val) || 0);
           },
           onError: (source, _err) => {
             setSyncStatus("error");
@@ -7009,7 +7180,7 @@ export default function App() {
     });
     await saveD(updated);
   }, [deliverables, saveD]);
-  const rates=useMemo(()=>({eur:eurRate,usd:usdRate}),[eurRate,usdRate]);
+  const { ratesCompat: rates, fetchedAt: fxFetchedAt } = useFx();
   const saveNote=(id,notes)=>saveC(contracts.map(c=>c.id===id?{...c,notes}:c));
   const toggleComm=id=>saveC(contracts.map(c=>c.id===id?{...c,hasCommission:!c.hasCommission}:c));
   const toggleCommPaid=(cid,key)=>saveC(contracts.map(c=>{if(c.id!==cid)return c;const cp={...(c.commPaid||{})};cp[key]=!cp[key];return{...c,commPaid:cp};}));
@@ -7132,12 +7303,13 @@ export default function App() {
 
   // App
   return (
+    <FxProvider>
     <ToastProvider>
       <div style={{ display:"flex", minHeight:"100vh", background:ds.color.neutral[50], fontFamily:ds.font.sans, fontSize:ds.font.size.base, color:ds.color.neutral[900] }}>
         {/* Globals CSS is imported via src/styles/globals.css → main.jsx */}
         {!isMobile && <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts} role={role} userName={userName} deliverables={deliverables}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-          <TopBar view={view} eurRate={eurRate} usdRate={usdRate} setEurRate={setEurRate} setUsdRate={setUsdRate}
+          <TopBar view={view}
             onNewContract={()=>setModal({type:"contract",data:null})}
             onNewPost={()=>setModal({type:"post",data:null})}
             onNewTask={()=>setTriggerNewTask(true)}
@@ -7187,6 +7359,7 @@ export default function App() {
         />
       </div>
     </ToastProvider>
+    </FxProvider>
   );
 }
 

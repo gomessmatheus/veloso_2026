@@ -23,5 +23,7 @@ export { Modal }                   from './Modal.jsx';
 export { Toggle }                  from './Toggle.jsx';
 export { Skeleton, DashboardSkeleton, TableSkeleton, PipelineSkeleton } from './Skeleton.jsx';
 
+export { CurrencyRateBadge }           from './CurrencyRateBadge.jsx';
+
 // ── Tokens (re-export para conveniência) ──────────────────
 export { theme, t, css }           from '../lib/theme.js';

@@ -13,6 +13,15 @@ import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSa
 import { ptBR } from "date-fns/locale";
 import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote, Landmark } from "lucide-react";
 
+// ─── Dashboard libs & sub-components ──────────────────────
+import { startOfWeek as sowLib, endOfWeek as eowLib, weekDays, isInCurrentWeek, daysBetween, toDateStr } from "./lib/dates.js";
+import { topPriorityItems } from "./lib/priority.js";
+import { detectRiskSignals } from "./lib/riskSignals.js";
+import { WeekHeader }     from "./views/dashboard/WeekHeader.jsx";
+import { TodayFocusList } from "./views/dashboard/TodayFocusList.jsx";
+import { RiskSignals }    from "./views/dashboard/RiskSignals.jsx";
+import { WeekTimeline }   from "./views/dashboard/WeekTimeline.jsx";
+
 // ─── Design tokens ────────────────────────────────────────
 const B0  = "#FEFEFE";           // background (oklch 0.9940 0 0)
 const B1  = "#FEFEFE";           // card
@@ -1015,929 +1024,172 @@ function TopBar({ view, eurRate, usdRate, setEurRate, setUsdRate, onNewContract,
 
 
 // ─── Dashboard ────────────────────────────────────────────
-function AlertCard({ type, title, sub, value, action, onAction, color }) {
-  const [hov, setHov] = useState(false);
-  const colors = {
-    danger:  { bg: "#FFF1F2", border: "#FCA5A5", accent: RED,  icon: "🔴" },
-    warning: { bg: "#FFFBEB", border: "#FCD34D", accent: AMB,  icon: "🟡" },
-    info:    { bg: "#EFF6FF", border: "#BFDBFE", accent: BLU,  icon: "🔵" },
-    success: { bg: "#F0FDF4", border: "#86EFAC", accent: GRN,  icon: "🟢" },
+/**
+ * Dashboard — Centro de Comando Operacional Semanal
+ *
+ * ZERO informação financeira. Responde: "O que precisa
+ * acontecer essa semana para nada atrasar?"
+ *
+ * 4 blocos:
+ *   1. WeekHeader    — semana, chips, progresso
+ *   2. TodayFocusList — foco de hoje (top 7 por urgência)
+ *   3. RiskSignals   — semáforo de riscos
+ *   4. WeekTimeline  — visualização da semana
+ *
+ * Navegação cross-view:
+ *   Chips e sinais chamam navigateTo("acompanhamento") e
+ *   gravam window.__dashboardFilter para que Acompanhamento
+ *   possa ler e aplicar o filtro inicial.
+ *   TODO: substituir window.__dashboardFilter por estado React
+ *         passado via prop (requer ajuste em ViewRenderer).
+ */
+function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo, role = "admin", userName = "Matheus" }) {
+  const isMobile       = useIsMobile();
+  const today          = useMemo(() => new Date(), []);
+  const allDeliverables = dashDeliverables || [];
+
+  // ── Week bounds ──────────────────────────────────────────
+  const wStart = useMemo(() => sowLib(today), [today]);
+  const wEnd   = useMemo(() => eowLib(today), [today]);
+  const wDays  = useMemo(() => weekDays(today), [today]);
+
+  // ── Chip counts ──────────────────────────────────────────
+  const weekDeliverables = useMemo(
+    () => allDeliverables.filter(d => isInCurrentWeek(d.plannedPostDate, today)),
+    [allDeliverables, today],
+  );
+
+  const weekDone   = useMemo(() => weekDeliverables.filter(d => d.stage === "done").length, [weekDeliverables]);
+  const weekTotal  = weekDeliverables.length;
+
+  // Chip a: deliver this week (not done)
+  const deliverThisWeek = useMemo(
+    () => weekDeliverables.filter(d => d.stage !== "done").length,
+    [weekDeliverables],
+  );
+
+  // Chip b: in production (roteiro → edicao)
+  const IN_PROD_STAGES = new Set(["roteiro", "ap_roteiro", "gravacao", "edicao"]);
+  const inProd = useMemo(
+    () => allDeliverables.filter(d => IN_PROD_STAGES.has(d.stage)).length,
+    [allDeliverables],
+  );
+
+  // Chip c: awaiting approval
+  const awaitingApproval = useMemo(
+    () => allDeliverables.filter(d => d.stage === "ap_roteiro" || d.stage === "ap_final").length,
+    [allDeliverables],
+  );
+
+  // ── Risk signals ─────────────────────────────────────────
+  const signals = useMemo(
+    () => detectRiskSignals({ deliverables: allDeliverables, contracts }, today),
+    [allDeliverables, contracts, today],
+  );
+
+  // Chip d: at-risk count = HIGH signals count
+  const atRisk = useMemo(() => signals.filter(s => s.severity === "HIGH").length, [signals]);
+
+  // ── Focus list ───────────────────────────────────────────
+  const focusList = useMemo(
+    () => topPriorityItems(allDeliverables, 7, today),
+    [allDeliverables, today],
+  );
+
+  // ── Navigation helpers ───────────────────────────────────
+  const navigateWithFilter = (targetView, filter) => {
+    // TODO: refactor to use React state/context instead of window global.
+    //       For now, Acompanhamento can read window.__dashboardFilter on mount.
+    if (filter) window.__dashboardFilter = filter;
+    navigateTo(targetView);
   };
-  const c = colors[type] || colors.info;
+
+  const handleChipClick = (chipId) => {
+    const filtersByChip = {
+      entregar:  { type: "week_pending" },
+      producao:  { type: "stages", stages: ["roteiro","ap_roteiro","gravacao","edicao"] },
+      aprovacao: { type: "stages", stages: ["ap_roteiro","ap_final"] },
+      risco:     { type: "ids", ids: signals.filter(s=>s.severity==="HIGH").flatMap(s=>s.ids) },
+    };
+    navigateWithFilter("acompanhamento", filtersByChip[chipId]);
+  };
+
+  const handleSignalClick = (signal) => {
+    if (signal.action.type === "filter") {
+      navigateWithFilter("acompanhamento", signal.action.filter);
+    } else {
+      navigateTo(signal.action.view);
+    }
+  };
+
+  const handleOpenItem = (d) => {
+    // Navigate to acompanhamento and pre-select the item
+    navigateWithFilter("acompanhamento", { type: "ids", ids: [d.id] });
+  };
+
+  const handleActionClick = (d) => {
+    // TODO: wire to actual stage-advance action or show inline modal.
+    //       For now, open the deliverable detail via pipeline.
+    handleOpenItem(d);
+  };
+
+  // ── Skeleton on first load ───────────────────────────────
+  // (Handled by ViewRenderer — this component only renders when data is ready)
+
   return (
-    <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        background: c.bg, border: `1px solid ${hov ? c.accent : c.border}`,
-        borderRadius: 10, padding: "14px 16px", transition: "all 0.18s ease",
-        boxShadow: hov ? `0 4px 14px ${c.accent}20` : "0 1px 3px rgba(0,0,0,0.05)",
-        transform: hov ? "translateY(-1px)" : "none",
+    <div style={{ padding: isMobile ? "12px" : "20px 24px", maxWidth: 1320, margin: "0 auto" }}>
+
+      {/* BLOCO 1 — Cabeçalho da semana */}
+      <WeekHeader
+        today={today}
+        weekStart={wStart}
+        weekEnd={wEnd}
+        weekDone={weekDone}
+        weekTotal={weekTotal}
+        deliverThisWeek={deliverThisWeek}
+        inProd={inProd}
+        awaitingApproval={awaitingApproval}
+        atRisk={atRisk}
+        isMobile={isMobile}
+        onChipClick={handleChipClick}
+      />
+
+      {/* BLOCOS 2 + 3 — Foco de hoje e Sinais (side by side) */}
+      <div style={{
+        display:             "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "60% 1fr",
+        gap:                 16,
+        marginBottom:        16,
+        alignItems:          "start",
       }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: c.accent, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
-            <span>{c.icon}</span>{title}
-          </div>
-          <div style={{ fontSize: 12, color: TX, lineHeight: 1.45 }}>{sub}</div>
-        </div>
-        {value && <div style={{ fontSize: 18, fontWeight: 700, color: c.accent, flexShrink: 0, lineHeight: 1 }}>{value}</div>}
-      </div>
-      {action && (
-        <button onClick={onAction}
-          style={{ marginTop: 10, fontSize: 10, fontWeight: 700, letterSpacing: ".04em", color: c.accent, background: "none", border: `1px solid ${c.accent}40`, borderRadius: 5, padding: "4px 10px", cursor: "pointer", transition: "all 0.15s ease" }}
-          onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>
-          {action} →
-        </button>
-      )}
-    </div>
-  );
-}
-
-function StatTile({ label, value, sub, trend }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ ...(hov ? GHV : G), padding: "18px 20px", transition: TRANS }}>
-      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: TX2, marginBottom: 10 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-.02em", color: TX, lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: TX2, marginTop: 5 }}>{sub}</div>}
-      {trend && <div style={{ fontSize: 10, fontWeight: 600, marginTop: 4, color: trend > 0 ? GRN : RED }}>{trend > 0 ? "↑" : "↓"} {Math.abs(trend)}%</div>}
-    </div>
-  );
-}
-
-function DashKpi({ label, value, sub, accent, icon, small=false }) {
-  const isMobile = useIsMobile();
-  const [hov, setHov] = useState(false);
-  return (
-    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{ ...(hov?GHV:G), padding:small?"12px 14px":isMobile?"14px 16px":"18px 20px", transition:TRANS, borderRadius:12 }}>
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:small?6:10 }}>
-        <div style={{ fontSize:small?8:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX3, lineHeight:1.3, flex:1 }}>{label}</div>
-        {icon && <span style={{ fontSize:14, opacity:.6, flexShrink:0 }}>{icon}</span>}
-      </div>
-      <div style={{ fontSize:small?16:isMobile?22:26, fontWeight:800, color:accent||TX, lineHeight:1, letterSpacing:"-.02em" }}>{value}</div>
-      {sub && <div style={{ fontSize:10, color:TX3, marginTop:6, lineHeight:1.4 }}>{sub}</div>}
-    </div>
-  );
-}
-
-// ─── Production Rules Card (visible to all, highlighted for agentes) ──
-function ProductionRulesCard({ deliverables=[], contracts=[] }) {
-  const [open, setOpen] = useState(false);
-  const slots = useMemo(() => calcAvailableSlots(deliverables, contracts, 6), [deliverables, contracts]);
-
-  const exceptions = useMemo(() => {
-    const exc = [];
-    deliverables.forEach(d => {
-      const warns = validateDeliverable(d);
-      if (warns.length) exc.push({ ...d, warnings: warns });
-    });
-    return exc;
-  }, [deliverables]);
-
-  const STATUS_COLOR = { ok:"#16A34A", tight:"#D97706", full:"#C8102E" };
-  const STATUS_LABEL = { ok:"Disponível", tight:"Apertado", full:"Cheio" };
-
-  return (
-    <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer" }} onClick={()=>setOpen(o=>!o)}>
-        <div>
-          <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:2 }}>⚙️ Regras de Produção & Slots disponíveis</div>
-          <div style={{ fontSize:11, color:TX2 }}>
-            Ciclo mínimo: <strong>9 dias</strong> · Roteiro: <strong>2 dias</strong> · Gravação: <strong>1 dia após ap. roteiro</strong> · Edição: <strong>2 dias</strong>
-            <span style={{ marginLeft:12, padding:"2px 8px", borderRadius:99, background:`${AMB}14`, color:AMB, fontWeight:700, fontSize:10 }}>
-              Publis: ideal 2/sem · máx 3/sem
-            </span>
-            {exceptions.length > 0 && <span style={{ marginLeft:10, color:RED, fontWeight:700 }}>⚠️ {exceptions.length} exceção{exceptions.length>1?"ões":""}</span>}
-          </div>
-        </div>
-        <span style={{ fontSize:12, color:TX2 }}>{open?"▲":"▼"}</span>
-      </div>
-
-      {open && (
-        <div style={{ marginTop:16 }}>
-          {/* Rules table */}
-          <div style={{ ...G2, padding:"12px 16px", marginBottom:14 }}>
-            <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>Fluxo de produção obrigatório</div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:8 }}>
-              {STAGES.filter(s=>s.id!=="done"&&s.id!=="postagem").map((s,i) => (
-                <div key={s.id} style={{ background:B2, borderRadius:8, padding:"10px 12px", borderTop:`3px solid ${s.minDays>=2?RED:AMB}` }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:TX, marginBottom:4 }}>{s.label}</div>
-                  <div style={{ fontSize:11, fontWeight:700, color:s.minDays>=2?RED:AMB }}>{s.minDays}d mín.</div>
-                  <div style={{ fontSize:9, color:TX2, marginTop:4, lineHeight:1.4 }}>{s.rule}</div>
-                  <div style={{ fontSize:9, color:TX3, marginTop:4 }}>→ {s.resp}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Slot calendar */}
-          <div style={{ marginBottom:14 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:10 }}>
-              <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2 }}>
-                Slots de publi · próximas 6 semanas
-              </div>
-              <div style={{ display:"flex", gap:10, fontSize:10 }}>
-                <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:GRN, display:"inline-block" }}/>● Ideal (≤2/sem)</span>
-                <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:AMB, display:"inline-block" }}/>▲ Máximo (3/sem)</span>
-                <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ width:10, height:10, borderRadius:2, background:LN, display:"inline-block" }}/>Vazio</span>
-              </div>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:8 }}>
-              {slots.map((s,i) => {
-                const sc = { ok:GRN, tight:AMB, full:RED }[s.status];
-                return (
-                  <div key={i} style={{ background:`${sc}06`, border:`1px solid ${sc}20`, borderRadius:8, padding:"10px 12px" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:TX }}>{s.label}</div>
-                      <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:99, background:`${sc}18`, color:sc }}>
-                        {{ok:"✓ OK", tight:"⚠ Atenção", full:"🔴 Cheio"}[s.status]}
-                      </span>
-                    </div>
-                    {/* 3 publi slots visual */}
-                    <div style={{ display:"flex", gap:3, marginBottom:6 }}>
-                      {[1,2,3].map(n => (
-                        <div key={n} style={{
-                          flex:1, height:22, borderRadius:4,
-                          background: s.publiCount >= n ? (n <= PRODUCTION_RULES.idealPubliPerWeek ? GRN : AMB) : LN,
-                          border: `1px solid ${s.publiCount >= n ? (n <= 2 ? GRN+"50" : AMB+"50") : LN2}`,
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          fontSize:9, fontWeight:700, color: s.publiCount >= n ? "#fff" : TX3,
-                          transition:"all .15s",
-                        }}>
-                          {n <= 2 ? "●" : "▲"}
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ fontSize:12, fontWeight:700, color:sc }}>
-                      {s.publiCount} publi{s.publiCount!==1?"s":""}
-                      {s.lucasRemaining > 0 && <span style={{ fontSize:10, fontWeight:400, color:TX2 }}> · +{s.lucasRemaining} livre{s.lucasRemaining!==1?"s":""}</span>}
-                    </div>
-                    {s.travelDays > 0 && <div style={{ fontSize:9, color:"#7C3AED", marginTop:3 }}>✈️ {s.travelDays}d viagem</div>}
-                    {s.deliverables?.length > 0 && (
-                      <div style={{ fontSize:8, color:TX3, marginTop:4, lineHeight:1.4 }}>
-                        {s.deliverables.slice(0,2).map((t,i)=><div key={i}>· {t.length>18?t.substr(0,18)+"…":t}</div>)}
-                        {s.deliverables.length>2&&<div>+{s.deliverables.length-2} mais</div>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {slots.some(s=>s.publiOverIdeal) && (
-              <div style={{ marginTop:10, padding:"8px 14px", background:`${AMB}08`, border:`1px solid ${AMB}25`, borderRadius:8, fontSize:11 }}>
-                ⚠️ <strong style={{color:AMB}}>Semanas com mais de 2 publis</strong> — ideal é máximo 2/semana para não comprometer o feed orgânico.
-                {slots.some(s=>s.publiOverMax) && <span style={{color:RED, fontWeight:700}}> Há semanas no limite máximo (3) — não vender mais nessas semanas.</span>}
-              </div>
-            )}
-          </div>
-
-          {/* Exceptions */}
-          {exceptions.length > 0 && (
-            <div style={{ background:"#FFF1F2", border:"1px solid #FCA5A5", borderRadius:8, padding:"12px 16px" }}>
-              <div style={{ fontSize:11, fontWeight:700, color:RED, marginBottom:10 }}>⚠️ Exceções detectadas — prazos abaixo do mínimo</div>
-              {exceptions.map((d,i) => (
-                <div key={i} style={{ marginBottom:i<exceptions.length-1?10:0, paddingBottom:i<exceptions.length-1?10:0, borderBottom:i<exceptions.length-1?`1px solid #FCA5A5`:"none" }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:TX, marginBottom:4 }}>{d.title}</div>
-                  {d.warnings.map((w,j) => (
-                    <div key={j} style={{ fontSize:11, color:RED, display:"flex", alignItems:"center", gap:6 }}>
-                      <span>↳ {w.label}:</span>
-                      <span><strong>{w.got}d disponíveis</strong> vs {w.need}d necessários</span>
-                      <span style={{ color:TX2 }}>— {w.rule}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-          {exceptions.length === 0 && (
-            <div style={{ fontSize:11, color:GRN, fontWeight:600 }}>✓ Nenhuma exceção. Todos os entregáveis respeitam as regras de produção.</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Dashboard({ contracts, posts, deliverables:dashDeliverables=[], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo, role="admin", userName="Matheus" }) {
-  const isMobile = useIsMobile();
-  const today    = new Date();
-  const todayStr = today.toISOString().substr(0, 10);
-  const in7Str   = new Date(today.getTime() + 7 * 864e5).toISOString().substr(0, 10);
-  const in30Str  = new Date(today.getTime() + 30 * 864e5).toISOString().substr(0, 10);
-  const [aiInsight, setAiInsight] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-
-  const allDeliverables = useMemo(() => dashDeliverables || [], [dashDeliverables]);
-  const lateDeliverables = useMemo(() => {
-    try { return allDeliverables.filter(d => {
-      if (!d || d.stage === "done") return false;
-      // If already published (has link or date), not late
-      if (d.publishedAt || d.postLink) return false;
-      // If stage is postagem and plannedPostDate hasn't passed yet by more than 1 day, grace period
-      const stageIdx = STAGE_IDS.indexOf(d.stage || "briefing");
-      if (stageIdx < 0 || !d.plannedPostDate) return false;
-      const currentStage = STAGES[stageIdx];
-      if (!currentStage) return false;
-      const dl = daysLeft(addDays(d.plannedPostDate, currentStage.days));
-      return dl !== null && dl < 0;
-    }); } catch { return []; }
-  }, [allDeliverables]);
-
-  const upcomingDeliverables = useMemo(() => {
-    try { return allDeliverables
-      .filter(d => d && d.stage !== "done" && d.plannedPostDate)
-      .sort((a,b) => new Date(a.plannedPostDate) - new Date(b.plannedPostDate))
-      .slice(0, 6);
-    } catch { return []; }
-  }, [allDeliverables]);
-
-  // Conflict detection
-  const postDateCounts = {};
-  allDeliverables.forEach(d => { if (d?.plannedPostDate) postDateCounts[d.plannedPostDate] = (postDateCounts[d.plannedPostDate]||0)+1; });
-  const conflicts = Object.entries(postDateCounts).filter(([,c]) => c > 1);
-
-  // Urgency signals
-  const [dismissedAlerts, setDismissedAlerts] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("dismissed_alerts")||"[]"); } catch { return []; }
-  });
-  const dismissAlert = (key) => {
-    const next = [...dismissedAlerts, key];
-    setDismissedAlerts(next);
-    localStorage.setItem("dismissed_alerts", JSON.stringify(next));
-  };
-
-  const urgency = [];
-  if (lateDeliverables.length > 0) urgency.push({
-    type:"danger", key:"pipe",
-    title:`${lateDeliverables.length} entregável${lateDeliverables.length>1?"s":""} atrasado${lateDeliverables.length>1?"s":""}`,
-    sub: lateDeliverables.slice(0,3).map(d=>d.title).join(", "),
-    action:"Ver produção", onAction:()=>navigateTo("acompanhamento"),
-  });
-  if (conflicts.length > 0) urgency.push({
-    type:"warning", key:"conflict",
-    title:`${conflicts.length} conflito${conflicts.length>1?"s":""} de postagem`,
-    sub: conflicts.map(([d])=>fmtDate(d)).join(", ") + " — 2+ publis no mesmo dia",
-    action:"Ajustar", onAction:()=>navigateTo("acompanhamento"),
-  });
-  const postsDue = posts.filter(p => !p.isPosted && p.plannedDate && p.plannedDate <= in7Str && p.plannedDate >= todayStr);
-  if (postsDue.length) urgency.push({
-    type:"warning", key:"posts",
-    title:`${postsDue.length} post${postsDue.length>1?"s":""} planejado${postsDue.length>1?"s":""} esta semana`,
-    sub: postsDue.map(p=>p.title).slice(0,3).join(", "),
-    action:"Ver posts", onAction:()=>navigateTo("posts"),
-  });
-  // Etapa 4: data-quality warnings (monthly contracts missing dates)
-  const calcWarnings = contractCalcWarnings(contracts);
-  if (calcWarnings.length > 0) urgency.push({
-    type:"warning", key:"calcwarn",
-    title:`${calcWarnings.length} contrato${calcWarnings.length>1?"s":""} com valor incalculável`,
-    sub: calcWarnings.slice(0,2).join(" · "),
-    action:"Ver contratos", onAction:()=>navigateTo("contratos"),
-  });
-  if (urgency.length === 0) urgency.push({ type:"success", key:"ok", title:"Tudo em dia", sub:"Nenhuma ação urgente. Bom trabalho!" });
-
-  // Upcoming payments
-  const upcomingPayments = [];
-  contracts.forEach(c => {
-    if (c.paymentType==="single" && c.paymentDeadline && c.paymentDeadline<=in30Str && c.paymentDeadline>=todayStr)
-      upcomingPayments.push({company:c.company,color:c.color,date:c.paymentDeadline,value:contractTotal(c),currency:c.currency});
-    if (c.paymentType==="split") getInstallments(c).forEach((inst,i) => {
-      if (inst.date && inst.date<=in30Str && inst.date>=todayStr) {
-        const O=["1ª","2ª","3ª","4ª","5ª","6ª"];
-        upcomingPayments.push({company:`${c.company} · ${O[i]||`${i+1}ª`}`,color:c.color,date:inst.date,value:inst.value,currency:c.currency});
-      }
-    });
-  });
-  upcomingPayments.sort((a,b) => new Date(a.date)-new Date(b.date));
-
-  // AI Analysis
-  const runAI = async () => {
-    setAiLoading(true); setAiInsight(null);
-    try {
-      const context = {
-        contracts: contracts.map(c => ({
-          company: c.company, value: contractTotal(c), currency: c.currency,
-          deadline: c.contractDeadline, numPosts: c.numPosts, numStories: c.numStories,
-        })),
-        deliverables: allDeliverables.map(d => ({
-          title: d.title, stage: d.stage, plannedPostDate: d.plannedPostDate,
-          isLate: lateDeliverables.some(l => l.id === d.id),
-        })),
-        posts: posts.map(p => ({ title: p.title, isPosted: p.isPosted, plannedDate: p.plannedDate })),
-        stats: { totalBRL: stats.totalBRL, commPendBRL: stats.commPendBRL, nfPending: stats.nfPending, avgEng: stats.avgEng },
-        lateCount: lateDeliverables.length,
-        conflictCount: conflicts.length,
-        today: todayStr,
-      };
-      const res = await fetch("/api/ai", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          max_tokens:1000,
-          messages:[{
-            role:"user",
-            content:`Você é o assistente operacional do influenciador Lucas Veloso (@veloso.lucas_) para a Copa 2026. A Ranked é a agência gestora.
-
-Analise esses dados e retorne um JSON com: 
-{ "risks": ["risco 1", "risco 2", "risco 3"], "priorities": ["prioridade 1", "prioridade 2", "prioridade 3"], "insight": "uma frase direta sobre o momento atual", "score": número de 0-100 indicando saúde geral do projeto }
-
-Dados: ${JSON.stringify(context)}
-
-Responda APENAS com o JSON, sem markdown.`
-          }]
-        })
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(()=>({}));
-        throw new Error(`API ${res.status}: ${JSON.stringify(errData).substr(0,200)}`);
-      }
-      const data = await res.json();
-      const raw = data.text || "{}";
-      const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
-      setAiInsight(parsed);
-    } catch(e) { setAiInsight({ error: String(e) }); }
-    setAiLoading(false);
-  };
-
-  const scoreColor = aiInsight?.score >= 70 ? GRN : aiInsight?.score >= 40 ? AMB : RED;
-
-  const hour = today.getHours();
-  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-  const roleSubtitle = {
-    admin:       "Visão geral · Copa 2026",
-    agente:      "Visão comercial · Copa 2026",
-    atendimento: "Produção e entregas · Copa 2026",
-    influencer:  "Seus próximos conteúdos · Copa 2026",
-  }[role] || "Copa 2026";
-
-  // Capacity analysis state
-  const [capAnalysis, setCapAnalysis] = useState(null);
-  const [capLoading, setCapLoading] = useState(false);
-
-  const analyzeCapacity = async () => {
-    setCapLoading(true); setCapAnalysis(null);
-    try {
-      // Build month-by-month data for next 6 months
-      const months = [];
-      for (let i = 0; i < 6; i++) {
-        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const monthKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-        const monthLabel = `${MONTHS_PT[d.getMonth()]} ${d.getFullYear()}`;
-        const daysInMonth = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
-        
-        // Count deliverables already scheduled this month
-        const scheduled = allDeliverables.filter(del => del.plannedPostDate?.startsWith(monthKey));
-        
-        // Count days blocked by travel
-        const travelDays = new Set();
-        contracts.forEach(c => {
-          if (!c.hasTravel || !c.travelDates?.length) return;
-          const sortedT = c.travelDates.filter(td=>td.date).sort((a,b)=>a.date.localeCompare(b.date));
-          if (sortedT.length < 2) { sortedT.forEach(td => { if(td.date.startsWith(monthKey)) travelDays.add(td.date); }); return; }
-          let cur = sortedT[0].date;
-          const end = sortedT[sortedT.length-1].date;
-          while(cur <= end) { if(cur.startsWith(monthKey)) travelDays.add(cur); cur = addDays(cur,1); }
-        });
-
-        // Dates with conflicts (2+ posts)
-        const dateCounts = {};
-        scheduled.forEach(d => { if(d.plannedPostDate) dateCounts[d.plannedPostDate] = (dateCounts[d.plannedPostDate]||0)+1; });
-        const conflictDates = Object.entries(dateCounts).filter(([,c])=>c>1).length;
-
-        // Available days = total - travel - weekends (Sundays)
-        let availableDays = 0;
-        for(let day=1; day<=daysInMonth; day++) {
-          const ds = `${monthKey}-${String(day).padStart(2,"0")}`;
-          const dow = new Date(ds+"T12:00:00").getDay();
-          if(dow !== 0 && !travelDays.has(ds)) availableDays++;
-        }
-
-        months.push({
-          month: monthLabel,
-          monthKey,
-          daysInMonth,
-          availableDays,
-          travelDays: travelDays.size,
-          scheduled: scheduled.length,
-          conflicts: conflictDates,
-          scheduledTitles: scheduled.map(d=>d.title).slice(0,5),
-        });
-      }
-
-      // Total pipeline load
-      const totalContracts = contracts.length;
-      const pendingDeliverables = allDeliverables.filter(d=>d.stage!=="done").length;
-      const unscheduled = allDeliverables.filter(d=>!d.plannedPostDate&&d.stage!=="done").length;
-
-      // Only 3 months, compact prompt, robust parsing
-      const months3 = months.slice(0, 3);
-      const prompt = "Analise capacidade producao influencer. Dados por mes: " +
-        months3.map(m => m.month+"[agendados="+m.scheduled+",diasUteis="+m.availableDays+",viagem="+m.travelDays+"]").join(" ") +
-        " Regras: max1post/dia, 9dias producao. Contratos:"+totalContracts+" Pendentes:"+unscheduled+
-        ". Retorne JSON: {overview:str,months:[{month:str,scheduled:int,safeCapacity:int,availableSlots:int,status:str,recommendation:str}],globalRisks:[str],suggestions:[str]}" +
-        " status=ok/attention/full/critical. Recomendacoes max 8 palavras. APENAS JSON puro sem markdown.";
-      const capRes = await fetch("/api/ai", {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ max_tokens: 700, messages:[{ role:"user", content: prompt }] })
-      });
-      if (!capRes.ok) throw new Error("API "+capRes.status);
-      const capData = await capRes.json();
-      const raw = (capData.text||"").trim().replace(/^[^{]*/,"").replace(/[^}]*$/,"");
-      if (!raw.startsWith("{")) throw new Error("JSON nao encontrado na resposta");
-      const parsed = JSON.parse(raw);
-      setCapAnalysis({ ...parsed, rawMonths: months });
-    } catch(e) { setCapAnalysis({ error: String(e) }); }
-    setCapLoading(false);
-  };
-
-  return (
-    <div style={{ padding:isMobile?"14px 12px":24, maxWidth:1400 }}>
-      {/* Header */}
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24 }}>
-        <div>
-          <h1 style={{ fontSize:isMobile?18:20, fontWeight:700, color:TX, letterSpacing:"-.02em" }}>{greeting}, {userName}! 👋</h1>
-          <p style={{ fontSize:12, color:TX2, marginTop:4 }}>{today.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · {roleSubtitle}</p>
-        </div>
-        <Btn onClick={runAI} variant="primary" size="sm" disabled={aiLoading} icon={aiLoading?null:Zap}>
-          {aiLoading ? "Analisando…" : "Análise IA"}
-        </Btn>
-      </div>
-
-      {/* AI Insight Panel */}
-      {aiInsight && !aiInsight.error && (
-        <div style={{ ...G, padding:"18px 20px", marginBottom:20, borderLeft:`3px solid ${scoreColor}` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:TX2, flex:1 }}>⚡ Análise IA · Copilot</div>
-            {aiInsight.score != null && (
-              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ fontSize:11, color:TX2 }}>Saúde do projeto</span>
-                <div style={{ background:B2, borderRadius:99, padding:"2px 12px", fontSize:13, fontWeight:700, color:scoreColor }}>
-                  {aiInsight.score}/100
-                </div>
-              </div>
-            )}
-          </div>
-          {aiInsight.insight && <p style={{ fontSize:13, color:TX, fontWeight:500, marginBottom:14, lineHeight:1.5 }}>"{aiInsight.insight}"</p>}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-            {aiInsight.risks?.length > 0 && (
-              <div>
-                <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:RED, marginBottom:8 }}>🔴 Riscos</div>
-                {aiInsight.risks.map((r,i) => (
-                  <div key={i} style={{ fontSize:12, color:TX, padding:"5px 0", borderBottom:`1px solid ${LN}`, display:"flex", gap:8 }}>
-                    <span style={{ color:RED, flexShrink:0 }}>{i+1}.</span>{r}
-                  </div>
-                ))}
-              </div>
-            )}
-            {aiInsight.priorities?.length > 0 && (
-              <div>
-                <div style={{ fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:AMB, marginBottom:8 }}>🟡 Prioridades</div>
-                {aiInsight.priorities.map((p,i) => (
-                  <div key={i} style={{ fontSize:12, color:TX, padding:"5px 0", borderBottom:`1px solid ${LN}`, display:"flex", gap:8 }}>
-                    <span style={{ color:AMB, flexShrink:0 }}>{i+1}.</span>{p}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {aiInsight?.error && (
-        <div style={{ ...G, padding:14, marginBottom:20, borderLeft:`3px solid ${RED}` }}>
-          <span style={{ fontSize:12, color:RED }}>Erro na análise: {aiInsight.error}</span>
-        </div>
-      )}
-
-      {/* KPIs — 4 cards, produção only */}
-      <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?10:12, marginBottom:20 }}>
-        <DashKpi label="Entregáveis ativos" value={allDeliverables.filter(d=>d.stage!=="done").length} sub={`${allDeliverables.filter(d=>d.stage==="done").length} concluídos`}/>
-        <MonthDeliverables deliverables={allDeliverables} contracts={contracts}/>
-        <DashKpi label="Atrasados" value={lateDeliverables.length} sub="no pipeline" accent={lateDeliverables.length>0?RED:GRN}/>
-        <DashKpi label="Engajamento" value={fmtEng(stats.avgEng)} sub="média das publis" accent={stats.avgEng!=null?(stats.avgEng>=3?GRN:stats.avgEng>=1?AMB:TX2):TX2}/>
-      </div>
-
-      {/* Production Rules & Slots */}
-      <ProductionRulesCard deliverables={allDeliverables} contracts={contracts}/>
-
-      {/* Capacidade de Absorção (AI) */}
-      <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div>
-            <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:2 }}>🧠 Capacidade de Absorção</div>
-            <div style={{ fontSize:11, color:TX2 }}>Quantos conteúdos cabem com segurança nos próximos 3 meses</div>
-          </div>
-          <Btn onClick={analyzeCapacity} variant="primary" size="sm" disabled={capLoading} icon={capLoading?null:Zap}>
-            {capLoading ? "Analisando…" : capAnalysis ? "Reanalisar" : "Analisar"}
-          </Btn>
-        </div>
-        {capAnalysis?.error && <div style={{ fontSize:11, color:RED, marginTop:10 }}>{capAnalysis.error}</div>}
-        {capAnalysis && !capAnalysis.error && (<>
-          {capAnalysis.overview && <p style={{ fontSize:12, color:TX2, lineHeight:1.6, marginTop:12, marginBottom:14, fontStyle:"italic", borderLeft:`3px solid ${BLU}`, paddingLeft:12 }}>{capAnalysis.overview}</p>}
-          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(3,1fr)", gap:10 }}>
-            {(capAnalysis.months||[]).map((m,i) => {
-              const SC = { ok:GRN, attention:AMB, full:RED, critical:RED };
-              const SL = { ok:"✓ Disponível", attention:"⚠ Atenção", full:"● Cheio", critical:"🔴 Crítico" };
-              const sc = SC[m.status]||TX2;
-              const rawM = capAnalysis.rawMonths?.find(r=>r.month===m.month);
-              return (
-                <div key={i} style={{ background:`${sc}08`, border:`1px solid ${sc}25`, borderRadius:10, padding:"12px 14px" }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:TX }}>{m.month}</div>
-                    <span style={{ fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:99, background:`${sc}15`, color:sc }}>{SL[m.status]||m.status}</span>
-                  </div>
-                  <div style={{ height:5, background:"rgba(0,0,0,.08)", borderRadius:3, overflow:"hidden", marginBottom:8 }}>
-                    <div style={{ height:5, borderRadius:3, background:sc, width:`${Math.min(100, m.safeCapacity>0?(m.scheduled/m.safeCapacity*100):100)}%` }}/>
-                  </div>
-                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:TX2, marginBottom:4 }}>
-                    <span>{m.scheduled} agendados</span>
-                    <span style={{ fontWeight:700, color:sc }}>{m.availableSlots>0?`+${m.availableSlots} slots livres`:"sem espaço"}</span>
-                  </div>
-                  {rawM?.travelDays>0&&<div style={{ fontSize:10,color:"#7C3AED" }}>✈️ {rawM.travelDays}d viagem</div>}
-                  <p style={{ fontSize:10, color:TX2, lineHeight:1.4, margin:"4px 0 0" }}>{m.recommendation}</p>
-                </div>
-              );
-            })}
-          </div>
-        </>)}
-      </div>
-
-      {/* Ações & Urgências */}
-      {urgency.filter(u => !dismissedAlerts.includes(u.key) && u.key !== "ok").length > 0 && (
-        <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:10, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:10 }}>Ações & Urgências</div>
-          <div style={{ display:"flex", gap:10, overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
-            {urgency.filter(u => !dismissedAlerts.includes(u.key)).map(u => {
-              const bg = u.type==="error"?`${RED}08`:u.type==="warning"?`${AMB}08`:u.type==="success"?`${GRN}08`:`${BLU}08`;
-              const bc = u.type==="error"?`${RED}25`:u.type==="warning"?`${AMB}25`:u.type==="success"?`${GRN}25`:`${BLU}25`;
-              const tc = u.type==="error"?RED:u.type==="warning"?AMB:u.type==="success"?GRN:BLU;
-              return (
-                <div key={u.key} style={{ background:bg, border:`1px solid ${bc}`, borderRadius:10, padding:"12px 14px", minWidth:220, flexShrink:0 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                    <span style={{ fontSize:13 }}>{u.type==="error"?"🔴":u.type==="warning"?"🟡":u.type==="success"?"✅":"🔵"}</span>
-                    <span style={{ fontSize:12, fontWeight:700, color:tc, flex:1 }}>{u.title}</span>
-                    <button onClick={()=>dismissAlert(u.key)} title="Dispensar"
-                      style={{ background:"none",border:"none",color:TX3,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1 }}>×</button>
-                  </div>
-                  {u.sub&&<p style={{ fontSize:11, color:TX2, marginBottom:4, lineHeight:1.4 }}>{u.sub}</p>}
-                  <div style={{ display:"flex", gap:6 }}>
-                    {u.action&&<button onClick={u.onAction} style={{ fontSize:11,fontWeight:700,color:tc,background:"none",border:`1px solid ${bc}`,borderRadius:5,padding:"4px 10px",cursor:"pointer" }}>{u.action} →</button>}
-                    <button onClick={()=>dismissAlert(u.key)}
-                      style={{ fontSize:11,color:TX3,background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"4px 10px",cursor:"pointer" }}>
-                      Dispensar
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Próximas Postagens */}
-      <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-          <div style={{ fontSize:10, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2 }}>Próximas Postagens</div>
-          <button onClick={()=>navigateTo("acompanhamento")} style={{ fontSize:11, color:TX2, background:"none", border:"none", cursor:"pointer" }}>Gerenciar →</button>
-        </div>
-        {upcomingDeliverables.length === 0 && <div style={{ fontSize:12, color:TX3, textAlign:"center", padding:"12px 0" }}>Nenhuma postagem no pipeline.</div>}
-        {upcomingDeliverables.slice(0,6).map((d,i) => {
-          const c = contracts.find(x=>x.id===d.contractId);
-          const stage = STAGES.find(s=>s.id===d.stage);
-          const dl = d.plannedPostDate ? daysLeft(d.plannedPostDate) : null;
-          const isLate = d.stage!=="done" && !d.publishedAt && !d.postLink && dl !== null && dl < 0;
-          const STAGE_COLOR = { briefing:"#94A3B8", roteiro:"#7C3AED", ap_roteiro:"#D97706", gravacao:"#BE185D", edicao:"#2563EB", ap_final:"#EA580C", postagem:"#0891B2", done:"#16A34A" };
-          const stageColor = STAGE_COLOR[d.stage] || TX2;
-          return (
-            <div key={d.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:i<upcomingDeliverables.slice(0,6).length-1?`1px solid ${LN}`:"none" }}>
-              <div style={{ width:8, height:8, borderRadius:"50%", background:c?.color||TX3, flexShrink:0 }}/>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:isLate?RED:TX, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", marginBottom:5 }}>{d.title}</div>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${stageColor}14`, color:stageColor }}>{stage?.label||d.stage}</span>
-                  {d.plannedPostDate && (
-                    <span style={{ fontSize:11, fontWeight:600, color:isLate?RED:TX2 }}>
-                      📅 {fmtDate(d.plannedPostDate)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {dl!==null && (
-                <div style={{ fontSize:12, fontWeight:700, color:dlColor(dl), flexShrink:0, minWidth:70, textAlign:"right" }}>
-                  {dl<0 ? `${Math.abs(dl)}d atraso` : dl===0 ? "Hoje" : `${dl}d`}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Pagamentos — 30 dias */}
-      <div style={{ ...G, padding:"16px 20px", marginBottom:20 }}>
-        <div style={{ fontSize:10, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:12 }}>Pagamentos · 30 dias</div>
-        {upcomingPayments.length === 0
-          ? <div style={{ fontSize:12, color:TX3, textAlign:"center", padding:"12px 0" }}>Nenhum nos próximos 30 dias.</div>
-          : upcomingPayments.map((p,i) => (
-            <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:i<upcomingPayments.length-1?`1px solid ${LN}`:"none" }}>
-              <div style={{ width:6, height:6, borderRadius:"50%", background:p.color||TX3, flexShrink:0 }}/>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:12, fontWeight:500, color:TX }}>{p.company}</div>
-                <div style={{ fontSize:10, color:TX2 }}>{p.label} · {fmtDate(p.date)}</div>
-              </div>
-              <div style={{ fontSize:13, fontWeight:700, color:TX }}>{fmtMoney(p.value,p.currency)}</div>
-              <div style={{ fontSize:11, fontWeight:700, color:dlColor(daysLeft(p.date)), flexShrink:0, minWidth:40, textAlign:"right" }}>{daysLeft(p.date)===0?"Hoje":`${daysLeft(p.date)}d`}</div>
-            </div>
-          ))
-        }
-      </div>
-    </div>
-  );
-}
-
-// ─── Tarefas ──────────────────────────────────────────────
-function TaskCard({ task, contracts, onEdit, onStatusChange, isDragOver }) {
-  const [hov, setHov] = useState(false);
-  const prio     = TASK_PRIORITIES.find(p => p.id === (task.priority||"none"));
-  const contract = contracts.find(c => c.id === task.contractId);
-  const dl       = daysLeft(task.dueDate);
-  return (
-    <div
-      draggable
-      onDragStart={e => { e.dataTransfer.setData("text/plain", task.id); e.currentTarget.style.opacity = "0.5"; }}
-      onDragEnd={e => { e.currentTarget.style.opacity = "1"; }}
-      onClick={() => onEdit(task)}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        background: B1, borderRadius: 8, padding: "11px 13px", cursor: "grab",
-        border: `1px solid ${hov ? LN2 : LN}`,
-        boxShadow: hov ? "0 4px 14px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)" : "0 1px 3px rgba(0,0,0,0.05)",
-        transform: hov ? "translateY(-2px)" : "translateY(0)",
-        transition: "all 0.18s cubic-bezier(0.4,0,0.2,1)",
-        userSelect: "none",
-      }}>
-      <div style={{ fontSize: 12, fontWeight: 500, color: TX, marginBottom: 8, lineHeight: 1.45 }}>{task.title}</div>
-      {task.description && (
-        <div style={{ fontSize: 11, color: TX2, marginBottom: 8, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{task.description}</div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-        {prio && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 99, background: `${prio.color}15`, color: prio.color }}>
-            <prio.icon size={9} />{prio.label}
-          </span>
-        )}
-        {contract && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, color: TX2, padding: "2px 7px", borderRadius: 99, background: B3 }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: contract.color, display: "inline-block" }} />
-            {contract.company.split("/")[0].trim()}
-          </span>
-        )}
-        {task.dueDate && (
-          <span style={{ fontSize: 9, fontWeight: 600, marginLeft: "auto", color: dlColor(dl) }}>{fmtDate(task.dueDate)}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function KanbanColumn({ status, tasks, contracts, onEdit, onAddNew, onDrop }) {
-  const [dragOver, setDragOver] = useState(false);
-  return (
-    <div
-      style={{
-        background: dragOver ? `${status.color}06` : B2,
-        border: `1.5px solid ${dragOver ? status.color : LN}`,
-        borderRadius: 12, overflow: "hidden",
-        transition: "all 0.18s ease",
-        minHeight: 200,
-      }}
-      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={e => { e.preventDefault(); setDragOver(false); onDrop(e.dataTransfer.getData("text/plain"), status.id); }}>
-      <div style={{ padding: "12px 14px", borderBottom: `1px solid ${LN}`, display: "flex", alignItems: "center", gap: 6, background: B1 }}>
-        <status.icon size={12} style={{ color: status.color }} />
-        <span style={{ fontSize: 11, fontWeight: 700, color: TX, flex: 1 }}>{status.label}</span>
-        <span style={{ fontSize: 9, fontWeight: 700, background: B3, color: TX2, padding: "2px 7px", borderRadius: 99 }}>{tasks.length}</span>
-      </div>
-      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-        {tasks.map(task => (
-          <TaskCard key={task.id} task={task} contracts={contracts} onEdit={onEdit} />
-        ))}
-        <div
-          onClick={onAddNew}
-          style={{ padding: "9px 12px", fontSize: 11, color: TX3, cursor: "pointer", borderRadius: 8, border: `1.5px dashed ${LN2}`, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, transition: "all 0.18s ease" }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = status.color; e.currentTarget.style.color = status.color; e.currentTarget.style.background = `${status.color}06`; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = LN2; e.currentTarget.style.color = TX3; e.currentTarget.style.background = "transparent"; }}>
-          <Plus size={11} /> Adicionar
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Tarefas({ contracts, externalNewTask, onExternalNewTaskHandled, navigateTo }) {
-  const [tasks, setTasks]               = useState(() => lsLoad("copa6_tasks", []));
-  const [boardView, setBoardView]       = useState("board");
-  const [filter, setFilter]             = useState("all");
-  const [priorityFilter, setPriority]   = useState("all");
-  const [editTask, setEditTask]         = useState(null);
-  const [newOpen, setNewOpen]           = useState(false);
-  const toast                           = useToast();
-
-  useEffect(() => {
-    if (externalNewTask) { setNewOpen(true); onExternalNewTaskHandled?.(); }
-  }, [externalNewTask]);
-
-  const save = list => { setTasks(list); lsSave("copa6_tasks", list); };
-  const drop = (taskId, newStatus) => save(tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
-
-  const filtered = tasks.filter(t => {
-    if (filter !== "all" && t.contractId !== filter) return false;
-    if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
-    return true;
-  });
-
-  const ACTIVE = TASK_STATUSES.filter(s => s.id !== "cancelled");
-  const pending = tasks.filter(t => t.status !== "done" && t.status !== "cancelled").length;
-  const done    = tasks.filter(t => t.status === "done").length;
-
-  return (
-    <div style={{ padding: 24, maxWidth: 1400 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: TX }}>Tarefas</h2>
-          <p style={{ fontSize: 11, color: TX2, marginTop: 2 }}>{pending} pendentes · {done} concluídas</p>
-        </div>
-        {/* View toggle */}
-        <div style={{ display: "flex", background: B2, border: `1px solid ${LN}`, borderRadius: 6, overflow: "hidden" }}>
-          {[["board","Kanban"],["list","Lista"]].map(([v,l]) => (
-            <div key={v} onClick={() => setBoardView(v)}
-              style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, cursor: "pointer", transition: TRANS,
-                color: boardView === v ? TX : TX2, background: boardView === v ? B3 : "transparent" }}>{l}</div>
-          ))}
-        </div>
-        {/* Filters */}
-        <select value={filter} onChange={e => setFilter(e.target.value)}
-          style={{ padding: "5px 10px", background: B1, border: `1px solid ${LN}`, borderRadius: 6, color: TX2, fontSize: 11, fontFamily: "inherit", outline: "none", cursor: "pointer" }}>
-          <option value="all">Todos contratos</option>
-          {contracts.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
-        </select>
-        <select value={priorityFilter} onChange={e => setPriority(e.target.value)}
-          style={{ padding: "5px 10px", background: B1, border: `1px solid ${LN}`, borderRadius: 6, color: TX2, fontSize: 11, fontFamily: "inherit", outline: "none", cursor: "pointer" }}>
-          <option value="all">Todas prioridades</option>
-          {TASK_PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
-        <Btn onClick={() => setNewOpen(true)} variant="primary" size="sm" icon={Plus}>Nova tarefa</Btn>
-      </div>
-
-      {/* Kanban board */}
-      {boardView === "board" && (
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${ACTIVE.length}, 1fr)`, gap: 10 }}>
-          {ACTIVE.map(status => (
-            <KanbanColumn
-              key={status.id}
-              status={status}
-              tasks={filtered.filter(t => (t.status || "todo") === status.id)}
-              contracts={contracts}
-              onEdit={setEditTask}
-              onAddNew={() => setNewOpen(true)}
-              onDrop={drop}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* List view */}
-      {boardView === "list" && (
-        <div style={{ border: `1px solid ${LN}`, borderRadius: 10, overflow: "hidden", background: B1, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 120px 120px 120px 100px", padding: "8px 16px", background: B2, borderBottom: `1px solid ${LN}`, fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: TX3 }}>
-            <div/><div>Título</div><div>Status</div><div>Prioridade</div><div>Contrato</div><div>Data</div>
-          </div>
-          {ACTIVE.map(status => {
-            const col = filtered.filter(t => (t.status || "todo") === status.id);
-            if (!col.length) return null;
-            return (
-              <div key={status.id}>
-                <div style={{ padding: "6px 16px", background: B2, borderBottom: `1px solid ${LN}`, display: "flex", alignItems: "center", gap: 6 }}>
-                  <status.icon size={11} style={{ color: status.color }} />
-                  <span style={{ fontSize: 10, fontWeight: 700, color: TX2 }}>{status.label}</span>
-                  <span style={{ fontSize: 9, color: TX3, marginLeft: 4 }}>{col.length}</span>
-                </div>
-                {col.map(task => {
-                  const prio     = TASK_PRIORITIES.find(p => p.id === (task.priority||"none"));
-                  const contract = contracts.find(c => c.id === task.contractId);
-                  return (
-                    <div key={task.id} onClick={() => setEditTask(task)}
-                      style={{ display: "grid", gridTemplateColumns: "24px 1fr 120px 120px 120px 100px", padding: "10px 16px", borderBottom: `1px solid ${LN}`, cursor: "pointer", fontSize: 12, transition: TRANS }}
-                      onMouseEnter={e => e.currentTarget.style.background = B2}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                      <div onClick={e => { e.stopPropagation(); drop(task.id, task.status === "done" ? "todo" : "done"); }} style={{ display: "flex", alignItems: "center" }}>
-                        {task.status === "done"
-                          ? <CheckCircle2 size={14} style={{ color: GRN }} />
-                          : <Circle size={14} style={{ color: TX3 }} />}
-                      </div>
-                      <div style={{ color: task.status === "done" ? TX3 : TX, textDecoration: task.status === "done" ? "line-through" : "none" }}>{task.title}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, color: status.color, fontSize: 10 }}><status.icon size={10} />{status.label}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, color: prio?.color||TX3, fontSize: 10 }}>{prio && <prio.icon size={10} />}{prio?.label || "—"}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: TX2 }}>
-                        {contract && <><span style={{ width: 5, height: 5, borderRadius: "50%", background: contract.color, display: "inline-block" }} />{contract.company.split("/")[0].trim()}</>}
-                      </div>
-                      <div style={{ fontSize: 10, color: task.dueDate ? dlColor(daysLeft(task.dueDate)) : TX3 }}>{fmtDate(task.dueDate)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-          {filtered.length === 0 && <div style={{ padding: 48, textAlign: "center", color: TX3 }}>Nenhuma tarefa.</div>}
-        </div>
-      )}
-
-      {/* Modals */}
-      {(newOpen || editTask) && (
-        <TaskModal
-          task={editTask}
+        <TodayFocusList
+          items={focusList}
           contracts={contracts}
-          navigateTo={navigateTo}
-          onClose={() => { setNewOpen(false); setEditTask(null); }}
-          onSave={t => {
-            if (editTask) {
-              save(tasks.map(x => x.id === t.id ? t : x));
-              toast?.("Tarefa atualizada", "success");
-            } else {
-              save([...tasks, { ...t, id: uid(), status: t.status || "todo", createdAt: new Date().toISOString() }]);
-              toast?.("✓ Tarefa criada", "success");
-            }
-            setNewOpen(false);
-            setEditTask(null);
-          }}
-          onDelete={editTask ? id => {
-            if (confirm("Excluir esta tarefa?")) { save(tasks.filter(t => t.id !== id)); setEditTask(null); }
-          } : null}
+          today={today}
+          isMobile={isMobile}
+          hasWeekItems={weekTotal > 0}
+          onOpenItem={handleOpenItem}
+          onNavigate={navigateTo}
+          onActionClick={handleActionClick}
         />
-      )}
-    </div>
-  );
-}
-
-function TaskModal({ task, contracts, onClose, onSave, onDelete, navigateTo }) {
-  const isEdit = !!task;
-  const [f, setF] = useState(task || { title: "", description: "", status: "todo", priority: "medium", contractId: "", dueDate: "" });
-  const set = (k, v) => setF(x => ({ ...x, [k]: v }));
-
-  const handleSave = () => {
-    if (!f.title?.trim()) { alert("Preencha o título."); return; }
-    onSave(f);
-  };
-
-  return (
-    <Modal
-      title={isEdit ? "Editar Tarefa" : "Nova Tarefa"}
-      onClose={onClose}
-      footer={<>
-        {onDelete && <Btn onClick={() => onDelete(task.id)} variant="danger" size="sm">Excluir</Btn>}
-        <div style={{ flex: 1 }} />
-        {isEdit && f.contractId && navigateTo && (
-          <Btn onClick={() => { navigateTo("contratos"); onClose(); }} variant="ghost" size="sm">Ver contrato ↗</Btn>
-        )}
-        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
-        <Btn onClick={handleSave} variant="primary" size="sm">{isEdit ? "Salvar" : "Criar tarefa"}</Btn>
-      </>}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Field label="Título">
-          <Input value={f.title} onChange={e => set("title", e.target.value)} placeholder="ex: Enviar roteiro Amazon até 04/mai" />
-        </Field>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Status">
-            <Select value={f.status || "todo"} onChange={e => set("status", e.target.value)}>
-              {TASK_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </Select>
-          </Field>
-          <Field label="Prioridade">
-            <Select value={f.priority || "medium"} onChange={e => set("priority", e.target.value)}>
-              {TASK_PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </Select>
-          </Field>
-          <Field label="Contrato / Marca">
-            <Select value={f.contractId || ""} onChange={e => set("contractId", e.target.value)}>
-              <option value="">— Nenhum —</option>
-              {contracts.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
-            </Select>
-          </Field>
-          <Field label="Data / Prazo">
-            <Input type="date" value={f.dueDate || ""} onChange={e => set("dueDate", e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Descrição / Detalhes">
-          <Textarea value={f.description || ""} onChange={e => set("description", e.target.value)} placeholder="Contexto, links, referências…" rows={4} />
-        </Field>
+        <RiskSignals
+          signals={signals}
+          isMobile={isMobile}
+          onSignalClick={handleSignalClick}
+        />
       </div>
-    </Modal>
+
+      {/* BLOCO 4 — Linha do tempo da semana */}
+      <WeekTimeline
+        today={today}
+        days={wDays}
+        deliverables={weekDeliverables}
+        contracts={contracts}
+        isMobile={isMobile}
+        onOpenItem={handleOpenItem}
+        onNavigate={navigateTo}
+      />
+    </div>
   );
 }
 

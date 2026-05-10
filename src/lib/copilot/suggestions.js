@@ -186,6 +186,18 @@ export function getSuggestions({ view, data = {}, today = new Date(), context = 
   }
 
   // ── Always available ─────────────────────────────────────
+  // Extract metrics from screenshot — show when there are deliverables
+  if ((data.deliverables?.length || 0) > 0) {
+    push({
+      id: "extract-metrics",
+      icon: "📸",
+      title: "Extrair métricas de um print",
+      description: "Instagram, TikTok ou YouTube — preenche automaticamente",
+      actionId: "extract-metrics",
+      priority: 9,
+    });
+  }
+
   const hasWA = suggestions.some(s => s.actionId === "whatsapp-daily");
   if (!hasWA) {
     push({

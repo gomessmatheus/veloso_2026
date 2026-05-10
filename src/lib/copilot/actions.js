@@ -498,6 +498,92 @@ Escreva em tom profissional e comercial, destacando resultados e ROI para a marc
     }
   },
 
+  // ── Extrair métricas de print (Vision LLM) ────────────
+  "extract-metrics": {
+    id: "extract-metrics",
+    label: "Extrair métricas de print",
+    icon: "📸",
+    /**
+     * @param {{ imageBase64: string, imageType: string }} params
+     * imageBase64 — dados da imagem sem o prefixo "data:..."
+     * imageType   — ex.: "image/jpeg" ou "image/png"
+     */
+    async run({ imageBase64, imageType = "image/jpeg" }) {
+      if (!imageBase64) throw new Error("Nenhuma imagem fornecida.");
+
+      const text = await callAPI({
+        max_tokens: 1200,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: imageType, data: imageBase64 },
+            },
+            {
+              type: "text",
+              text: `Você é um extrator de métricas de redes sociais para o criador @veloso.lucas_.
+
+Analise este print de analytics e extraia todas as métricas numéricas visíveis.
+
+Identifique a plataforma pelos elementos visuais:
+- Instagram: fundo preto, header "Insights do reel", ícones rosa/roxo nos gráficos, labels em português como "Curtidas", "Compartilhamentos", "Salvamentos"
+- TikTok: badge "TikTok Studio" no canto superior direito, fundo branco/claro, tabs "Inspiração / Visão geral / Espectadores / Engajam..."
+- YouTube: nav bar inferior com ícones Painel/Conteúdo/Analytics/Comunidade/Ganhos, tabs "Visão Geral / Alcance / Envolvimento / Público"
+
+Retorne APENAS JSON válido, sem markdown, sem texto fora do JSON:
+{
+  "platform": "Instagram" | "TikTok" | "YouTube",
+  "metrics": {
+    "views": número inteiro ou null,
+    "likes": número inteiro ou null,
+    "comments": número inteiro ou null,
+    "shares": número inteiro ou null,
+    "saves": número inteiro ou null,
+    "reach": número inteiro ou null,
+    "reposts": número inteiro ou null,
+    "avgWatchTimeSec": número em segundos ou null,
+    "retentionPct": número decimal ou null,
+    "newFollowers": número inteiro ou null,
+    "skipRatePct": número decimal ou null,
+    "totalWatchTimeHrs": número decimal ou null
+  },
+  "confidence": "high" | "medium" | "low",
+  "notes": "breve descrição do que foi extraído e o que não estava visível"
+}
+
+Regras de conversão obrigatórias:
+- "74 mil" ou "74K" → 74000
+- "3,8 mil" → 3800
+- "622.787" → 622787
+- "622,787" → 622787
+- "544,4 mil" → 544400
+- "1,6 mil" → 1600
+- "941K" → 941000
+- Tempo: "50 s" → 50, "1:33" → 93, "46.3 s" → 46
+- Percentuais: "39,9%" → 39.9, "54,3%" → 54.3
+- Horas: "10,1 mil" horas → 10100
+- Se o campo não aparecer no print: null`,
+            },
+          ],
+        }],
+      });
+
+      let parsed;
+      try {
+        parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      } catch {
+        throw new Error("Não foi possível extrair as métricas. Tente um print mais nítido da tela completa de insights.");
+      }
+
+      if (!parsed.platform || !parsed.metrics) {
+        throw new Error("Plataforma não reconhecida. Certifique-se de enviar o print da tela de insights (não do feed).");
+      }
+
+      return { type: "metrics_extraction", content: parsed, title: `Métricas ${parsed.platform}` };
+    },
+  },
+
 };
 
 /** Run an action by id. Returns { type, content, title } */

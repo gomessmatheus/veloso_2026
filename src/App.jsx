@@ -5,13 +5,14 @@ import {
   loadContracts, syncContracts, loadPosts, syncPosts,
   loadDeliverables, syncDeliverables,
   loadCaixaTx, syncCaixaTx,
+  loadBrands, syncBrands, deleteBrand,
   getSetting, setSetting, subscribeToChanges,
   updatePresence, removePresence, subscribeToPresence, getMyPresence,
   getUserRole, deleteItem,
 } from "./db.js";
 import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSameDay, isSameMonth, isToday, parse, startOfToday, startOfWeek, add } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote, Landmark } from "lucide-react";
+import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote, Landmark, Tag, Building2 } from "lucide-react";
 
 // ─── Dashboard libs & sub-components ──────────────────────
 import { startOfWeek as sowLib, endOfWeek as eowLib, weekDays, isInCurrentWeek, daysBetween, toDateStr } from "./lib/dates.js";
@@ -21,6 +22,10 @@ import { WeekHeader }     from "./views/dashboard/WeekHeader.jsx";
 import { TodayFocusList } from "./views/dashboard/TodayFocusList.jsx";
 import { RiskSignals }    from "./views/dashboard/RiskSignals.jsx";
 import { WeekTimeline }   from "./views/dashboard/WeekTimeline.jsx";
+
+// ─── Brand lib ─────────────────────────────────────────────
+import { BRAND_CATEGORIES, slugify, inferCategory, runBrandsMigration } from "./lib/brands.js";
+import { detectConflicts, buildConflictDateMap } from "./lib/conflicts.js";
 
 // ─── Design tokens ────────────────────────────────────────
 const B0  = "#FEFEFE";           // background (oklch 0.9940 0 0)
@@ -68,9 +73,9 @@ const ROLE_META = {
   influencer:  { label:"Influenciador",  color:"#059669", badge:"🎬" },
 };
 const ROLE_NAV = {
-  admin:       ["dashboard","acompanhamento","contratos","financeiro","caixa"],
-  agente:      ["dashboard","contratos","financeiro"],
-  atendimento: ["dashboard","acompanhamento","contratos"],
+  admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa"],
+  agente:      ["dashboard","contratos","marcas","financeiro"],
+  atendimento: ["dashboard","acompanhamento","contratos","marcas"],
   influencer:  ["dashboard","acompanhamento","financeiro"],
 };
 const ROLE_CAN = {
@@ -841,6 +846,7 @@ const NAV_ITEMS = [
   { id:"dashboard",      label:"Dashboard",       icon:LayoutDashboard },
   { id:"acompanhamento", label:"Produção",         icon:KanbanSquare },
   { id:"contratos",      label:"Contratos",        icon:FileText },
+  { id:"marcas",         label:"Marcas",           icon:Tag },
   { id:"financeiro",     label:"Financeiro",       icon:Banknote },
   { id:"caixa",          label:"Caixa",            icon:Landmark },
 ];
@@ -1335,7 +1341,7 @@ function PipelineColumn({ stage, items, contracts, onEdit, onDrop, onReorder }) 
   );
 }
 
-function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF, role }) {
+function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF, role, brands=[] }) {
   const isMobile = useIsMobile();
   const setDeliverables = saveDeliverables || (() => {});
   const [view, setView]   = useState("calendar");
@@ -1384,23 +1390,36 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
   return (
     <div style={{ padding: isMobile ? "12px 12px 80px" : 24, maxWidth:1600 }}>
-      {/* Conflict alerts */}
-      {conflicts.length > 0 && (
-        <div style={{ background: "#FFF1F2", border: "1px solid #FCA5A5", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 10 }}>
-          <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: RED, marginBottom: 3 }}>Conflito de postagem detectado</div>
-            {conflicts.map(([date, count]) => {
-              const items = deliverables.filter(d => d.plannedPostDate === date);
-              return (
-                <div key={date} style={{ fontSize: 11, color: TX2 }}>
-                  <strong style={{ color: TX }}>{fmtDate(date)}</strong> — {count} publicações: {items.map(i => i.title).join(", ")}
+      {/* Conflict summary — replaces the old "Conflito de postagem detectado" banner */}
+      {(() => {
+        const allConflicts = buildConflictDateMap(deliverables, brands, contracts);
+        const blockDates = Object.entries(allConflicts).filter(([,s])=>s==="BLOCK");
+        const warnDates  = Object.entries(allConflicts).filter(([,s])=>s==="WARN");
+        if (!blockDates.length && !warnDates.length) return null;
+        return (
+          <div style={{ background:`${AMB}08`, border:`1px solid ${AMB}30`, borderLeft:`3px solid ${AMB}`, borderRadius:8, padding:"10px 14px", marginBottom:16, display:"flex", alignItems:"flex-start", gap:10 }}>
+            <span style={{ fontSize:16, flexShrink:0 }}>📋</span>
+            <div>
+              <div style={{ fontSize:12, fontWeight:700, color:AMB, marginBottom:4 }}>
+                Conflitos de agenda abertos —&nbsp;
+                {blockDates.length>0&&<span style={{color:RED}}>{blockDates.length} bloqueante{blockDates.length>1?"s":""}</span>}
+                {blockDates.length>0&&warnDates.length>0&&" · "}
+                {warnDates.length>0&&<span style={{color:AMB}}>{warnDates.length} aviso{warnDates.length>1?"s":""}</span>}
+              </div>
+              {blockDates.slice(0,3).map(([date])=>(
+                <div key={date} style={{fontSize:11,color:TX2}}>
+                  <strong style={{color:RED}}>⛔ {fmtDate(date)}</strong> — {deliverables.filter(d=>d.plannedPostDate===date).map(d=>d.title).join(", ")}
                 </div>
-              );
-            })}
+              ))}
+              {warnDates.slice(0,3).map(([date])=>(
+                <div key={date} style={{fontSize:11,color:TX2}}>
+                  <strong style={{color:AMB}}>⚠️ {fmtDate(date)}</strong> — {deliverables.filter(d=>d.plannedPostDate===date).map(d=>d.title).join(", ")}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
@@ -1455,7 +1474,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
       {/* Calendar view */}
       {view === "calendar" && (
-        <CalendarView contracts={contracts} deliverables={deliverables} saveDeliverables={save} onEditDeliverable={setEditItem} onNewDeliverable={date=>setQuickDate(date)} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF}/>
+        <CalendarView contracts={contracts} deliverables={deliverables} saveDeliverables={save} onEditDeliverable={setEditItem} onNewDeliverable={date=>setQuickDate(date)} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} brands={brands}/>
       )}
 
       {/* Modals */}
@@ -1475,6 +1494,8 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
         <DeliverableModal
           item={editItem}
           contracts={contracts}
+          allDeliverables={deliverables}
+          brands={brands}
           onClose={() => { setNewOpen(false); setEditItem(null); setPrefillDate(""); }}
           onSave={item => {
             if (editItem) {
@@ -1630,12 +1651,13 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
 }
 
 
-function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSave, prefillDate="" }) {
+function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSave, prefillDate="", allDeliverables=[], brands=[] }) {
   const isEdit = !!item;
   const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: prefillDate||"", stage: "briefing", responsible: {}, stageDateOverrides: {}, notes: "", roteiro: "", networks: [], networkMetrics: {} });
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
   const [modalTab, setModalTab] = useState("info");
   const [openNet, setOpenNet] = useState(null);
+  const [warnOk, setWarnOk] = useState(false); // user acknowledged WARN
   const NETS = ["Instagram","TikTok","YouTube","Facebook","X / Twitter","Kwai"];
   const NET_EMOJI = {"Instagram":"📸","TikTok":"🎵","YouTube":"▶️","Facebook":"👥","X / Twitter":"𝕏","Kwai":"🎬"};
   const toggleNetwork = net => {
@@ -1646,7 +1668,32 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
   const setMetric = (net,field,val) => setF(x=>({...x,networkMetrics:{...(x.networkMetrics||{}),[net]:{...(x.networkMetrics?.[net]||{}),[field]:val}}}));
   const getMetric = (net,field) => f.networkMetrics?.[net]?.[field] || "";
   const stageDates = f.plannedPostDate ? calcStageDates(f.plannedPostDate) : {};
-  const handleSave = () => { if (!f.title?.trim()) { alert("Preencha o título."); return; } if (!f.contractId) { alert("Selecione o contrato."); return; } onSave(f); };
+
+  // ── Conflict detection ──────────────────────────────────
+  const conflicts = useMemo(() => {
+    if (!f.plannedPostDate || !f.contractId) return [];
+    const contract = contracts.find(c => c.id === f.contractId);
+    if (!contract) return [];
+    const others = allDeliverables.filter(d => d.id !== (item?.id));
+    return detectConflicts(
+      { date: f.plannedPostDate, brandId: contract.brandId, contractId: f.contractId },
+      others, brands, contracts
+    );
+  }, [f.plannedPostDate, f.contractId, allDeliverables, brands, contracts]);
+
+  // Reset acknowledgement when conflicts change
+  useEffect(() => { setWarnOk(false); }, [f.plannedPostDate, f.contractId]);
+
+  const hasBlock = conflicts.some(c => c.severity === "BLOCK");
+  const hasWarn  = conflicts.some(c => c.severity === "WARN");
+  const saveDisabled = hasBlock || (hasWarn && !warnOk);
+
+  const handleSave = () => {
+    if (!f.title?.trim()) { alert("Preencha o título."); return; }
+    if (!f.contractId) { alert("Selecione o contrato."); return; }
+    if (saveDisabled) return;
+    onSave(f);
+  };
 
   const MODAL_TABS = [{ id:"info", label:"Info" },{ id:"roteiro", label:"✍️ Roteiro" },{ id:"metricas", label:"Métricas" }];
   const ROTEIRO_SECTIONS = ["Abertura","Campinho","Desenvolvimento","Bloco Publi","CTA","Encerramento"];
@@ -1656,9 +1703,39 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
     set("roteiro", cur + (cur ? "\n\n" : "") + `[${s}]\n`);
   };
 
+  // ── Conflict warning banner (rendered above footer) ──────
+  const ConflictBanner = () => {
+    if (!conflicts.length) return null;
+    const topSeverity = conflicts[0].severity;
+    const color = topSeverity === "BLOCK" ? RED : topSeverity === "WARN" ? AMB : BLU;
+    const bg    = topSeverity === "BLOCK" ? `${RED}08` : topSeverity === "WARN" ? `${AMB}08` : `${BLU}06`;
+    const icon  = topSeverity === "BLOCK" ? "⛔" : topSeverity === "WARN" ? "⚠️" : "ℹ️";
+    return (
+      <div style={{ background:bg, border:`1px solid ${color}30`, borderLeft:`3px solid ${color}`, borderRadius:8, padding:"12px 14px", marginTop:16 }}>
+        <div style={{ fontWeight:700, fontSize:12, color, marginBottom:6 }}>
+          {icon} {topSeverity === "BLOCK" ? "Conflito bloqueante" : topSeverity === "WARN" ? "Aviso de conflito" : "Informação"}
+        </div>
+        {conflicts.map((c,i) => (
+          <div key={i} style={{ fontSize:11, color:TX2, marginBottom:4 }}>• {c.message}</div>
+        ))}
+        {hasWarn && !hasBlock && (
+          <label style={{ display:"flex", alignItems:"center", gap:8, marginTop:8, cursor:"pointer", fontSize:11, fontWeight:600, color:AMB }}>
+            <input type="checkbox" checked={warnOk} onChange={e=>setWarnOk(e.target.checked)}/>
+            Estou ciente, salvar mesmo assim
+          </label>
+        )}
+        {hasBlock && (
+          <div style={{ fontSize:11, color:RED, fontWeight:700, marginTop:6 }}>
+            Resolva o conflito antes de salvar — altere a data ou a marca do entregável.
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <Modal title={isEdit?"Editar Entregável":"Novo Entregável"} onClose={onClose} width={860}
-      footer={<>{onDelete&&<Btn onClick={()=>onDelete(item.id)} variant="danger" size="sm">Excluir</Btn>}<div style={{flex:1}}/><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={handleSave} variant="primary" size="sm">{isEdit?"Salvar":"Criar"}</Btn></>}>
+      footer={<>{onDelete&&<Btn onClick={()=>onDelete(item.id)} variant="danger" size="sm">Excluir</Btn>}<div style={{flex:1}}/><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={handleSave} variant="primary" size="sm" disabled={saveDisabled}>{isEdit?"Salvar":"Criar"}</Btn></>}>
 
       {/* Tabs */}
       <div style={{display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:16,marginTop:-4}}>
@@ -1699,6 +1776,7 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
         </>)}
         <SRule>Briefing / Observações</SRule>
         <Field label=""><Textarea value={f.notes||""} onChange={e=>set("notes",e.target.value)} rows={4} placeholder="Resumo do briefing, links, pontos obrigatórios, don'ts…"/></Field>
+        <ConflictBanner/>
       </>}
 
       {/* ── Tab: Roteiro ── */}
@@ -1841,7 +1919,7 @@ function CostsSection({ contract: c, saveC, contracts }) {
 }
 
 
-function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, saveP, saveDeliverables, toggleComm, toggleCommPaid, toggleNF, rates, onBack, setModal }) {
+function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, saveP, saveDeliverables, toggleComm, toggleCommPaid, toggleNF, rates, onBack, setModal, brands=[], navigateTo, setSelectedBrand }) {
   const [tab, setTab]         = useState("overview");
   const [aiReport, setAiReport] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -1987,6 +2065,13 @@ Responda APENAS com o JSON.` }]
               {currBadge(c.currency)}
               {c.paymentType==="monthly" && <Badge color={TX2}>Mensal</Badge>}
               {c.hasTravel && <Badge color={BLU}>✈️ {c.travelDestination||"Viagem"}</Badge>}
+              {/* Brand link — shows only when brandId is set */}
+              {c.brandId && brands.find(b=>b.id===c.brandId) && (
+                <button onClick={()=>{ setSelectedBrand&&setSelectedBrand(c.brandId); navigateTo&&navigateTo("marca-detalhe"); }}
+                  style={{ display:"flex", alignItems:"center", gap:4, padding:"2px 8px", borderRadius:99, background:`${BLU}10`, border:`1px solid ${BLU}30`, color:BLU, fontSize:10, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                  <Tag size={10}/> {brands.find(b=>b.id===c.brandId).name}
+                </button>
+              )}
             </div>
             <div style={{ display:"flex", gap:16, fontSize:12, color:TX2 }}>
               <span style={{ fontWeight:700, fontSize:16, color:TX }}>{total>0?fmtMoney(total,c.currency):"Valor TBD"}</span>
@@ -2347,8 +2432,423 @@ Escreva em português, de forma direta e prática. Use marcadores claros.`}]})})
   );
 }
 
+// ─── Marcas ───────────────────────────────────────────────
+
+function BrandInitial({ brand, size = 44 }) {
+  const letter = (brand.name || "?").charAt(0).toUpperCase();
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size / 4, flexShrink: 0,
+      background: brand.primaryColor || "#374151",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.42, fontWeight: 800, color: "#fff", letterSpacing: "-.01em",
+    }}>
+      {letter}
+    </div>
+  );
+}
+
+function brandLTV(brand, contracts, posts, deliverables) {
+  const bContracts = contracts.filter(c => c.brandId === brand.id);
+  return bContracts.reduce((s, c) => s + contractTotal(c), 0);
+}
+
+function brandAvgEng(brand, contracts, posts, deliverables) {
+  const ids = new Set(contracts.filter(c => c.brandId === brand.id).map(c => c.id));
+  const items = [
+    ...posts.filter(p => ids.has(p.contractId) && p.isPosted),
+    ...deliverables.filter(d => ids.has(d.contractId) && d.stage === "done"),
+  ];
+  const engs = items.map(calcEngagement).filter(e => e !== null);
+  return engs.length ? engs.reduce((s, v) => s + v, 0) / engs.length : null;
+}
+
+function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo, setSelectedBrand, role }) {
+  const isMobile = useIsMobile();
+  const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState("all");
+  const [sort, setSort] = useState("ltv"); // ltv | alpha | recent
+  const [showNewModal, setShowNewModal] = useState(false);
+  const toast = useToast();
+
+  const filtered = useMemo(() => {
+    let list = brands.filter(b => !b.archived);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(b => b.name.toLowerCase().includes(q));
+    }
+    if (catFilter !== "all") list = list.filter(b => b.category === catFilter);
+    if (sort === "ltv")    list = [...list].sort((a, b) => brandLTV(b, contracts, posts, deliverables) - brandLTV(a, contracts, posts, deliverables));
+    if (sort === "alpha")  list = [...list].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    if (sort === "recent") list = [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return list;
+  }, [brands, contracts, posts, deliverables, search, catFilter, sort]);
+
+  const handleCreate = async ({ name, category }) => {
+    const now = new Date().toISOString();
+    const brand = {
+      id: uid(), name, slug: slugify(name), category,
+      primaryColor: CONTRACT_COLORS[brands.length % CONTRACT_COLORS.length],
+      contact: {}, exclusivityWindowDays: 7,
+      recurringBriefing: "", notes: "", createdAt: now, updatedAt: now,
+    };
+    await saveBrands([...brands, brand]);
+    toast?.(`Marca "${name}" criada`, "success");
+    setShowNewModal(false);
+  };
+
+  return (
+    <div style={{ padding: isMobile ? "12px 12px 80px" : "24px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ flex: 1 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: TX, marginBottom: 2 }}>Marcas</h2>
+          <div style={{ fontSize: 12, color: TX2 }}>{brands.filter(b=>!b.archived).length} marcas cadastradas</div>
+        </div>
+        <Btn onClick={() => setShowNewModal(true)} variant="primary" size="sm" icon={Plus}>Nova marca</Btn>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {/* Search */}
+        <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
+          <Search size={13} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:TX3 }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar marca…"
+            style={{ width:"100%", padding:"7px 10px 7px 32px", background:B2, border:`1px solid ${LN}`, borderRadius:8, fontSize:12, color:TX, fontFamily:"inherit", outline:"none" }}/>
+        </div>
+        {/* Category filter */}
+        <select value={catFilter} onChange={e=>setCatFilter(e.target.value)}
+          style={{ padding:"7px 12px", background:B2, border:`1px solid ${LN}`, borderRadius:8, fontSize:12, color:TX, fontFamily:"inherit", outline:"none" }}>
+          <option value="all">Todas as categorias</option>
+          {Object.entries(BRAND_CATEGORIES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+        </select>
+        {/* Sort */}
+        <select value={sort} onChange={e=>setSort(e.target.value)}
+          style={{ padding:"7px 12px", background:B2, border:`1px solid ${LN}`, borderRadius:8, fontSize:12, color:TX, fontFamily:"inherit", outline:"none" }}>
+          <option value="ltv">Ordenar: LTV</option>
+          <option value="alpha">Ordenar: A-Z</option>
+          <option value="recent">Ordenar: Recente</option>
+        </select>
+      </div>
+
+      {/* Grid */}
+      {filtered.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"60px 0", color:TX3 }}>
+          <Building2 size={40} strokeWidth={1} style={{ marginBottom:12 }}/>
+          <div style={{ fontSize:14, fontWeight:600, color:TX }}>Nenhuma marca encontrada</div>
+          <div style={{ fontSize:12, color:TX2, marginTop:4 }}>Crie uma nova marca ou ajuste os filtros.</div>
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
+          {filtered.map(brand => {
+            const bContracts = contracts.filter(c=>c.brandId===brand.id);
+            const active = bContracts.filter(c=>!c.archived).length;
+            const ltv = brandLTV(brand, contracts, posts, deliverables);
+            const eng = brandAvgEng(brand, contracts, posts, deliverables);
+            const lastC = bContracts.map(c=>c.contractDeadline).filter(Boolean).sort().reverse()[0];
+            const catLabel = BRAND_CATEGORIES[brand.category] || brand.category;
+            return (
+              <div key={brand.id}
+                onClick={()=>{ setSelectedBrand(brand.id); navigateTo("marca-detalhe"); }}
+                style={{ ...G, padding:"18px 20px", cursor:"pointer", transition:TRANS, borderLeft:`4px solid ${brand.primaryColor||"#374151"}` }}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 6px 24px rgba(0,0,0,0.1)`;}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow=G.boxShadow;}}>
+                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+                  <BrandInitial brand={brand} size={40}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color:TX, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{brand.name}</div>
+                    <span style={{ fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:99, background:`${brand.primaryColor||"#374151"}18`, color:brand.primaryColor||TX2 }}>{catLabel}</span>
+                  </div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                  <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:TX3, marginBottom:2 }}>LTV</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:TX }}>{ltv>0?fmtMoney(ltv):"—"}</div>
+                  </div>
+                  <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:TX3, marginBottom:2 }}>Contratos</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:TX }}>{active} ativos</div>
+                  </div>
+                  <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:TX3, marginBottom:2 }}>Engajamento</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX2):TX3 }}>{fmtEng(eng)}</div>
+                  </div>
+                  <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:TX3, marginBottom:2 }}>Último prazo</div>
+                    <div style={{ fontSize:12, fontWeight:600, color:TX }}>{lastC?fmtDate(lastC):"—"}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* New brand modal */}
+      {showNewModal && (
+        <NewBrandModal onClose={()=>setShowNewModal(false)} onSave={handleCreate}/>
+      )}
+    </div>
+  );
+}
+
+function NewBrandModal({ onClose, onSave }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("OUTROS");
+  const disabled = !name.trim();
+  return (
+    <Modal title="Nova Marca" onClose={onClose} width={420}
+      footer={<>
+        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
+        <Btn onClick={()=>onSave({name:name.trim(),category})} variant="primary" size="sm" disabled={disabled}>Criar marca</Btn>
+      </>}>
+      <Field label="Nome da marca" full>
+        <Input value={name} onChange={e=>setName(e.target.value)} placeholder="ex: Netshoes"/>
+      </Field>
+      <div style={{ height:12 }}/>
+      <Field label="Categoria" full>
+        <Select value={category} onChange={e=>setCategory(e.target.value)}>
+          {Object.entries(BRAND_CATEGORIES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+        </Select>
+      </Field>
+    </Modal>
+  );
+}
+
+function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBrands, onBack, navigateTo, setSelectedBrand }) {
+  const brand = brands.find(b => b.id === brandId);
+  const isMobile = useIsMobile();
+  const toast = useToast();
+  const [tab, setTab] = useState("contratos");
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+
+  if (!brand) return (
+    <div style={{ padding:40, textAlign:"center", color:TX2 }}>
+      <div style={{ marginBottom:8 }}>Marca não encontrada.</div>
+      <Btn onClick={onBack} variant="ghost" size="sm">← Voltar</Btn>
+    </div>
+  );
+
+  const bContracts = contracts.filter(c => c.brandId === brand.id);
+  const activeC    = bContracts.filter(c => !c.archived);
+  const bPosts     = posts.filter(p => bContracts.some(c => c.id === p.contractId));
+  const bDels      = deliverables.filter(d => bContracts.some(c => c.id === d.contractId));
+  const ltv        = bContracts.reduce((s,c)=>s+contractTotal(c),0);
+  const doneDels   = bDels.filter(d=>d.stage==="done"||d.stage==="postagem").length + bPosts.filter(p=>p.isPosted).length;
+  const eng        = brandAvgEng(brand, contracts, posts, deliverables);
+  const catLabel   = BRAND_CATEGORIES[brand.category] || brand.category;
+
+  const saveField = async (field, val) => {
+    const updated = brands.map(b => b.id === brand.id ? { ...b, [field]: val, updatedAt: new Date().toISOString() } : b);
+    await saveBrands(updated);
+    toast?.("Salvo", "success");
+  };
+
+  const TABS = [{ id:"contratos", label:"Contratos" }, { id:"performance", label:"Performance" }, { id:"briefing", label:"Briefing Recorrente" }];
+
+  return (
+    <div style={{ padding: isMobile ? "12px 12px 80px" : "24px" }}>
+      {/* Back */}
+      <button onClick={onBack}
+        style={{ background:"none", border:`1px solid ${LN}`, borderRadius:6, padding:"6px 12px", cursor:"pointer", fontSize:11, color:TX2, marginBottom:20, fontFamily:"inherit" }}>
+        ← Marcas
+      </button>
+
+      {/* Brand header */}
+      <div style={{ ...G, padding:"20px 24px", marginBottom:20, borderLeft:`4px solid ${brand.primaryColor||"#374151"}` }}>
+        <div style={{ display:"flex", alignItems:"flex-start", gap:16, flexWrap:"wrap" }}>
+          <BrandInitial brand={brand} size={56}/>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6, flexWrap:"wrap" }}>
+              <h1 style={{ fontSize:22, fontWeight:800, color:TX, letterSpacing:"-.02em" }}>{brand.name}</h1>
+              <span style={{ fontSize:9, fontWeight:700, padding:"2px 9px", borderRadius:99, background:`${brand.primaryColor||"#374151"}18`, color:brand.primaryColor||TX2 }}>{catLabel}</span>
+            </div>
+            {/* Contact chips */}
+            {brand.contact?.email && <div style={{ fontSize:11, color:TX2, marginBottom:3 }}>📧 {brand.contact.email}</div>}
+            {brand.contact?.phone && <div style={{ fontSize:11, color:TX2 }}>📞 {brand.contact.phone}</div>}
+          </div>
+          <Btn onClick={() => { setEditForm({ ...brand }); setEditing(true); }} variant="default" size="sm">✎ Editar</Btn>
+        </div>
+
+        {/* 4 KPIs */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginTop:20 }}>
+          {[
+            { label:"LTV total",          value: ltv>0?fmtMoney(ltv):"—",               accent:ltv>0?GRN:TX2 },
+            { label:"Contratos ativos",   value: `${activeC.length} / ${bContracts.length}`, accent:activeC.length>0?BLU:TX2 },
+            { label:"Posts entregues",    value: doneDels,                                accent:doneDels>0?GRN:TX2 },
+            { label:"Eng. médio",         value: fmtEng(eng),                            accent:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX2):TX2 },
+          ].map(kpi => (
+            <div key={kpi.label} style={{ background:B2, borderRadius:10, padding:"12px 14px" }}>
+              <div style={{ fontSize:9, color:TX3, marginBottom:4, textTransform:"uppercase", letterSpacing:".08em", fontWeight:700 }}>{kpi.label}</div>
+              <div style={{ fontSize:18, fontWeight:800, color:kpi.accent }}>{kpi.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:"flex", borderBottom:`1px solid ${LN}`, marginBottom:20 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{ padding:"10px 18px", fontSize:12, fontWeight:tab===t.id?700:400, color:tab===t.id?TX:TX2, background:"none", border:"none", borderBottom:`2px solid ${tab===t.id?RED:"transparent"}`, cursor:"pointer", fontFamily:"inherit", transition:TRANS }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Contratos */}
+      {tab === "contratos" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {bContracts.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:TX3 }}>Nenhum contrato vinculado a esta marca.</div>
+          ) : bContracts.map(c => {
+            const total = contractTotal(c);
+            const dl    = daysLeft(c.contractDeadline);
+            return (
+              <div key={c.id}
+                onClick={()=>navigateTo&&navigateTo("contratos")}
+                style={{ ...G, padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:12, borderLeft:`3px solid ${c.color||brand.primaryColor}` }}
+                onMouseEnter={e=>e.currentTarget.style.background=B2}
+                onMouseLeave={e=>e.currentTarget.style.background=B1}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:13, color:c.archived?TX2:TX, marginBottom:3 }}>
+                    {c.company}{c.archived&&<span style={{ fontSize:10, color:TX3, marginLeft:6 }}>Arquivado</span>}
+                  </div>
+                  <div style={{ fontSize:11, color:TX2 }}>
+                    {total>0?fmtMoney(total,c.currency):"Valor TBD"}
+                    {c.contractDeadline&&<span style={{ marginLeft:10, color:dlColor(dl) }}>prazo {fmtDate(c.contractDeadline)}</span>}
+                  </div>
+                </div>
+                <span style={{ fontSize:12, color:TX3 }}>→</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Tab: Performance */}
+      {tab === "performance" && (
+        <div>
+          {bPosts.length === 0 && bDels.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:TX3 }}>
+              Nenhum post ou entregável registrado para esta marca.
+              {/* TODO: quando o módulo de métricas existir, ligar aqui */}
+            </div>
+          ) : (
+            <div>
+              {/* Aggregate metrics */}
+              {(() => {
+                const items = [...bPosts.filter(p=>p.isPosted), ...bDels.filter(d=>d.stage==="done")];
+                const totalViews = items.reduce((s,i)=>s+(Number(i.views)||0),0);
+                const totalReach = items.reduce((s,i)=>s+(Number(i.reach)||0),0);
+                const totalLikes = items.reduce((s,i)=>s+(Number(i.likes)||0),0);
+                const engs = items.map(calcEngagement).filter(e=>e!==null);
+                const avgE = engs.length ? engs.reduce((s,v)=>s+v,0)/engs.length : null;
+                return (
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
+                    {[
+                      { label:"Views", value: totalViews>0?totalViews.toLocaleString("pt-BR"):"—" },
+                      { label:"Alcance", value: totalReach>0?totalReach.toLocaleString("pt-BR"):"—" },
+                      { label:"Curtidas", value: totalLikes>0?totalLikes.toLocaleString("pt-BR"):"—" },
+                      { label:"Eng. médio", value: fmtEng(avgE) },
+                    ].map(m=>(
+                      <div key={m.label} style={{ background:B2, borderRadius:10, padding:"12px 14px" }}>
+                        <div style={{ fontSize:9, color:TX3, marginBottom:4, textTransform:"uppercase", letterSpacing:".08em", fontWeight:700 }}>{m.label}</div>
+                        <div style={{ fontSize:18, fontWeight:800, color:TX }}>{m.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+              <div style={{ fontSize:11, color:TX3 }}>
+                {/* TODO: gráfico de evolução de engajamento por contrato quando módulo de métricas existir */}
+                {bPosts.filter(p=>p.isPosted).length} posts · {bDels.filter(d=>d.stage==="done").length} entregáveis concluídos
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Briefing Recorrente */}
+      {tab === "briefing" && (
+        <div>
+          <div style={{ fontSize:12, color:TX2, marginBottom:12, lineHeight:1.6 }}>
+            Briefing permanente da marca — regras que se repetem em todos os contratos: tom de voz, hashtags obrigatórias, do's & don'ts.
+          </div>
+          <textarea
+            value={brand.recurringBriefing || ""}
+            onChange={e => {
+              const updated = brands.map(b => b.id===brand.id ? {...b, recurringBriefing:e.target.value} : b);
+              saveBrands(updated);
+            }}
+            placeholder="Ex: sempre usar #Copa2026, não mencionar concorrentes, tom animado e informal…"
+            rows={10}
+            style={{ width:"100%", padding:"14px", background:B2, border:`1px solid ${LN}`, borderRadius:10, fontSize:13, color:TX, fontFamily:"inherit", outline:"none", resize:"vertical", lineHeight:1.7 }}
+          />
+          <div style={{ fontSize:11, color:TX3, marginTop:8 }}>Salvo automaticamente ao editar.</div>
+        </div>
+      )}
+
+      {/* Edit brand modal */}
+      {editing && editForm && (
+        <Modal title={`Editar: ${brand.name}`} onClose={()=>setEditing(false)} width={500}
+          footer={<>
+            <Btn onClick={()=>setEditing(false)} variant="ghost" size="sm">Cancelar</Btn>
+            <Btn onClick={async()=>{
+              const updated = brands.map(b=>b.id===brand.id?{...editForm,updatedAt:new Date().toISOString()}:b);
+              await saveBrands(updated);
+              setEditing(false);
+              toast?.("Marca atualizada","success");
+            }} variant="primary" size="sm">Salvar</Btn>
+          </>}>
+          <Field label="Nome" full><Input value={editForm.name} onChange={e=>setEditForm(f=>({...f,name:e.target.value}))}/></Field>
+          <div style={{height:10}}/>
+          <Field label="Categoria" full>
+            <Select value={editForm.category} onChange={e=>setEditForm(f=>({...f,category:e.target.value}))}>
+              {Object.entries(BRAND_CATEGORIES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </Select>
+          </Field>
+          <SRule>Cor principal</SRule>
+          <input type="color" value={editForm.primaryColor||"#374151"} onChange={e=>setEditForm(f=>({...f,primaryColor:e.target.value}))}
+            style={{ width:"100%", height:40, padding:2, background:B2, border:`1px solid ${LN}`, borderRadius:8, cursor:"pointer" }}/>
+          <SRule>Contato</SRule>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <Field label="Nome"><Input value={editForm.contact?.name||""} onChange={e=>setEditForm(f=>({...f,contact:{...f.contact,name:e.target.value}}))}/></Field>
+            <Field label="Email"><Input type="email" value={editForm.contact?.email||""} onChange={e=>setEditForm(f=>({...f,contact:{...f.contact,email:e.target.value}}))}/></Field>
+            <Field label="Telefone"><Input value={editForm.contact?.phone||""} onChange={e=>setEditForm(f=>({...f,contact:{...f.contact,phone:e.target.value}}))}/></Field>
+            <Field label="Cargo"><Input value={editForm.contact?.role||""} onChange={e=>setEditForm(f=>({...f,contact:{...f.contact,role:e.target.value}}))}/></Field>
+          </div>
+          <SRule>Exclusividade</SRule>
+          <Field label="Janela de exclusividade (dias)">
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <input type="range" min="0" max="30" value={editForm.exclusivityWindowDays||7}
+                onChange={e=>setEditForm(f=>({...f,exclusivityWindowDays:Number(e.target.value)}))}
+                style={{ flex:1 }}/>
+              <span style={{ fontSize:13, fontWeight:700, color:TX, width:24, textAlign:"right" }}>
+                {editForm.exclusivityWindowDays||7}
+              </span>
+            </div>
+          </Field>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", background:B2, borderRadius:8, marginTop:8 }}>
+            <div>
+              <div style={{ fontSize:12, fontWeight:600, color:TX }}>Bloquear concorrentes na janela</div>
+              <div style={{ fontSize:11, color:TX2 }}>Eleva de WARN para BLOCK conflitos de mesma categoria</div>
+            </div>
+            <div onClick={()=>setEditForm(f=>({...f,blockConflicts:!f.blockConflicts}))}
+              style={{ width:44, height:24, borderRadius:99, background:editForm.blockConflicts?RED:LN, cursor:"pointer", position:"relative", transition:"background .2s", flexShrink:0 }}>
+              <div style={{ width:20, height:20, borderRadius:"50%", background:"#fff", position:"absolute", top:2, left:editForm.blockConflicts?22:2, transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.15)" }}/>
+            </div>
+          </div>
+          <div style={{ fontSize:10, color:TX3, marginTop:4 }}>Usado para detectar conflitos de marca concorrente no agendamento.</div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ─── Contratos list ────────────────────────────────────────
-function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates, role }) {
+function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates, role, brands=[], navigateTo, setSelectedBrand }) {
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -2380,6 +2880,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
       saveC={saveC} saveP={saveP} saveDeliverables={saveDeliverables}
       toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF}
       rates={rates} onBack={()=>setSelectedId(null)} setModal={setModal}
+      brands={brands} navigateTo={navigateTo} setSelectedBrand={setSelectedBrand}
     />
   );
 
@@ -2547,13 +3048,20 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
     </div>
   );
 }
-function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeliverable, onNewDeliverable, calEvents={}, calMonth, setCal, calFilter, setCalF }) {
+function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeliverable, onNewDeliverable, calEvents={}, calMonth, setCal, calFilter, setCalF, brands=[] }) {
   const isMobile = useIsMobile();
+  const toast    = useToast();
   const { y, m } = calMonth;
   const today    = startOfToday();
   const todayStr = today.toISOString().substr(0,10);
   const [dragOver, setDragOver] = useState(null);
   const [hoveredDate, setHoveredDate] = useState(null);
+
+  // Pre-compute conflict severity per date for visual marking
+  const conflictDateMap = useMemo(
+    () => buildConflictDateMap(deliverables, brands, contracts),
+    [deliverables, brands, contracts]
+  );
 
   const firstDay  = new Date(y, m, 1).getDay();
   const daysInMo  = new Date(y, m+1, 0).getDate();
@@ -2601,6 +3109,32 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
     setDragOver(null);
     const id = e.dataTransfer.getData("text/plain");
     if (!id || !saveDeliverables) return;
+
+    const dragged   = deliverables.find(d => d.id === id);
+    const contract  = contracts.find(c => c.id === dragged?.contractId);
+    const others    = deliverables.filter(d => d.id !== id);
+
+    if (dragged && contract && brands.length) {
+      const found = detectConflicts(
+        { date: ds, brandId: contract.brandId, contractId: contract.id },
+        others, brands, contracts
+      );
+
+      // BLOCK → revert (don't save)
+      if (found.some(c => c.severity === "BLOCK")) {
+        const msg = found.find(c => c.severity === "BLOCK")?.message || "Conflito bloqueante detectado.";
+        toast?.(`⛔ ${msg}`, "error");
+        return; // don't save
+      }
+
+      // WARN → save but toast warning
+      if (found.some(c => c.severity === "WARN")) {
+        const msg = found.find(c => c.severity === "WARN")?.message || "Aviso de conflito.";
+        toast?.(`⚠️ ${msg}`, "warning");
+        // fall through — save anyway (drag is harder to undo mid-flight)
+      }
+    }
+
     const updated = deliverables.map(d => d.id===id ? {...d, plannedPostDate:ds} : d);
     saveDeliverables(updated);
   };
@@ -2691,6 +3225,8 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
             const cEvents  = contractEventsFor(ds);
             const travels  = travelFor(ds);
             const cellHov  = hoveredDate===ds;
+            const conflictSev = conflictDateMap[ds]; // 'BLOCK' | 'WARN' | 'INFO' | undefined
+            const conflictBorderColor = conflictSev === "BLOCK" ? RED : conflictSev === "WARN" ? AMB : conflictSev === "INFO" ? BLU : null;
 
             return (
               <div key={d}
@@ -2704,7 +3240,10 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                   minHeight: isMobile?52:110,
                   padding: isMobile?"5px 4px":"6px 7px",
                   background: isDragTarget?`${RED}06`:isT?`${RED}04`:(isMobile&&hoveredDate===ds)?`${RED}04`:cellHov&&!isMobile?B2:B1,
-                  border: isDragTarget?`1px solid ${RED}40`:"none",
+                  border: isDragTarget ? `1px solid ${RED}40`
+                        : conflictBorderColor ? `1.5px dashed ${conflictBorderColor}50`
+                        : "none",
+                  title: conflictSev ? `Conflito ${conflictSev} detectado nesta data` : undefined,
                   transition:"background .12s",
                   position:"relative",
                   cursor: isMobile?(dayDels.length>0||onNewDeliverable)?"pointer":"default":"default",
@@ -2857,6 +3396,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
     parc1Value:"",parc1Deadline:"",parc2Value:"",parc2Deadline:"",
     hasCommission:true,commPaid:{},nfEmitted:{},paymentDaysAfterNF:0,
     numPosts:0,numStories:0,numCommunityLinks:0,numReposts:0,
+    exclusivityOverride:"DEFAULT",
     color:CONTRACT_COLORS[contracts.length%CONTRACT_COLORS.length],notes:""
   });
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
@@ -2957,6 +3497,14 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
         <Field label="CNPJ"><Input value={f.cnpj} onChange={e=>set("cnpj",e.target.value)} placeholder="00.000.000/0001-00"/></Field>
         <Field label="Cor"><input type="color" value={f.color} onChange={e=>set("color",e.target.value)} style={{width:"100%",height:36,padding:2,background:B2,border:`1px solid ${LN}`,borderRadius:6,cursor:"pointer"}}/></Field>
         <Field label="Obs." full><Textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2}/></Field>
+        <Field label="Exclusividade neste contrato" full>
+          <Select value={f.exclusivityOverride||"DEFAULT"} onChange={e=>set("exclusivityOverride",e.target.value)}>
+            <option value="DEFAULT">Padrão da marca (usa categoria)</option>
+            <option value="STRICT">Estrita (qualquer outra marca no período = conflito)</option>
+            <option value="NONE">Nenhuma (este contrato não gera nem sofre conflito)</option>
+          </Select>
+          <div style={{ fontSize:10, color:TX3, marginTop:3 }}>Controla como conflitos de agenda são detectados para este contrato.</div>
+        </Field>
       </div>
 
       <SRule>Financeiro & Pagamento</SRule>
@@ -3292,8 +3840,10 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
   );
   try {
     if (view==="dashboard")      return <Dashboard contracts={activeContracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView} role={role} userName={userName}/>;
-    if (view==="acompanhamento") return <Acompanhamento contracts={activeContracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} role={role}/>;
-    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role}/>;
+    if (view==="acompanhamento") return <Acompanhamento contracts={activeContracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} role={role} brands={brands}/>;
+    if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role} brands={brands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand}/>;
+    if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role}/>;
+    if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand}/>;
     if (view==="caixa")          return <Caixa contracts={activeContracts}/>;
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
     return null;
@@ -5422,6 +5972,8 @@ export default function App() {
   const [contracts, setC]   = useState([]);
   const [posts, setP]       = useState([]);
   const [deliverables, setD] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [selectedBrand, setSelectedBrand] = useState(null); // id
   const [modal, setModal]   = useState(null);
   const [eurRate, setEurRate] = useState(0);
   const [usdRate, setUsdRate] = useState(0);
@@ -5446,19 +5998,26 @@ export default function App() {
     setSyncStatus("loading");
     (async()=>{
       try {
-        const [cs,ps,ds,eur,usd]=await Promise.all([loadContracts(),loadPosts(),loadDeliverables(),getSetting("eurRate"),getSetting("usdRate")]);
+        const [cs,ps,ds,eur,usd,bs]=await Promise.all([loadContracts(),loadPosts(),loadDeliverables(),getSetting("eurRate"),getSetting("usdRate"),loadBrands()]);
         // Load role
         const userRole = USER_ROLES[user.email] || await getUserRole(user.email);
         setRole(userRole);
         setUserName(ROLE_NAMES[user.email] || user.email.split("@")[0]);
-        const ic=cs.length>0?cs:SEED; const ip=ps.length>0?ps:SEED_POSTS; const id=ds||[];
-        setC(ic); setP(ip); setD(id);
+        const ic=cs.length>0?cs:SEED; const ip=ps.length>0?ps:SEED_POSTS; const id=ds||[]; const ib=bs||[];
+        setC(ic); setP(ip); setD(id); setBrands(ib);
         prevCIds.current=ic.map(c=>c.id); prevPIds.current=ip.map(p=>p.id); prevDIds.current=id.map(d=>d.id);
         if(eur) setEurRate(Number(eur)||0);
         if(usd) setUsdRate(Number(usd)||0);
         if(cs.length===0) await syncContracts(ic,[]);
         if(ps.length===0&&SEED_POSTS.length>0) await syncPosts(ip,[]);
         setSyncStatus("ok");
+        // Run brand migration once — idempotent, guarded by localStorage flag
+        runBrandsMigration({
+          contracts: ic, brands: ib,
+          saveBrands:    async b => { setBrands(b); await syncBrands(b, []); },
+          saveContracts: async c => { setC(c);      await syncContracts(c, ic.map(x=>x.id)); },
+          uid,
+        }).catch(e => console.error('[brands] migration failed', e));
       } catch(err) { console.error(err); setSyncStatus("error"); setC(SEED); setP(SEED_POSTS); }
       try {
         unsub = subscribeToChanges({
@@ -5526,6 +6085,12 @@ export default function App() {
       prevDIds.current = [...newIds];
     } catch(e) { console.error('[App] saveD', e); }
   }, [syncWithDeletes]);;
+
+  const saveBrands = useCallback(async b => {
+    setBrands(b);
+    try { await syncBrands(b, []); }
+    catch(e) { console.error('[App] saveBrands', e); }
+  }, []);
   const rates=useMemo(()=>({eur:eurRate,usd:usdRate}),[eurRate,usdRate]);
   const saveNote=(id,notes)=>saveC(contracts.map(c=>c.id===id?{...c,notes}:c));
   const toggleComm=id=>saveC(contracts.map(c=>c.id===id?{...c,hasCommission:!c.hasCommission}:c));

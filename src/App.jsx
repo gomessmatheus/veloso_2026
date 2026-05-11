@@ -4078,7 +4078,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role} brands={brands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
     if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role} openCopilot={openCopilot}/>;
     if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot} onNewContract={(prefillBrandId)=>setModal({type:"contract",data:null,prefillBrandId})}/>;
-    if (view==="caixa")          return <Caixa contracts={activeContracts} openCopilot={openCopilot}/>;
+    if (view==="caixa")          return <Caixa contracts={activeContracts} openCopilot={openCopilot} role={role} syncStatus={syncStatus} onRetrySync={()=>{ /* retry via saveTx re-sync */ }}/>;
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
 
     return null;
@@ -4856,8 +4856,6 @@ function MonthDeliverables({ deliverables, contracts }) {
 
 
 // ─── Caixa: constants & helpers ──────────────────────────
-const CAIXA_PASSWORD   = "ranked2026";
-const BALANCE_PASSWORD = "Theus123";
 
 const TX_TYPES = [
   { id:"entrada",       label:"Entrada",        iconName:"arrowDown",  color:ds.color.success[500]  },
@@ -5478,128 +5476,6 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
 }
 
 // ─── Caixa (Controle Financeiro Administrativo) ───────────
-/**
- * CaixaPasswordGate — prova de conceito do design system Ranked.
- * Imports agora via top-level import em linha 15+.
- */
-
-function CaixaPasswordGate({ onUnlock }) {
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState(false);
-  const [show, setShow] = useState(false);
-
-  const check = () => {
-    if (pw === CAIXA_PASSWORD) {
-      onUnlock();
-    } else {
-      setErr(true);
-      setPw("");
-      setTimeout(() => setErr(false), 2200);
-    }
-  };
-
-  return (
-    <div style={{
-      display:         'flex',
-      alignItems:      'center',
-      justifyContent:  'center',
-      minHeight:       '60vh',
-      padding:         ds.space[6],
-    }}>
-      <DsCard
-        padding="lg"
-        elevation="sm"
-        bordered={false}
-        style={{ width: '100%', maxWidth: 380, textAlign: 'center' }}
-      >
-        {/* Lock icon — sem emoji */}
-        <div style={{
-          display:        'inline-flex',
-          alignItems:     'center',
-          justifyContent: 'center',
-          width:          44,
-          height:         44,
-          borderRadius:   ds.radius.full,
-          background:     ds.color.neutral[100],
-          marginBottom:   ds.space[4],
-        }}>
-          <DsIcon
-            name="lock"
-            size={20}
-            color={ds.color.neutral[700]}
-            ariaLabel="Acesso restrito"
-          />
-        </div>
-
-        {/* Heading */}
-        <div style={{
-          fontSize:   ds.font.size['2xl'],
-          fontWeight: ds.font.weight.semibold,
-          color:      ds.color.neutral[900],
-          marginBottom: ds.space[1],
-          letterSpacing: '-0.02em',
-        }}>
-          Controle Financeiro
-        </div>
-        <div style={{
-          fontSize:  ds.font.size.sm,
-          color:     ds.color.neutral[500],
-          marginBottom: ds.space[6],
-          lineHeight: ds.font.lineHeight.normal,
-        }}>
-          Acesso restrito · Administradores Ranked
-        </div>
-
-        {/* Password input + toggle */}
-        <div style={{ marginBottom: ds.space[3] }}>
-          <DsInput
-            label="Senha"
-            type={show ? 'text' : 'password'}
-            value={pw}
-            onChange={e => { setPw(e.target.value); if (err) setErr(false); }}
-            onKeyDown={e => e.key === 'Enter' && check()}
-            placeholder="••••••••"
-            autoFocus
-            error={err ? 'Senha incorreta — tente novamente' : undefined}
-            ariaLabel="Senha de acesso ao Caixa"
-            rightIcon={
-              <button
-                type="button"
-                onClick={() => setShow(s => !s)}
-                aria-label={show ? 'Ocultar senha' : 'Mostrar senha'}
-                style={{
-                  background:  'none',
-                  border:      'none',
-                  cursor:      'pointer',
-                  display:     'flex',
-                  alignItems:  'center',
-                  color:       ds.color.neutral[400],
-                  padding:     0,
-                  transition:  `color ${ds.motion.fast}`,
-                }}
-                onMouseEnter={e => e.currentTarget.style.color = ds.color.neutral[700]}
-                onMouseLeave={e => e.currentTarget.style.color = ds.color.neutral[400]}
-              >
-                <DsIcon name={show ? 'eyeOff' : 'eye'} size={16}/>
-              </button>
-            }
-          />
-        </div>
-
-        {/* Submit */}
-        <DsButton
-          variant="primary"
-          size="lg"
-          fullWidth
-          onClick={check}
-          disabled={!pw.trim()}
-        >
-          Acessar
-        </DsButton>
-      </DsCard>
-    </div>
-  );
-}
 
 function NewAccountModal({ onClose, onSave }) {
   const [f, setF] = useState({ name:"", bank:"", type:"corrente", balance:"" });
@@ -5918,8 +5794,7 @@ ${Object.entries(cats).map(([cat,items])=>`
 }
 
 
-function Caixa({ contracts, openCopilot }) {
-  const [unlocked, setUnlocked] = useState(true); // senha removida
+function Caixa({ contracts, openCopilot, role = "admin", syncStatus = "synced", onRetrySync }) {
   // tab state moved to useQueryState above
   const [transactions, setTransactions] = useState([]);
   const [baseBalance, setBaseBalance] = useState(0);
@@ -5934,7 +5809,9 @@ function Caixa({ contracts, openCopilot }) {
         prevTxIds.current = list.map(t => t.id);
         if (base != null) setBaseBalance(Number(base) || 0);
         if (bdate) setBaseDate(bdate);
-      } catch {
+      } catch(e) {
+        if (import.meta.env.DEV) console.error("[Caixa] carregamento remoto:", e);
+        toast?.("Falha ao carregar dados do caixa. Usando cópia local.", "warning");
         setTransactions(lsLoad("caixa_tx", []));
         setBaseBalance(lsLoad("caixa_base", 0));
         setBaseDate(lsLoad("caixa_base_date", ""));
@@ -5978,7 +5855,13 @@ function Caixa({ contracts, openCopilot }) {
   const saveTx = async (list) => {
     setTransactions(list);
     lsSave("caixa_tx", list);
-    try { await syncCaixaTx(list, prevTxIds.current); prevTxIds.current = list.map(t => t.id); } catch(e) { console.error("syncCaixaTx:", e); }
+    try {
+      await syncCaixaTx(list, prevTxIds.current);
+      prevTxIds.current = list.map(t => t.id);
+    } catch(e) {
+      if (import.meta.env.DEV) console.error("[Caixa] syncCaixaTx:", e);
+      toast?.("Falha ao sincronizar lançamento. Tentaremos novamente.", "error");
+    }
   };
 
   const updateBase = async (val, date) => {
@@ -5986,7 +5869,13 @@ function Caixa({ contracts, openCopilot }) {
     setBaseDate(date);
     lsSave("caixa_base", Number(val)||0);
     lsSave("caixa_base_date", date);
-    try { await setSetting("caixa_base", String(val)); await setSetting("caixa_base_date", date); } catch(e) { console.error("updateBase:", e); }
+    try {
+      await setSetting("caixa_base", String(val));
+      await setSetting("caixa_base_date", date);
+    } catch(e) {
+      if (import.meta.env.DEV) console.error("[Caixa] updateBase:", e);
+      toast?.("Falha ao salvar saldo base remoto. Cópia local OK.", "warning");
+    }
   };
 
   const [minVal, setMinVal] = useQueryState("caixa_min", "");
@@ -5997,7 +5886,18 @@ function Caixa({ contracts, openCopilot }) {
   const [pickerYear, setPickerYear]   = useState(new Date().getFullYear());
   const pickerRef = useRef(null);
 
-  if (!unlocked) return <CaixaPasswordGate onUnlock={()=>setUnlocked(true)}/>;
+  // ── Role gate (Task 2) ─────────────────────────────────
+  if (role !== "admin") {
+    return (
+      <div style={{ padding:ds.space[12], textAlign:"center", color:TX2 }}>
+        <div style={{ width:48,height:48,borderRadius:ds.radius.full,background:ds.color.neutral[100],display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:ds.space[4] }}>
+          <DsIcon name="lock" size={22} color={ds.color.neutral[500]}/>
+        </div>
+        <h2 style={{ fontSize:ds.font.size.lg,fontWeight:ds.font.weight.semibold,color:TX,marginBottom:ds.space[1],letterSpacing:"-.01em" }}>Acesso restrito</h2>
+        <p style={{ fontSize:ds.font.size.sm,color:TX2,maxWidth:320,margin:"0 auto" }}>O Controle Financeiro está disponível apenas para administradores.</p>
+      </div>
+    );
+  }
 
   // ── Computed saldo ──────────────────────────────────────
   // Agregados centralizados — via finance.js (sem filter+reduce inline)
@@ -6046,6 +5946,32 @@ function Caixa({ contracts, openCopilot }) {
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:4 }}>
           <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
           <span style={{ fontSize:ds.font.size.xs,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
+          {/* Sync status chip — Task 4 */}
+          {(() => {
+            const map = {
+              synced:  { label:"Sincronizado",   color:GRN,  icon:"checkCircle",  spin:false },
+              ok:      { label:"Sincronizado",   color:GRN,  icon:"checkCircle",  spin:false },
+              syncing: { label:"Sincronizando...",color:TX3,  icon:"refresh",      spin:true  },
+              loading: { label:"Sincronizando...",color:TX3,  icon:"refresh",      spin:true  },
+              offline: { label:"Offline",        color:AMB,  icon:"alertCircle",  spin:false },
+              error:   { label:"Erro de sync",   color:RED,  icon:"alertTriangle",spin:false },
+            };
+            const s = map[syncStatus] || map.synced;
+            return (
+              <div aria-live="polite" style={{ display:"inline-flex",alignItems:"center",gap:4,
+                padding:"3px 8px",borderRadius:99,background:`${s.color}12`,border:`1px solid ${s.color}25` }}>
+                <DsIcon name={s.icon} size={11} color={s.color}
+                  style={s.spin?{animation:"ranked-spin .9s linear infinite"}:undefined}/>
+                <span style={{ fontSize:ds.font.size.xs,fontWeight:600,color:s.color }}>{s.label}</span>
+                {syncStatus==="error" && onRetrySync && (
+                  <button onClick={onRetrySync}
+                    style={{ marginLeft:2,fontSize:ds.font.size.xs,color:RED,background:"none",border:"none",cursor:"pointer",fontWeight:700,padding:0,fontFamily:"inherit" }}>
+                    Tentar novamente
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           <button onClick={()=>setShowExport(true)} style={{ marginLeft:"auto",padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:8,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",gap:6 }}>
             Exportar para contador
           </button>

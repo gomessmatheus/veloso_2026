@@ -22,9 +22,7 @@
  *   <Overline color={ds.color.success[500]} mb={ds.space[3]}>✓ Pontos positivos</Overline>
  *   <Overline as="label" htmlFor="field-id">Valor do contrato</Overline>
  */
-
-import { t as ds } from '../lib/theme.js';
-
+import { theme as ds } from '../lib/theme.js'; // fix: era `t as ds` — t é helper CSS, não os tokens
 /**
  * @param {{
  *   children:   React.ReactNode,

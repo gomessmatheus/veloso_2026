@@ -15,7 +15,7 @@ import { ptBR } from "date-fns/locale";
 import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote, Landmark, Tag, Building2 } from "lucide-react";
 
 // ─── Design System Ranked ─────────────────────────────────
-import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard } from './ui/index.js';
+import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard, Overline } from './ui/index.js';
 
 // ─── FX — cotações cambiais ───────────────────────────────
 import { FxProvider, useFx }                       from './lib/FxContext.jsx';
@@ -888,7 +888,15 @@ const NAV_ITEMS = [
   { id:"marcas",         label:"Marcas",     icon:"tag"             },
   { id:"financeiro",     label:"Financeiro", icon:"banknote"        },
   { id:"caixa",          label:"Caixa",      icon:"landmark"        },
+  { id:"cotacoes",       label:"Cotações",   icon:"trendingUp"      },
 ];
+
+const ROLE_NAV = {
+  admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa","cotacoes"],
+  agente:      ["dashboard","contratos","marcas","financeiro","cotacoes"],
+  atendimento: ["dashboard","acompanhamento","contratos","marcas","cotacoes"],
+  influencer:  ["dashboard","acompanhamento","financeiro","cotacoes"],
+};
 
 function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts, role, userName, deliverables }) {
   const my = useMemo(() => getMyPresence(), []);
@@ -6299,12 +6307,38 @@ function MarkdownText({ content }) {
   return <div>{elems}</div>;
 }
 
-// ─── Cotações — configurações de FX ───────────────────────
+// ─── Sparkline SVG inline ─────────────────────────────────────────────────────
+function Sparkline({ values, color, width = 64, height = 24 }) {
+  if (!values || values.length < 2) return (
+    <svg width={width} height={height}><line x1={0} y1={height/2} x2={width} y2={height/2} stroke={ds.color.neutral[200]} strokeWidth={1}/></svg>
+  );
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / range) * (height - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg width={width} height={height} style={{ display:'block', overflow:'visible' }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+// ─── CotacoesView ─────────────────────────────────────────────────────────────
 function CotacoesView() {
-  const { rates, loading, error, stale, fetchedAt, source, isManual, refresh } = useFx();
-  const [manualUSD, setManualUSD] = useState("");
-  const [manualEUR, setManualEUR] = useState("");
+  const {
+    rates, loading, error, stale, fetchedAt, source, isManual, refresh,
+    autoRefresh, setAutoRefresh, intervalMin, setIntervalMin, history,
+  } = useFx();
+
+  const [manualUSD, setManualUSD] = useState('');
+  const [manualEUR, setManualEUR] = useState('');
   const [saved, setSaved]         = useState(false);
+
+  const INTERVALS = [5, 15, 30, 60];
 
   const handleSaveManual = () => {
     if (!manualUSD && !manualEUR) return;
@@ -6319,99 +6353,169 @@ function CotacoesView() {
 
   const handleClearManual = () => {
     clearManualRates();
-    setManualUSD(""); setManualEUR("");
+    setManualUSD(''); setManualEUR('');
     refresh();
   };
 
+  const eurHistory = history.map(r => r.EUR).filter(Boolean);
+  const usdHistory = history.map(r => r.USD).filter(Boolean);
+
+  // Label da fonte
+  const SOURCE_LABEL = { awesomeapi:'AwesomeAPI', frankfurter:'Frankfurter', 'er-api':'ExchangeRate-API', manual:'Override manual', cache:'Cache' };
+
   return (
-    <div style={{ padding:`${ds.space[6]} ${ds.space[8]}`, maxWidth:680 }}>
+    <div style={{ padding:`${ds.space[6]} ${ds.space[8]}`, maxWidth:720 }}>
+      {/* Header */}
       <div style={{ marginBottom:ds.space[6] }}>
-        <h1 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-.02em", marginBottom:ds.space[1] }}>Cotações cambiais</h1>
+        <h1 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:'-.02em', marginBottom:ds.space[1] }}>Cotações cambiais</h1>
         <p style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>
-          Taxas de câmbio usadas em contratos USD/EUR. Atualização automática a cada 15 min.
+          Taxas de câmbio usadas em contratos USD/EUR.
+          {autoRefresh ? ` Atualização automática a cada ${intervalMin} min.` : ' Atualização automática desativada.'}
         </p>
       </div>
 
       {/* Status atual */}
       <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}`, marginBottom:ds.space[4] }}>
-        <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:"0.12em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[4] }}>
-          Cotação atual
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:ds.space[4], marginBottom:ds.space[4] }}>
+        <Overline mb={ds.space[4]}>Cotação atual</Overline>
+        <div style={{ display:'flex', alignItems:'center', gap:ds.space[4], marginBottom:ds.space[4] }}>
           <CurrencyRateBadge size="md" showRefresh/>
-          {isManual && (
-            <span style={{ fontSize:ds.font.size.xs, padding:`2px ${ds.space[2]}`, borderRadius:ds.radius.full, background:ds.color.info[50], border:`1px solid ${ds.color.info[500]}30`, color:ds.color.info[500] }}>
-              Override manual ativo
-            </span>
-          )}
-          {stale && (
-            <span style={{ fontSize:ds.font.size.xs, color:ds.color.warning[500] }}>
-              ⚠ Desatualizada
-            </span>
-          )}
+          {isManual && <span style={{ fontSize:ds.font.size.xs, padding:`2px ${ds.space[2]}`, borderRadius:ds.radius.full, background:ds.color.info[50], border:`1px solid ${ds.color.info[500]}30`, color:ds.color.info[500] }}>Override manual</span>}
+          {stale    && <span style={{ fontSize:ds.font.size.xs, color:ds.color.warning[500] }}>⚠ Desatualizada</span>}
         </div>
         <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[500] }}>
-          {source && <>Fonte: <strong>{source}</strong> · </>}
-          {fetchedAt && <>Última atualização: {new Date(fetchedAt).toLocaleString("pt-BR")}</>}
+          {source && <><strong>{SOURCE_LABEL[source] || source}</strong> · </>}
+          {fetchedAt && <>Última atualização: {new Date(fetchedAt).toLocaleString('pt-BR')}</>}
         </div>
-        {error && (
-          <div style={{ fontSize:ds.font.size.xs, color:ds.color.danger[500], marginTop:ds.space[2] }}>
-            Erro: {error}
-          </div>
-        )}
+        {error && <div style={{ fontSize:ds.font.size.xs, color:ds.color.danger[500], marginTop:ds.space[2] }}>{error}</div>}
       </div>
 
-      {/* KPIs das cotações */}
+      {/* KPIs */}
       {rates && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:ds.space[3], marginBottom:ds.space[4] }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:ds.space[3], marginBottom:ds.space[4] }}>
           {[
-            { label:"USD · Dólar americano", value:rates.USD, symbol:"US$" },
-            { label:"EUR · Euro",            value:rates.EUR, symbol:"€"   },
+            { label:'USD · Dólar', value:rates.USD, symbol:'US$', spark:usdHistory, color:ds.color.info[500]    },
+            { label:'EUR · Euro',  value:rates.EUR, symbol:'€',   spark:eurHistory, color:ds.color.brand[500]   },
           ].map(item => (
             <div key={item.label} style={{ ...G, padding:`${ds.space[4]} ${ds.space[5]}` }}>
-              <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:"0.1em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[2] }}>{item.label}</div>
-              <div style={{ fontSize:ds.font.size['3xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], fontVariantNumeric:"tabular-nums", letterSpacing:"-0.02em" }}>
+              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:ds.space[2] }}>
+                <Overline>{item.label}</Overline>
+                <Sparkline values={item.spark} color={item.color} width={56} height={20}/>
+              </div>
+              <div style={{ fontSize:ds.font.size['3xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>
                 {formatRate(item.value)}
               </div>
               <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:ds.space[1] }}>
-                {item.symbol} 1 = R$ {item.value?.toFixed(4).replace(".", ",")}
+                {item.symbol} 1 = R$ {item.value?.toFixed(4).replace('.', ',')}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Override manual */}
-      <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}` }}>
-        <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:"0.12em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[3] }}>
-          Override manual
+      {/* Auto-refresh prefs */}
+      <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}`, marginBottom:ds.space[4] }}>
+        <Overline mb={ds.space[4]}>Atualização automática</Overline>
+
+        {/* Toggle */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:ds.space[4] }}>
+          <div>
+            <div style={{ fontSize:ds.font.size.sm, fontWeight:ds.font.weight.medium, color:ds.color.neutral[900] }}>Atualizar automaticamente</div>
+            <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[500], marginTop:2 }}>
+              {autoRefresh ? `Busca cotação a cada ${intervalMin} min` : 'Desativado — use o botão de refresh manual'}
+            </div>
+          </div>
+          <button
+            role="switch" aria-checked={autoRefresh}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            style={{ width:44, height:24, borderRadius:ds.radius.full, background:autoRefresh ? ds.color.success[500] : ds.color.neutral[300], border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
+            <div style={{ position:'absolute', top:2, left:autoRefresh ? 22 : 2, width:20, height:20, borderRadius:'50%', background:'#fff', boxShadow:ds.shadow.sm, transition:'left .2s' }}/>
+          </button>
         </div>
-        {isManual && (
-          <div style={{ fontSize:ds.font.size.xs, color:ds.color.warning[700], background:ds.color.warning[50], border:`1px solid ${ds.color.warning[500]}30`, borderRadius:ds.radius.md, padding:`${ds.space[2]} ${ds.space[3]}`, marginBottom:ds.space[3] }}>
-            ⚠ Override manual ativo — auto-fetch desativado até ser removido.
+
+        {/* Slider de intervalo */}
+        {autoRefresh && (
+          <div>
+            <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.medium, color:ds.color.neutral[500], letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:ds.space[2] }}>
+              Intervalo de atualização
+            </div>
+            <div style={{ display:'flex', gap:ds.space[2] }}>
+              {INTERVALS.map(v => (
+                <button key={v} onClick={() => setIntervalMin(v)}
+                  style={{ flex:1, padding:`${ds.space[2]} 0`, fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, borderRadius:ds.radius.md, border:`1px solid ${intervalMin===v ? ds.color.neutral[900] : ds.color.neutral[200]}`, background:intervalMin===v ? ds.color.neutral[900] : 'transparent', color:intervalMin===v ? ds.color.neutral[0] : ds.color.neutral[500], cursor:'pointer', transition:'all .15s' }}>
+                  {v} min
+                </button>
+              ))}
+            </div>
           </div>
         )}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:ds.space[3], marginBottom:ds.space[3] }}>
-          <div>
-            <label style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.medium, color:ds.color.neutral[500], letterSpacing:"0.06em", textTransform:"uppercase", display:"block", marginBottom:ds.space[1] }}>USD → BRL</label>
-            <input type="number" step="0.01" value={manualUSD} onChange={e=>setManualUSD(e.target.value)}
-              placeholder={rates?.USD?.toFixed(2) || "Ex: 5.92"}
-              style={{ width:"100%", padding:`0 ${ds.space[3]}`, height:40, fontSize:ds.font.size.base, fontFamily:"inherit", color:ds.color.neutral[900], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, outline:"none", boxSizing:"border-box", fontVariantNumeric:"tabular-nums" }}/>
+      </div>
+
+      {/* Histórico das últimas 10 cotações */}
+      <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}`, marginBottom:ds.space[4] }}>
+        <Overline mb={ds.space[4]}>Histórico de cotações</Overline>
+        {history.length === 0 ? (
+          <div style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[400], textAlign:'center', padding:`${ds.space[6]} 0` }}>
+            Nenhuma cotação registrada ainda.<br/>As próximas buscas automáticas aparecerão aqui.
           </div>
-          <div>
-            <label style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.medium, color:ds.color.neutral[500], letterSpacing:"0.06em", textTransform:"uppercase", display:"block", marginBottom:ds.space[1] }}>EUR → BRL</label>
-            <input type="number" step="0.01" value={manualEUR} onChange={e=>setManualEUR(e.target.value)}
-              placeholder={rates?.EUR?.toFixed(2) || "Ex: 6.40"}
-              style={{ width:"100%", padding:`0 ${ds.space[3]}`, height:40, fontSize:ds.font.size.base, fontFamily:"inherit", color:ds.color.neutral[900], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, outline:"none", boxSizing:"border-box", fontVariantNumeric:"tabular-nums" }}/>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:ds.font.size.xs }}>
+              <thead>
+                <tr style={{ borderBottom:`1px solid ${ds.color.neutral[200]}` }}>
+                  {['Data/hora', 'EUR/BRL', 'USD/BRL', 'Fonte'].map(h => (
+                    <th key={h} style={{ textAlign:'left', padding:`${ds.space[2]} ${ds.space[3]}`, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[500], letterSpacing:'0.06em', textTransform:'uppercase' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((rec, i) => (
+                  <tr key={rec.recordedAt || i} style={{ borderBottom:`1px solid ${ds.color.neutral[100]}` }}>
+                    <td style={{ padding:`${ds.space[2]} ${ds.space[3]}`, color:ds.color.neutral[700], fontVariantNumeric:'tabular-nums' }}>
+                      {rec.fetchedAt ? new Date(rec.fetchedAt).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—'}
+                    </td>
+                    <td style={{ padding:`${ds.space[2]} ${ds.space[3]}`, color:ds.color.neutral[900], fontWeight:ds.font.weight.semibold, fontVariantNumeric:'tabular-nums' }}>
+                      {formatRate(rec.EUR)}
+                    </td>
+                    <td style={{ padding:`${ds.space[2]} ${ds.space[3]}`, color:ds.color.neutral[900], fontWeight:ds.font.weight.semibold, fontVariantNumeric:'tabular-nums' }}>
+                      {formatRate(rec.USD)}
+                    </td>
+                    <td style={{ padding:`${ds.space[2]} ${ds.space[3]}`, color:ds.color.neutral[500] }}>
+                      {SOURCE_LABEL[rec.source] || rec.source || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        )}
+      </div>
+
+      {/* Override manual */}
+      <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}` }}>
+        <Overline mb={ds.space[3]}>Override manual</Overline>
+        {isManual && (
+          <div style={{ fontSize:ds.font.size.xs, color:ds.color.warning[700], background:ds.color.warning[50], border:`1px solid ${ds.color.warning[500]}30`, borderRadius:ds.radius.md, padding:`${ds.space[2]} ${ds.space[3]}`, marginBottom:ds.space[3] }}>
+            ⚠ Override ativo — auto-fetch desativado até ser removido.
+          </div>
+        )}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:ds.space[3], marginBottom:ds.space[3] }}>
+          {[
+            { label:'USD → BRL', val:manualUSD, set:setManualUSD, ph:rates?.USD?.toFixed(2) || 'Ex: 5.92' },
+            { label:'EUR → BRL', val:manualEUR, set:setManualEUR, ph:rates?.EUR?.toFixed(2) || 'Ex: 6.40' },
+          ].map(f => (
+            <div key={f.label}>
+              <label style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.medium, color:ds.color.neutral[500], letterSpacing:'0.06em', textTransform:'uppercase', display:'block', marginBottom:ds.space[1] }}>{f.label}</label>
+              <input type="number" step="0.01" value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.ph}
+                style={{ width:'100%', padding:`0 ${ds.space[3]}`, height:40, fontSize:ds.font.size.base, fontFamily:'inherit', color:ds.color.neutral[900], background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, outline:'none', boxSizing:'border-box', fontVariantNumeric:'tabular-nums' }}/>
+            </div>
+          ))}
         </div>
-        <div style={{ display:"flex", gap:ds.space[2] }}>
+        <div style={{ display:'flex', gap:ds.space[2] }}>
           <DsButton variant="primary" size="sm" onClick={handleSaveManual} disabled={!manualUSD && !manualEUR}>
-            {saved ? "✓ Salvo" : "Salvar override"}
+            {saved ? '✓ Salvo' : 'Salvar override'}
           </DsButton>
           {isManual && (
-            <DsButton variant="ghost" size="sm" onClick={handleClearManual}
-              style={{ color:ds.color.danger[500] }}>
+            <DsButton variant="ghost" size="sm" onClick={handleClearManual} style={{ color:ds.color.danger[500] }}>
               Remover override
             </DsButton>
           )}
@@ -7404,8 +7508,13 @@ function AppContent() {
 // App = FxProvider + AppContent.
 // FxProvider DEVE ser pai de AppContent para que useFx() funcione.
 export default function App() {
+  const [uid, setUid] = useState(null);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, u => setUid(u?.uid ?? null));
+    return unsub;
+  }, []);
   return (
-    <FxProvider>
+    <FxProvider uid={uid}>
       <AppContent/>
     </FxProvider>
   );

@@ -1424,6 +1424,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
   const [quickDate, setQuickDate]     = useState(null); // for QuickPostModal from calendar
   const [filter, setFilter]       = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [dismissedConflicts, setDismissedConflicts] = useState(new Set());
   const toast = useToast();
 
   const save = list => { setDeliverables(list); };
@@ -1466,13 +1467,14 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
       {/* Conflict summary — replaces the old "Conflito de postagem detectado" banner */}
       {(() => {
         const allConflicts = buildConflictDateMap(deliverables, brands, contracts);
-        const blockDates = Object.entries(allConflicts).filter(([,s])=>s==="BLOCK");
-        const warnDates  = Object.entries(allConflicts).filter(([,s])=>s==="WARN");
+        const blockDates = Object.entries(allConflicts).filter(([d,s])=>s==="BLOCK" && !dismissedConflicts.has(d));
+        const warnDates  = Object.entries(allConflicts).filter(([d,s])=>s==="WARN"  && !dismissedConflicts.has(d));
         if (!blockDates.length && !warnDates.length) return null;
+        const dismiss = (date) => setDismissedConflicts(prev => new Set([...prev, date]));
         return (
           <div style={{ background:`${AMB}08`, border:`1px solid ${AMB}30`, borderLeft:`3px solid ${AMB}`, borderRadius:8, padding:"10px 14px", marginBottom:16, display:"flex", alignItems:"flex-start", gap:10 }}>
             <DsIcon name="alertTriangle" size={16} color={AMB}/>
-            <div>
+            <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:12, fontWeight:700, color:AMB, marginBottom:4 }}>
                 Conflitos de agenda abertos —&nbsp;
                 {blockDates.length>0&&<span style={{color:RED}}>{blockDates.length} bloqueante{blockDates.length>1?"s":""}</span>}
@@ -1480,13 +1482,25 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
                 {warnDates.length>0&&<span style={{color:AMB}}>{warnDates.length} aviso{warnDates.length>1?"s":""}</span>}
               </div>
               {blockDates.slice(0,3).map(([date])=>(
-                <div key={date} style={{fontSize:11,color:TX2}}>
-                  <strong style={{color:RED}}>⛔ {fmtDate(date)}</strong> — {deliverables.filter(d=>d.plannedPostDate===date).map(d=>d.title).join(", ")}
+                <div key={date} style={{fontSize:11,color:TX2,display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                  <strong style={{color:RED,flexShrink:0}}>⛔ {fmtDate(date)}</strong>
+                  <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {deliverables.filter(d=>d.plannedPostDate===date).map(d=>d.title).join(", ")}
+                  </span>
                 </div>
               ))}
               {warnDates.slice(0,3).map(([date])=>(
-                <div key={date} style={{fontSize:11,color:TX2}}>
-                  <strong style={{color:AMB}}>⚠️ {fmtDate(date)}</strong> — {deliverables.filter(d=>d.plannedPostDate===date).map(d=>d.title).join(", ")}
+                <div key={date} style={{fontSize:11,color:TX2,display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                  <strong style={{color:AMB,flexShrink:0}}>⚠️ {fmtDate(date)}</strong>
+                  <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {deliverables.filter(d=>d.plannedPostDate===date).map(d=>d.title).join(", ")}
+                  </span>
+                  <button
+                    onClick={()=>dismiss(date)}
+                    aria-label={`Dispensar aviso de ${fmtDate(date)}`}
+                    style={{fontSize:10,color:TX3,background:"none",border:`1px solid ${LN2}`,borderRadius:4,padding:"1px 7px",cursor:"pointer",flexShrink:0,lineHeight:1.6}}>
+                    Dispensar
+                  </button>
                 </div>
               ))}
             </div>
@@ -2590,7 +2604,18 @@ function brandAvgEng(brand, contracts, posts, deliverables) {
     ...posts.filter(p => ids.has(p.contractId) && p.isPosted),
     ...deliverables.filter(d => ids.has(d.contractId) && d.stage === "done"),
   ];
-  const engs = items.map(calcEngagement).filter(e => e !== null);
+  // Usa sumNetworkMetrics para cobrir posts (campos flat) e entregáveis
+  // (campos em networkMetrics). Guard reach < 10 evita % absurdos de
+  // itens com reach=1 inserido por engano.
+  const engs = items
+    .map(item => {
+      const reach    = sumNetworkMetrics(item, "reach");
+      const likes    = sumNetworkMetrics(item, "likes");
+      const comments = sumNetworkMetrics(item, "comments");
+      if (!reach || reach < 10) return null;
+      return (likes + comments) / reach * 100;
+    })
+    .filter(e => e !== null);
   return engs.length ? engs.reduce((s, v) => s + v, 0) / engs.length : null;
 }
 
@@ -2749,7 +2774,7 @@ function NewBrandModal({ onClose, onSave }) {
   );
 }
 
-function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBrands, onBack, navigateTo, setSelectedBrand }) {
+function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBrands, onBack, navigateTo, setSelectedBrand, onNewContract }) {
   const brand = brands.find(b => b.id === brandId);
   const isMobile = useIsMobile();
   const toast = useToast();
@@ -2837,8 +2862,18 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
       {/* Tab: Contratos */}
       {tab === "contratos" && (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {onNewContract && (
+            <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:4 }}>
+              <Btn variant="primary" size="sm" onClick={()=>onNewContract(brandId)}>+ Novo contrato</Btn>
+            </div>
+          )}
           {bContracts.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"40px 0", color:TX3 }}>Nenhum contrato vinculado a esta marca.</div>
+            <div style={{ textAlign:"center", padding:"32px 0", color:TX3 }}>
+              Nenhum contrato vinculado.
+              {onNewContract && <div style={{ marginTop:8 }}>
+                <Btn variant="ghost" size="sm" onClick={()=>onNewContract(brandId)}>Criar primeiro contrato →</Btn>
+              </div>}
+            </div>
           ) : bContracts.map(c => {
             const total = contractTotal(c);
             const dl    = daysLeft(c.contractDeadline);
@@ -3552,7 +3587,7 @@ function Calendario({ contracts, calEvents, calMonth, setCal, calFilter, setCalF
 
 
 // ─── Contract Modal ───────────────────────────────────────
-function ContractModal({ modal, setModal, contracts, saveC }) {
+function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
   const isEdit=!!modal.data;
   const [f,setF]=useState(modal.data||{
     company:"",cnpj:"",contractDeadline:"",contractValue:"",currency:"BRL",
@@ -3562,6 +3597,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
     hasCommission:true,commPaid:{},nfEmitted:{},paymentDaysAfterNF:0,
     numPosts:0,numStories:0,numCommunityLinks:0,numReposts:0,
     exclusivityOverride:"DEFAULT",
+    brandId: modal.prefillBrandId || "",
     color:CONTRACT_COLORS[contracts.length%CONTRACT_COLORS.length],notes:""
   });
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
@@ -3655,6 +3691,15 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
       </>}>
       <SRule>Empresa</SRule>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <Field label="Marca vinculada" full>
+          <Select value={f.brandId||""} onChange={e=>set("brandId",e.target.value)}>
+            <option value="">— Sem vínculo com marca —</option>
+            {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+          </Select>
+          <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:3 }}>
+            Vincula este contrato a uma marca para LTV, conflitos de agenda e métricas consolidadas.
+          </div>
+        </Field>
         <Field label="Nome" full>
           <Input value={f.company} onChange={e=>set("company",e.target.value)} placeholder="ex: Netshoes"/>
           <WarnBanner field="company"/>
@@ -4031,7 +4076,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="acompanhamento") return <Acompanhamento contracts={activeContracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} role={role} brands={brands}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role} brands={brands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
     if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role} openCopilot={openCopilot}/>;
-    if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
+    if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot} onNewContract={(prefillBrandId)=>setModal({type:"contract",data:null,prefillBrandId})}/>;
     if (view==="caixa")          return <Caixa contracts={activeContracts} openCopilot={openCopilot}/>;
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
     if (view==="cotacoes")       return <CotacoesView/>;
@@ -7467,7 +7512,7 @@ function AppContent() {
         </div>
         {modal && (
           <div>
-            {modal.type==="contract"&&<ContractModal modal={{...modal,saveDeliverables:saveD,existingDeliverables:deliverables}} setModal={setModal} contracts={contracts} saveC={saveC}/>}
+            {modal.type==="contract"&&<ContractModal modal={{...modal,saveDeliverables:saveD,existingDeliverables:deliverables}} setModal={setModal} contracts={contracts} saveC={saveC} brands={brands}/>}
             {modal.type==="post"    &&<PostModal modal={modal} setModal={setModal} contracts={contracts} posts={posts} saveP={saveP}/>}
           </div>
         )}

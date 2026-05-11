@@ -1994,33 +1994,48 @@ function CostsSection({ contract: c, saveC, contracts }) {
 /** Card de cotação FX para contratos em moeda estrangeira */
 function FxContractCard({ contract: c, rates }) {
   const { fetchedAt, stale, source, refresh, loading } = useFx();
-  const rate = rates?.[c.currency] || rates?.[c.currency?.toLowerCase()] || 0;
-  const brlValue = rate > 0 ? toBRL(contractTotal(c), c.currency, rates) : null;
+  const rate     = Number(rates?.[c.currency] ?? rates?.[c.currency?.toLowerCase()] ?? 0);
+  const total    = contractTotal(c);
+  const brlValue = rate > 0 ? toBRL(total, c.currency, rates) : null;
 
   if (!rate) return null;
 
-  const variation = c.lockedRate && rate
-    ? ((rate - c.lockedRate) / c.lockedRate * 100).toFixed(1)
+  // lockedRate pode ser null (campo ausente em contratos antigos) — tratar como 0
+  const lockedRate = Number(c.lockedRate) || 0;
+  const variation  = lockedRate > 0 && rate > 0
+    ? ((rate - lockedRate) / lockedRate * 100).toFixed(1)
     : null;
+
+  const variationNum = Number(variation);
+  const varColor = variationNum > 0
+    ? ds.color.success[500]
+    : variationNum < 0
+    ? ds.color.danger[500]
+    : ds.color.neutral[500];
 
   return (
     <div style={{ ...G2, padding:`${ds.space[3]} ${ds.space[4]}`, display:"flex", alignItems:"center", gap:ds.space[4], flexWrap:"wrap" }}>
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[700], marginBottom:2, fontVariantNumeric:"tabular-nums" }}>
-          <span style={{ fontWeight:ds.font.weight.semibold }}>{fmtMoney(contractTotal(c), c.currency)}</span>
-          {brlValue && <span style={{ color:ds.color.neutral[500] }}> ≈ {fmtMoney(brlValue)}</span>}
+          <span style={{ fontWeight:ds.font.weight.semibold }}>{fmtMoney(total, c.currency)}</span>
+          {brlValue != null && (
+            <span style={{ color:ds.color.neutral[500] }}> ≈ {fmtMoney(brlValue)}</span>
+          )}
         </div>
         <div style={{ fontSize:9, color:ds.color.neutral[400] }}>
           Cotação atual: {formatRate(rate)}
           {stale && <span style={{ color:ds.color.warning[500] }}> · desatualizada</span>}
-          {!stale && <span> · {formatRelativeTime(fetchedAt)}</span>}
+          {!stale && fetchedAt && <span> · {formatRelativeTime(fetchedAt)}</span>}
         </div>
-        {c.lockedRate && (
+        {lockedRate > 0 && (
           <div style={{ fontSize:9, color:ds.color.neutral[400], marginTop:1 }}>
-            Cotação na assinatura: {formatRate(c.lockedRate)}
-            {variation && (
-              <span style={{ color: Number(variation) >= 0 ? ds.color.success[500] : ds.color.danger[500], fontWeight:ds.font.weight.semibold, marginLeft:4 }}>
-                {Number(variation) >= 0 ? '+' : ''}{variation}%
+            Na assinatura: {formatRate(lockedRate)}
+            {c.lockedRateAt && (
+              <span> em {new Date(c.lockedRateAt).toLocaleDateString('pt-BR')}</span>
+            )}
+            {variation != null && (
+              <span style={{ color:varColor, fontWeight:ds.font.weight.semibold, marginLeft:4 }}>
+                {variationNum >= 0 ? '+' : ''}{variation}%
               </span>
             )}
           </div>
@@ -3666,7 +3681,24 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
           <Field label="Total"><input readOnly value={liveTotal>0&&months?`${months}m = ${fmtMoney(liveTotal,f.currency)}`:"—"} style={{width:"100%",padding:"8px 12px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:GRN,fontSize:12,fontFamily:"inherit",outline:"none",fontWeight:700}}/></Field>
           {f.currency!=="BRL"&&(
             <Field label={`Cotação na assinatura (${f.currency}/BRL)`}>
-              <Input type="number" step="0.01" value={f.lockedRate||""} onChange={e=>set("lockedRate",Number(e.target.value)||null)} placeholder="Ex: 5.80"/>
+              <Input type="number" step="0.01"
+                value={f.lockedRate||""}
+                onChange={e => {
+                  const v = Number(e.target.value) || null;
+                  set("lockedRate", v);
+                  // Registra o timestamp apenas quando um valor é inserido pela
+                  // primeira vez; preserva lockedRateAt se já existir e o
+                  // usuário só está ajustando o valor.
+                  if (v && !f.lockedRateAt) {
+                    set("lockedRateAt", new Date().toISOString());
+                  }
+                  if (!v) set("lockedRateAt", null);
+                }}
+                placeholder="Ex: 5.80"
+                hint={f.lockedRateAt
+                  ? `Registrado em ${new Date(f.lockedRateAt).toLocaleDateString('pt-BR')}`
+                  : "Registra a cotação usada na assinatura do contrato"}
+              />
             </Field>
           )}
           <div style={{gridColumn:"1/-1",display:"flex",alignItems:"center",gap:8}}><CommToggle on={f.hasCommission} onToggle={()=>set("hasCommission",!f.hasCommission)} label/></div>

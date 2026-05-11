@@ -35,6 +35,7 @@ import { WeekTimeline }   from "./views/dashboard/WeekTimeline.jsx";
 import { BRAND_CATEGORIES, slugify, inferCategory, runBrandsMigration } from "./lib/brands.js";
 import { detectConflicts, buildConflictDateMap } from "./lib/conflicts.js";
 import { formatDate } from "./lib/format.js";
+import { useQueryState } from "./lib/url-state.js";
 import {
   aggregate, monthlyBreakdown, burnRate as calcBurnRate,
   liquidityRatio, futureInstallments as calcFutureInstallments,
@@ -5374,25 +5375,40 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
         );
       })()}
 
-      {/* Bar chart */}
+      {/* Bar chart with projection (Task 4) */}
       <div style={{ ...G,padding:"18px 20px" }}>
         <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs Saídas {currentYear}</div>
-        <div style={{ display:"flex",gap:12,fontSize:ds.font.size.xs,color:TX2,marginBottom:16 }}>
+        <div style={{ display:"flex",gap:12,fontSize:ds.font.size.xs,color:TX2,marginBottom:16,flexWrap:"wrap" }}>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:GRN,display:"inline-block" }}/>Entradas</span>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:RED,display:"inline-block" }}/>Saídas</span>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:"#7C3AED",display:"inline-block" }}/>Dividendos</span>
+          {currentYear===new Date().getFullYear()&&(
+            <span style={{ display:"flex",alignItems:"center",gap:4 }}>
+              <span style={{ width:10,height:10,borderRadius:2,border:`1px solid ${LN2}`,display:"inline-block",
+                backgroundImage:"repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.12) 3px 6px)" }}/>
+              Projeção (parcelas futuras)
+            </span>
+          )}
         </div>
         <div style={{ display:"flex",alignItems:"flex-end",gap:4,height:120 }}>
-          {monthData.map((d,i)=>(
-            <div key={i} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
-              <div style={{ width:"100%",display:"flex",gap:1,alignItems:"flex-end",height:100 }}>
-                <div style={{ flex:1,background:GRN,height:`${maxVal>0?d.entradas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.entradas>0?3:0 }}/>
-                <div style={{ flex:1,background:RED,height:`${maxVal>0?d.saidas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.saidas>0?3:0 }}/>
-                {d.dividendos>0&&<div style={{ flex:1,background:"#7C3AED",height:`${maxVal>0?d.dividendos/maxVal*100:0}%`,borderRadius:"3px 3px 0 0" }}/>}
+          {monthData.map((d,i)=>{
+            const isCurrentYear = currentYear===new Date().getFullYear();
+            const isFuture = isCurrentYear && i > new Date().getMonth();
+            const projStyle = isFuture ? {
+              opacity:0.45,
+              backgroundImage:"repeating-linear-gradient(45deg,transparent 0 4px,rgba(0,0,0,.08) 4px 8px)",
+            } : {};
+            return (
+              <div key={i} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
+                <div style={{ width:"100%",display:"flex",gap:1,alignItems:"flex-end",height:100 }}>
+                  <div style={{ flex:1,background:GRN,height:`${maxVal>0?d.entradas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.entradas>0?3:0,...projStyle }}/>
+                  <div style={{ flex:1,background:RED,height:`${maxVal>0?d.saidas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.saidas>0?3:0,...projStyle }}/>
+                  {d.dividendos>0&&<div style={{ flex:1,background:"#7C3AED",height:`${maxVal>0?d.dividendos/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",...projStyle }}/>}
+                </div>
+                <div style={{ fontSize:8,color:isFuture?TX3+"88":TX3,textAlign:"center" }}>{d.month}</div>
               </div>
-              <div style={{ fontSize:8,color:TX3,textAlign:"center" }}>{d.month}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -5431,19 +5447,30 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
       {transactions.length>0&&(
         <div style={{ ...G,padding:"18px 20px" }}>
           <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:12 }}>Saídas por Categoria</div>
-          {Object.entries(
-            transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})
-          ).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([cat,val],idx,arr)=>(
-            <div key={cat} style={{ marginBottom:10 }}>
-              <div style={{ display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4 }}>
-                <span style={{ color:TX }}>{cat}</span>
-                <span style={{ fontWeight:700,color:TX }}>{fmtMoney(val)}</span>
-              </div>
-              <div style={{ height:4,background:LN,borderRadius:2 }}>
-                <div style={{ height:4,borderRadius:2,background:RED,width:`${val/arr[0][1]*100}%` }}/>
-              </div>
-            </div>
-          ))}
+          {(() => {
+            const cats = Object.entries(
+              transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})
+            ).sort((a,b)=>b[1]-a[1]).slice(0,8);
+            const totalSaidas_ = cats.reduce((s,[,v])=>s+v,0);
+            const maxCat = cats[0]?.[1] || 1;
+            return cats.map(([cat,val])=>{
+              const s = Math.round(30 + (val/maxCat)*45); // 30..75%
+              const barColor = `hsl(355,${s}%,45%)`;
+              const pct = totalSaidas_ > 0 ? (val/totalSaidas_*100).toFixed(1) : "0.0";
+              return (
+                <div key={cat} style={{ marginBottom:10 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4 }}>
+                    <span style={{ color:TX }}>{cat}</span>
+                    <span style={{ fontWeight:700,color:TX }}>{fmtMoney(val)}</span>
+                  </div>
+                  <div style={{ height:4,background:LN,borderRadius:2 }}>
+                    <div title={`${pct}% do total de saídas`}
+                      style={{ height:4,borderRadius:2,background:barColor,width:`${val/maxCat*100}%`,transition:"width .3s" }}/>
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
     </div>
@@ -5591,8 +5618,10 @@ function NewAccountModal({ onClose, onSave }) {
 }
 
 // ─── Indicadores Financeiros ──────────────────────────────
-function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contracts }) {
-  const [year, setYear] = useState(new Date().getFullYear());
+function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contracts, year: yearProp, setYear: setYearProp }) {
+  const [yearLocal, setYearLocal] = useState(new Date().getFullYear());
+  const year = yearProp ?? yearLocal;
+  const setYear = setYearProp ?? setYearLocal;
   const txYear = transactions.filter(t => t.date?.startsWith(String(year)));
   const _breakdown_ind = useMemo(() => monthlyBreakdown(txYear, year), [txYear, year]);
 
@@ -5891,7 +5920,7 @@ ${Object.entries(cats).map(([cat,items])=>`
 
 function Caixa({ contracts, openCopilot }) {
   const [unlocked, setUnlocked] = useState(true); // senha removida
-  const [tab, setTab] = useState("dash");
+  // tab state moved to useQueryState above
   const [transactions, setTransactions] = useState([]);
   const [baseBalance, setBaseBalance] = useState(0);
   const [baseDate, setBaseDate]       = useState("");
@@ -5917,11 +5946,33 @@ function Caixa({ contracts, openCopilot }) {
   const [aiMessages, setAiMessages] = useState([]);
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const [dreYear, setDreYear] = useState(new Date().getFullYear());
+  // ── URL-persisted state (Task 3) ─────────────────────────────────────
+  // dreYear lives in IndicadoresFinanceiros but is lifted here for URL sync
+  const [dreYear, setDreYear] = useQueryState("caixa_dre_ano", new Date().getFullYear(), {
+    serialize: (v) => String(v),
+    parse:     (v) => { const n = parseInt(v, 10); return n >= 2020 && n <= 2100 ? n : null; },
+  });
   const tabRefs = useRef({});
-  const [monthOffset, setMonthOffset] = useState(0);
-  const [search, setSearch] = useState("");
-  const [filterType2, setFilterType2] = useState("all");
+  const [tab, setTab] = useQueryState("caixa_tab", "dash", {
+    parse: (v) => ["dash","lancamentos","dre","indicadores"].includes(v) ? v : null,
+  });
+  const [monthOffset, setMonthOffset] = useQueryState("caixa_mes", 0, {
+    serialize: (offset) => {
+      const d = new Date();
+      const t = new Date(d.getFullYear(), d.getMonth() + offset, 1);
+      return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}`;
+    },
+    parse: (str) => {
+      const m = /^(\d{4})-(\d{2})$/.exec(str);
+      if (!m) return null;
+      const y = parseInt(m[1],10), mo = parseInt(m[2],10);
+      if (mo < 1 || mo > 12) return null;
+      const now = new Date();
+      return (y - now.getFullYear()) * 12 + (mo - 1 - now.getMonth());
+    },
+  });
+  const [search, setSearch] = useQueryState("caixa_q", "");
+  const [filterType2, setFilterType2] = useQueryState("caixa_tipo", "all");
   const toast = useToast();
 
   const saveTx = async (list) => {
@@ -5938,8 +5989,13 @@ function Caixa({ contracts, openCopilot }) {
     try { await setSetting("caixa_base", String(val)); await setSetting("caixa_base_date", date); } catch(e) { console.error("updateBase:", e); }
   };
 
-  const [minVal, setMinVal] = useState("");
-  const [maxVal, setMaxVal] = useState("");
+  const [minVal, setMinVal] = useQueryState("caixa_min", "");
+  const [maxVal, setMaxVal] = useQueryState("caixa_max", "");
+  // Month/year picker (Task 2)
+  const [pickerOpen, setPickerOpen]   = useState(false);
+  const [pickerMonth, setPickerMonth] = useState(0); // 0-based
+  const [pickerYear, setPickerYear]   = useState(new Date().getFullYear());
+  const pickerRef = useRef(null);
 
   if (!unlocked) return <CaixaPasswordGate onUnlock={()=>setUnlocked(true)}/>;
 
@@ -5968,6 +6024,8 @@ function Caixa({ contracts, openCopilot }) {
     .filter(t => !maxVal || Number(t.amount) <= Number(maxVal))
     .sort((a,b) => b.date.localeCompare(a.date));
 
+  // Unfiltered total for the counter (Task 1)
+  const totalDoMes = transactions.filter(t => t.date?.startsWith(monthKey));
   const _monthAgg       = aggregate(monthTx, 0);
   const monthEntradas   = _monthAgg.totalEntradas;
   const monthSaidas     = _monthAgg.totalOutflows;
@@ -6096,11 +6154,23 @@ function Caixa({ contracts, openCopilot }) {
               ))}
             </div>
           </div>
-          {/* Month nav */}
+          {/* Month nav with picker (Task 2) */}
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
             <button onClick={()=>setMonthOffset(o=>o-1)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,width:32,height:32,cursor:"pointer",color:TX2,fontSize:16 }}>‹</button>
-            <div style={{ flex:1,textAlign:"center" }}>
-              <div style={{ fontWeight:700,fontSize:15,color:TX }}>{monthLabel}</div>
+            <div style={{ flex:1,textAlign:"center",position:"relative" }}>
+              {/* Clickable month label */}
+              <button onClick={()=>{
+                  setPickerMonth(viewMonth);
+                  setPickerYear(viewYear);
+                  setPickerOpen(p=>!p);
+                }}
+                style={{ background:"none",border:"none",fontWeight:700,fontSize:15,color:TX,cursor:"pointer",fontFamily:"inherit",padding:"2px 8px",borderRadius:4,
+                  border:`1px solid transparent`,transition:"border-color .15s" }}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=LN}
+                onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}
+                aria-expanded={pickerOpen} aria-haspopup="dialog">
+                {monthLabel} ▾
+              </button>
               <div style={{ fontSize:11,color:TX2 }}>
                 <span style={{ color:GRN }}>+{fmtMoney(monthEntradas)}</span>
                 {" · "}
@@ -6109,10 +6179,72 @@ function Caixa({ contracts, openCopilot }) {
                 {" · "}
                 <span style={{ fontWeight:700, color:monthNet>=0?GRN:RED }}>{monthNet>=0?"+":""}{fmtMoney(monthNet)}</span>
               </div>
+              {/* Month/year picker popover */}
+              {pickerOpen && (() => {
+                const txYears = [...new Set(transactions.map(t=>t.date?.substr(0,4)).filter(Boolean).map(Number))];
+                const currY = new Date().getFullYear();
+                const years = [...new Set([...txYears, currY, currY-1, currY-2])].sort((a,b)=>b-a);
+                return (
+                  <div ref={pickerRef} role="dialog" aria-modal="false" aria-label="Selecionar mês e ano"
+                    style={{ position:"absolute",top:"calc(100% + 6px)",left:"50%",transform:"translateX(-50%)",
+                      background:B1,border:`1px solid ${LN}`,borderRadius:10,padding:"16px",
+                      boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:200,display:"flex",flexDirection:"column",gap:10,minWidth:220 }}
+                    onKeyDown={e=>{if(e.key==="Escape") setPickerOpen(false);}}>
+                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+                      <div>
+                        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Mês</div>
+                        <select autoFocus value={pickerMonth} onChange={e=>setPickerMonth(Number(e.target.value))}
+                          style={{ width:"100%",padding:"6px 8px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}>
+                          {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map((m,i)=>(
+                            <option key={i} value={i}>{m}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Ano</div>
+                        <select value={pickerYear} onChange={e=>setPickerYear(Number(e.target.value))}
+                          style={{ width:"100%",padding:"6px 8px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}>
+                          {years.map(y=><option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display:"flex",gap:6 }}>
+                      <button onClick={()=>{
+                          const now2=new Date();
+                          const offset=(pickerYear-now2.getFullYear())*12+(pickerMonth-now2.getMonth());
+                          setMonthOffset(offset);
+                          setPickerOpen(false);
+                        }}
+                        style={{ flex:1,padding:"7px",fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6,background:TX,border:"none",color:"white" }}>
+                        Ir
+                      </button>
+                      <button onClick={()=>setPickerOpen(false)}
+                        style={{ padding:"7px 10px",fontSize:12,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2 }}>
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
             <button onClick={()=>setMonthOffset(o=>o+1)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,width:32,height:32,cursor:"pointer",color:TX2,fontSize:16 }}>›</button>
             <button onClick={()=>setMonthOffset(0)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,padding:"0 12px",height:32,cursor:"pointer",color:TX2,fontSize:11,fontWeight:600 }}>Hoje</button>
             <DsButton variant="primary" size="sm" onClick={()=>setTxModal({})} leftIcon={<DsIcon name="plus" size={13} color={ds.color.neutral[0]}/>}>Lançamento</DsButton>
+          </div>
+
+          {/* Results counter + clear button (Task 1) */}
+          <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:12,fontSize:12,color:TX2 }}>
+            <div role="status" aria-live="polite">
+              Mostrando <strong style={{ color:TX }}>{monthTx.length}</strong> de {totalDoMes.length} lançamentos
+            </div>
+            {(search!==""||minVal!==""||maxVal!==""||filterType2!=="all") && (
+              <button onClick={()=>{ setSearch(""); setMinVal(""); setMaxVal(""); setFilterType2("all"); }}
+                style={{ background:"none",border:`1px solid ${LN}`,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",color:TX2,transition:"all .15s" }}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=TX2}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>
+                × Limpar filtros
+              </button>
+            )}
           </div>
 
           {monthTx.length===0 ? (
@@ -6163,7 +6295,7 @@ function Caixa({ contracts, openCopilot }) {
       </div>{/* /tabpanel-lancamentos */}
 
       <div id="tabpanel-indicadores" role="tabpanel" aria-labelledby="tab-indicadores" tabIndex={0} hidden={tab!=="indicadores"}>
-        {tab==="indicadores" && <IndicadoresFinanceiros transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} contracts={contracts}/>}
+        {tab==="indicadores" && <IndicadoresFinanceiros transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} contracts={contracts} year={dreYear} setYear={setDreYear}/>}
       </div>
 
       {/* IA Financeira */}

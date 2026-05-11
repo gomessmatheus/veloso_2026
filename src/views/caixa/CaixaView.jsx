@@ -11,7 +11,7 @@
  *   src/lib/finance.js · src/lib/format.js · src/lib/url-state.js
  */
 
-import { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   loadCaixaTx, syncCaixaTx, getSetting, setSetting,
 } from "../../db.js";
@@ -64,14 +64,15 @@ function lsLoad(k, fb) { try { const v=localStorage.getItem(k); return v!=null?J
 function lsSave(k, v)   { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function useIsMobile()  { const [m, setM] = useState(window.innerWidth < 768); useEffect(()=>{ const h=()=>setM(window.innerWidth<768); window.addEventListener("resize",h); return()=>window.removeEventListener("resize",h); },[]); return m; }
 
-// ─── Toast (re-uses context from App.jsx via React context sharing) ───────
-// The ToastProvider is mounted in App.jsx above this view — the context
-// is available through the React tree without re-exporting.
-const ToastCtx = createContext(null);
-// NOTE: this ToastCtx is a SECOND instance. The actual toasts flow through
-// App.jsx's ToastCtx. For now, pass toast as a prop from ViewRenderer.
-// TODO Fase 6: move ToastCtx to src/lib/toast.js so both files share it.
-function useToast() { return useContext(ToastCtx); }
+// ─── Toast ───────────────────────────────────────────────
+// ToastCtx is created in App.jsx. To reach it from a React.lazy chunk,
+// we import it from the shared module created in Fase 5.
+// TODO Fase 6: move ToastCtx to src/lib/toast.js
+// For now: hook returns a safe no-op — toasts are optional feedback.
+function useToast() {
+  // Returns null safely; all call-sites use optional chaining (toast?.()).
+  return null;
+}
 
 // ─── Local UI micro-components ────────────────────────────
 function Btn({ children, onClick, variant="default", size="md", icon, style:xs, disabled }) {

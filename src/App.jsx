@@ -19,7 +19,7 @@ import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as Ds
 
 // ─── FX — cotações cambiais ───────────────────────────────
 import { FxProvider, useFx }                       from './lib/FxContext.jsx';
-import { formatRate, formatRelativeTime, convert, saveManualRates, clearManualRates } from './lib/fx.js';
+import { formatRate, formatRelativeTime, convert, saveManualRates, clearManualRates, calcLockedVariation } from './lib/fx.js';
 import { CurrencyRateBadge }                       from './ui/CurrencyRateBadge.jsx';
 
 // ─── Dashboard libs & sub-components ──────────────────────
@@ -2000,44 +2000,52 @@ function FxContractCard({ contract: c, rates }) {
 
   if (!rate) return null;
 
-  // lockedRate pode ser null (campo ausente em contratos antigos) — tratar como 0
-  const lockedRate = Number(c.lockedRate) || 0;
-  const variation  = lockedRate > 0 && rate > 0
-    ? ((rate - lockedRate) / lockedRate * 100).toFixed(1)
-    : null;
-
-  const variationNum = Number(variation);
-  const varColor = variationNum > 0
+  // Variação cambial — função pura testável, nunca NaN/Infinity/0% espúrio
+  const lockedRate  = Number(c.lockedRate)  || 0;
+  const variationPct = calcLockedVariation(rate, lockedRate); // number|null
+  const variationFmt = variationPct != null
+    ? `${variationPct >= 0 ? '+' : ''}${variationPct.toFixed(1)}%`
+    : '—';
+  const varColor = variationPct == null
+    ? ds.color.neutral[400]
+    : variationPct > 0
     ? ds.color.success[500]
-    : variationNum < 0
-    ? ds.color.danger[500]
-    : ds.color.neutral[500];
+    : ds.color.danger[500];
+
+  // lockedRateAt: pode ser ISO string ou null
+  const lockedDateFmt = c.lockedRateAt
+    ? new Date(c.lockedRateAt).toLocaleDateString('pt-BR')
+    : null;
 
   return (
     <div style={{ ...G2, padding:`${ds.space[3]} ${ds.space[4]}`, display:"flex", alignItems:"center", gap:ds.space[4], flexWrap:"wrap" }}>
       <div style={{ flex:1, minWidth:0 }}>
+        {/* Valor original + conversão BRL */}
         <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[700], marginBottom:2, fontVariantNumeric:"tabular-nums" }}>
           <span style={{ fontWeight:ds.font.weight.semibold }}>{fmtMoney(total, c.currency)}</span>
           {brlValue != null && (
             <span style={{ color:ds.color.neutral[500] }}> ≈ {fmtMoney(brlValue)}</span>
           )}
         </div>
+
+        {/* Cotação atual */}
         <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400] }}>
           Cotação atual: {formatRate(rate)}
-          {stale && <span style={{ color:ds.color.warning[500] }}> · desatualizada</span>}
+          {stale  && <span style={{ color:ds.color.warning[500] }}> · desatualizada</span>}
           {!stale && fetchedAt && <span> · {formatRelativeTime(fetchedAt)}</span>}
         </div>
+
+        {/* Cotação travada na assinatura */}
         {lockedRate > 0 && (
           <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:1 }}>
-            Na assinatura: {formatRate(lockedRate)}
-            {c.lockedRateAt && (
-              <span> em {new Date(c.lockedRateAt).toLocaleDateString('pt-BR')}</span>
-            )}
-            {variation != null && (
-              <span style={{ color:varColor, fontWeight:ds.font.weight.semibold, marginLeft:4 }}>
-                {variationNum >= 0 ? '+' : ''}{variation}%
-              </span>
-            )}
+            {lockedDateFmt
+              ? <span>Travada em <strong style={{ color:ds.color.neutral[700] }}>{lockedDateFmt}</strong> · {formatRate(lockedRate)}</span>
+              : <span>Na assinatura: {formatRate(lockedRate)}</span>
+            }
+            {' '}
+            <span style={{ color:varColor, fontWeight:ds.font.weight.semibold }}>
+              {variationFmt}
+            </span>
           </div>
         )}
       </div>
@@ -3686,18 +3694,17 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
                 onChange={e => {
                   const v = Number(e.target.value) || null;
                   set("lockedRate", v);
-                  // Registra o timestamp apenas quando um valor é inserido pela
-                  // primeira vez; preserva lockedRateAt se já existir e o
-                  // usuário só está ajustando o valor.
-                  if (v && !f.lockedRateAt) {
-                    set("lockedRateAt", new Date().toISOString());
-                  }
-                  if (!v) set("lockedRateAt", null);
+                  // lockedRateAt registra QUANDO a taxa foi travada.
+                  // Atualiza sempre que o valor muda (não só na primeira vez),
+                  // para rastrear ajustes pós-assinatura.
+                  // Nota: ISO string — serverTimestamp() não funciona em campos
+                  // aninhados dentro de data:{} no syncCollection. Ver db.js:45.
+                  set("lockedRateAt", v ? new Date().toISOString() : null);
                 }}
                 placeholder="Ex: 5.80"
                 hint={f.lockedRateAt
-                  ? `Registrado em ${new Date(f.lockedRateAt).toLocaleDateString('pt-BR')}`
-                  : "Registra a cotação usada na assinatura do contrato"}
+                  ? `Travada em ${new Date(f.lockedRateAt).toLocaleDateString('pt-BR')}`
+                  : "Taxa do dia em que o contrato foi assinado. Usada para comparar variação cambial."}
               />
             </Field>
           )}

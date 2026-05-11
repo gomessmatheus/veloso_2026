@@ -257,6 +257,12 @@ const ICONS = {
       <line x1="23" y1="11" x2="17" y2="11"/>
     </>
   ),
+  trendingUp: () => (
+    <>
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+      <polyline points="17 6 23 6 23 12"/>
+    </>
+  ),
   arrowUp: () => (
     <>
       <line x1="12" y1="19" x2="12" y2="5"/>

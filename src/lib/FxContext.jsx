@@ -21,7 +21,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { fetchRates } from './fx.js';
-import { getFxPrefs, setFxPrefs, getFxHistory, appendFxHistory } from '../../db.js';
+import { getFxPrefs, setFxPrefs, getFxHistory, appendFxHistory } from '../db.js'; // fix: era ../../db.js
 
 const FxCtx = createContext(null);
 

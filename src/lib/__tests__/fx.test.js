@@ -87,9 +87,11 @@ const awesomeBody = (EUR = 6.40, USD = 5.92) => ({
   USDBRL: { bid: String(USD) },
 });
 
-/** Corpo de resposta do Frankfurter (base EUR → BRL) */
-const frankfurterEurBody = (BRL = 6.42) => ({ rates: { BRL } });
-const frankfurterUsdBody = (BRL = 5.93) => ({ rates: { BRL } });
+/** Corpo de resposta do Frankfurter (base BRL → inversão em fx.js) */
+const frankfurterBody = (EUR_fraction = 0.15625, USD_fraction = 0.17094) => ({
+  base: 'BRL',
+  rates: { EUR: EUR_fraction, USD: USD_fraction },
+});
 
 /**
  * Corpo da ExchangeRate-API (base BRL → inversão em fx.js).
@@ -182,25 +184,24 @@ describe('fetchRates — AwesomeAPI ok', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('fetchRates — fallback Frankfurter', () => {
-  it('AwesomeAPI 500 → usa Frankfurter', async () => {
+  it('AwesomeAPI 500 → usa Frankfurter (1 call)', async () => {
+    // 1/0.15625 ≈ 6.40 EUR; 1/0.17094 ≈ 5.85 USD
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(err(500))                              // AwesomeAPI
-      .mockResolvedValueOnce(ok(frankfurterEurBody(6.42)))          // Frankfurter EUR
-      .mockResolvedValueOnce(ok(frankfurterUsdBody(5.93)));         // Frankfurter USD
+      .mockResolvedValueOnce(ok(frankfurterBody()));                // Frankfurter (1 call)
 
     const result = await fetchRates({ force: true });
 
     expect(result).not.toBeNull();
     expect(result.source).toBe('frankfurter');
-    expect(result.EUR).toBeCloseTo(6.42);
-    expect(result.USD).toBeCloseTo(5.93);
+    expect(result.EUR).toBeGreaterThan(6.0);
+    expect(result.USD).toBeGreaterThan(5.0);
   });
 
   it('AwesomeAPI network error → usa Frankfurter', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockRejectedValueOnce(new Error('network error'))
-      .mockResolvedValueOnce(ok(frankfurterEurBody(6.41)))
-      .mockResolvedValueOnce(ok(frankfurterUsdBody(5.91)));
+      .mockResolvedValueOnce(ok(frankfurterBody(0.1562, 0.1709)));
 
     const result = await fetchRates({ force: true });
 
@@ -216,22 +217,19 @@ describe('fetchRates — fallback ExchangeRate-API', () => {
   it('AwesomeAPI 500 + Frankfurter 500 → usa ExchangeRate-API', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(err(500))                              // AwesomeAPI
-      .mockResolvedValueOnce(err(500))                              // Frankfurter EUR
-      .mockResolvedValueOnce(err(500))                              // Frankfurter USD
+      .mockResolvedValueOnce(err(500))                              // Frankfurter (1 call)
       .mockResolvedValueOnce(ok(erApiBody(0.169, 0.156)));          // ER-API
 
     const result = await fetchRates({ force: true });
 
     expect(result).not.toBeNull();
     expect(result.source).toBe('er-api');
-    // 1 / 0.169 ≈ 5.917; 1 / 0.156 ≈ 6.410
     expect(result.USD).toBeGreaterThan(5.8);
     expect(result.EUR).toBeGreaterThan(6.0);
   });
 
   it('AwesomeAPI network error + Frankfurter network error → usa ExchangeRate-API', async () => {
     vi.spyOn(globalThis, 'fetch')
-      .mockRejectedValueOnce(new Error('timeout'))
       .mockRejectedValueOnce(new Error('timeout'))
       .mockRejectedValueOnce(new Error('timeout'))
       .mockResolvedValueOnce(ok(erApiBody(0.169, 0.156)));

@@ -271,3 +271,46 @@ export async function setUserRoles(roles) {
     await setDoc(doc(db, 'settings', 'user_roles'), roles)
   } catch (err) { dbErr('setUserRoles', err); throw err }
 }
+
+// ─── FX Prefs (por usuário) ────────────────────────────────
+// Armazenados em settings/fx_prefs_{uid} como JSON.
+// Estrutura: { autoRefresh: boolean, intervalMin: number }
+
+export async function getFxPrefs(uid) {
+  if (!uid) return null
+  try {
+    const snap = await getDoc(doc(db, 'settings', `fx_prefs_${uid}`))
+    return snap.exists() ? snap.data().prefs : null
+  } catch (err) { dbErr('getFxPrefs', err); return null }
+}
+
+export async function setFxPrefs(uid, prefs) {
+  if (!uid) return
+  try {
+    await setDoc(doc(db, 'settings', `fx_prefs_${uid}`), { uid, prefs, updatedAt: new Date().toISOString() })
+  } catch (err) { dbErr('setFxPrefs', err); throw err }
+}
+
+// ─── FX History (últimas 10 cotações por usuário) ──────────
+// Armazenado em fx_history/{uid} como array de até 10 registros.
+// Estrutura de registro: { EUR, USD, fetchedAt, source, recordedAt }
+
+export async function getFxHistory(uid) {
+  if (!uid) return []
+  try {
+    const snap = await getDoc(doc(db, 'fx_history', uid))
+    return snap.exists() ? (snap.data().records || []) : []
+  } catch (err) { dbErr('getFxHistory', err); return [] }
+}
+
+export async function appendFxHistory(uid, record) {
+  if (!uid) return
+  try {
+    const ref      = doc(db, 'fx_history', uid)
+    const snap     = await getDoc(ref)
+    const existing = snap.exists() ? (snap.data().records || []) : []
+    // Prepend mais recente, manter máximo 10
+    const records  = [record, ...existing].slice(0, 10)
+    await setDoc(ref, { uid, records, updatedAt: new Date().toISOString() })
+  } catch (err) { dbErr('appendFxHistory', err) } // não propaga — não crítico
+}

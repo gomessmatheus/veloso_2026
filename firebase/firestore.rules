@@ -1,25 +1,107 @@
 // firebase/firestore.rules
-// Cole este conteúdo em:
-// Firebase Console > Firestore Database > Rules
+//
+// Atualizado na Fase 7.5.1 para validar:
+//   contracts/{id}.data.lockedRate   — number > 0 ou null
+//   contracts/{id}.data.lockedRateAt — string ISO 8601 ou null
+//
+// NOTA ARQUITETURAL:
+//   Contratos são armazenados como { id, data: {...}, updatedAt }.
+//   lockedRate e lockedRateAt ficam dentro do campo `data` (mapa aninhado).
+//   Por isso as regras acessam request.resource.data.data.lockedRate
+//   em vez de request.resource.data.lockedRate.
 
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Acesso aberto para o time (sem login obrigatório)
-    // Qualquer pessoa com o link pode ler e escrever
-    match /{document=**} {
-      allow read, write: if true;
+    // ─── Helpers ──────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
     }
 
-    // ─────────────────────────────────────────────────────
-    // OPCIONAL: Se quiser restringir por domínio de e-mail,
-    // substitua o bloco acima por:
-    //
-    // match /{document=**} {
-    //   allow read, write: if request.auth != null
-    //     && request.auth.token.email.matches('.*@seudominio\\.com');
-    // }
-    // ─────────────────────────────────────────────────────
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // Valida o campo lockedRate dentro de data:
+    //   - Ausente (sem chave): ok (contratos antigos sem o campo)
+    //   - null: ok
+    //   - number > 0: ok
+    //   - qualquer outra coisa: ❌
+    function validLockedRate(contractData) {
+      let lr = contractData.lockedRate;
+      return !('lockedRate' in contractData)
+          || lr == null
+          || (lr is number && lr > 0);
+    }
+
+    // Valida o campo lockedRateAt dentro de data:
+    //   - Ausente: ok
+    //   - null: ok
+    //   - string (ISO 8601 armazenado como string — ver db.js:45): ok
+    //   - timestamp Firestore: ok (caso futuro se migrar para serverTimestamp)
+    //   - qualquer outra coisa: ❌
+    function validLockedRateAt(contractData) {
+      let lrat = contractData.lockedRateAt;
+      return !('lockedRateAt' in contractData)
+          || lrat == null
+          || lrat is string
+          || lrat is timestamp;
+    }
+
+    // Consistência: se lockedRate é null, lockedRateAt deve ser null (e vice-versa)
+    function lockedRateConsistent(contractData) {
+      let lr   = contractData.get('lockedRate', null);
+      let lrat = contractData.get('lockedRateAt', null);
+      return (lr == null) == (lrat == null);
+    }
+
+    // ─── Contracts ────────────────────────────────────────────
+    match /contracts/{contractId} {
+      allow read: if isAuth();
+
+      allow create, update: if isAuth()
+        && request.resource.data.id == contractId
+        && request.resource.data.data is map
+        && validLockedRate(request.resource.data.data)
+        && validLockedRateAt(request.resource.data.data)
+        && lockedRateConsistent(request.resource.data.data);
+
+      allow delete: if isAuth();
+    }
+
+    // ─── Posts ────────────────────────────────────────────────
+    match /posts/{postId} {
+      allow read, write: if isAuth();
+    }
+
+    // ─── Deliverables ─────────────────────────────────────────
+    match /deliverables/{delivId} {
+      allow read, write: if isAuth();
+    }
+
+    // ─── Caixa transactions ───────────────────────────────────
+    match /caixa_tx/{txId} {
+      allow read, write: if isAuth();
+    }
+
+    // ─── Settings (cotações manuais, eurRate legado etc.) ─────
+    match /settings/{key} {
+      allow read: if isAuth();
+      // Impede escrita de eurRate/usdRate — orphans da Fase 7, não mais usados
+      allow write: if isAuth() && key != 'eurRate' && key != 'usdRate';
+    }
+
+    // ─── Brands ───────────────────────────────────────────────
+    match /brands/{brandId} {
+      allow read, write: if isAuth();
+    }
+
+    // ─── Presence (online users) ──────────────────────────────
+    match /presence/{sessionId} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
   }
 }

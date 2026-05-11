@@ -12,9 +12,8 @@
  */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import {
-  loadCaixaTx, syncCaixaTx, getSetting, setSetting,
-} from "../../db.js";
+import { useCaixaSession, caixaData } from "../../lib/caixaSession.js";
+import CaixaGate from "./CaixaGate.jsx";
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard, Modal as DsModal, Toggle as DsToggle, Select as DsSelect } from "../../ui/index.js";
 import {
   aggregate, monthlyBreakdown, burnRate as calcBurnRate,
@@ -1067,29 +1066,44 @@ ${Object.entries(cats).map(([cat,items])=>`
 
 
 export default function Caixa({ contracts, openCopilot, role = "admin", syncStatus = "synced", onRetrySync }) {
+  // ── Step-up session ────────────────────────────────────
+  const session = useCaixaSession();
+  const { unlocked } = session;
+
   // tab state moved to useQueryState above
   const [transactions, setTransactions] = useState([]);
   const [baseBalance, setBaseBalance] = useState(0);
   const [baseDate, setBaseDate]       = useState("");
   const prevTxIds = useRef([]);
+
+  // Load data once session is unlocked
   useEffect(() => {
+    if (!unlocked) return;
     (async () => {
       try {
-        const [txs, base, bdate] = await Promise.all([loadCaixaTx(), getSetting("caixa_base"), getSetting("caixa_base_date")]);
-        const list = txs.length > 0 ? txs : lsLoad("caixa_tx", []);
+        const [remoteSettings] = await Promise.all([
+          caixaData("get_settings"),
+        ]);
+        const txList = await caixaData("list_tx");
+        const list   = txList?.length > 0 ? txList : lsLoad("caixa_tx", []);
         setTransactions(list);
         prevTxIds.current = list.map(t => t.id);
-        if (base != null) setBaseBalance(Number(base) || 0);
-        if (bdate) setBaseDate(bdate);
+        const base  = remoteSettings?.["caixa_base"];
+        const bdate = remoteSettings?.["caixa_base_date"];
+        if (base  != null) setBaseBalance(Number(base) || 0);
+        if (bdate)         setBaseDate(bdate);
+        // Keep localStorage in sync as offline fallback
+        lsSave("caixa_tx", list);
       } catch(e) {
-        if (import.meta.env.DEV) console.error("[Caixa] carregamento remoto:", e);
-        toast?.("Falha ao carregar dados do caixa. Usando cópia local.", "warning");
+        if (import.meta.env.DEV) console.error("[Caixa] load:", e);
+        if (e.code === "CAIXA_LOCKED") return; // gate will re-render
+        // Fall back to localStorage offline copy
         setTransactions(lsLoad("caixa_tx", []));
         setBaseBalance(lsLoad("caixa_base", 0));
         setBaseDate(lsLoad("caixa_base_date", ""));
       }
     })();
-  }, []);
+  }, [unlocked]);
   const [txModal, setTxModal] = useState(null);
   const [showExport, setShowExport] = useState(false);
   const [aiMessages, setAiMessages] = useState([]);
@@ -1128,11 +1142,12 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     setTransactions(list);
     lsSave("caixa_tx", list);
     try {
-      await syncCaixaTx(list, prevTxIds.current);
+      await caixaData("save_tx", { transactions: list });
       prevTxIds.current = list.map(t => t.id);
     } catch(e) {
-      if (import.meta.env.DEV) console.error("[Caixa] syncCaixaTx:", e);
-      toast?.("Falha ao sincronizar lançamento. Tentaremos novamente.", "error");
+      if (import.meta.env.DEV) console.error("[Caixa] save_tx:", e);
+      if (e.code === "CAIXA_LOCKED") { session.lockout(); return; }
+      toast?.("Falha ao sincronizar lançamento. Dados salvos localmente.", "error");
     }
   };
 
@@ -1142,10 +1157,13 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     lsSave("caixa_base", Number(val)||0);
     lsSave("caixa_base_date", date);
     try {
-      await setSetting("caixa_base", String(val));
-      await setSetting("caixa_base_date", date);
+      await Promise.all([
+        caixaData("set_settings", { key: "caixa_base",      value: String(val) }),
+        caixaData("set_settings", { key: "caixa_base_date", value: date }),
+      ]);
     } catch(e) {
       if (import.meta.env.DEV) console.error("[Caixa] updateBase:", e);
+      if (e.code === "CAIXA_LOCKED") { session.lockout(); return; }
       toast?.("Falha ao salvar saldo base remoto. Cópia local OK.", "warning");
     }
   };
@@ -1169,6 +1187,12 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         <p style={{ fontSize:ds.font.size.sm,color:TX2,maxWidth:320,margin:"0 auto" }}>O Controle Financeiro está disponível apenas para administradores.</p>
       </div>
     );
+  }
+
+  // ── Step-up gate: if session is locked, show CaixaGate ──
+  // (hook is always called above — gate wraps the JSX output, not the hooks)
+  if (!unlocked) {
+    return <CaixaGate session={session}><div/></CaixaGate>;
   }
 
   // ── Computed saldo ──────────────────────────────────────
@@ -1213,6 +1237,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   ];
 
   return (
+    <CaixaGate session={session}>
     <div style={{ padding:"24px 28px", maxWidth:"min(1280px, calc(100% - 48px))" }}>
       <div style={{ marginBottom:20 }}>
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:4 }}>
@@ -1646,6 +1671,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
         </div>
       )}
     </div>
+    </CaixaGate>
   );
 }
 

@@ -1637,6 +1637,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
           }}/>
       )}
     </div>
+    </CaixaGate>
   );
 }
 
@@ -1671,7 +1672,6 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
         </div>
       )}
     </div>
-    </CaixaGate>
   );
 }
 

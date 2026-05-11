@@ -196,6 +196,25 @@ export function formatRate(rate) {
   return `R$ ${Number(rate).toFixed(2).replace('.', ',')}`;
 }
 
+/**
+ * Calcula variação % entre cotação atual e cotação travada na assinatura.
+ *
+ * Garante Princípio #9 — nunca retorna NaN, Infinity ou 0% quando lockedRate
+ * é nulo (o que indicaria "sem variação" erroneamente).
+ *
+ * @param {number|null|undefined} currentRate  — cotação atual (ex: 6.40)
+ * @param {number|null|undefined} lockedRate   — cotação travada (ex: 5.80)
+ * @returns {number|null}
+ *   - null  se qualquer argumento for nulo/zero/inválido
+ *   - number (ex: 10.34) se ambos forem válidos — sem toFixed, caller formata
+ */
+export function calcLockedVariation(currentRate, lockedRate) {
+  const c = Number(currentRate);
+  const l = Number(lockedRate);
+  if (!c || !l || isNaN(c) || isNaN(l) || l === 0) return null;
+  return ((c - l) / l) * 100;
+}
+
 // ─── Aliases (nomes alternativos para compatibilidade com spec) ────
 /** @alias saveManualRates */
 export const saveManualOverride  = saveManualRates;

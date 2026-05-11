@@ -4078,7 +4078,11 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role} brands={brands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
     if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role} openCopilot={openCopilot}/>;
     if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot} onNewContract={(prefillBrandId)=>setModal({type:"contract",data:null,prefillBrandId})}/>;
-    if (view==="caixa")          return <Caixa contracts={activeContracts} openCopilot={openCopilot} role={role} syncStatus={syncStatus} onRetrySync={()=>{ /* retry via saveTx re-sync */ }}/>;
+    if (view==="caixa")          return (
+      <React.Suspense fallback={<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh",color:"#6E6E6E",fontSize:13}}>Carregando...</div>}>
+        <Caixa contracts={activeContracts} openCopilot={openCopilot} role={role} syncStatus={syncStatus} onRetrySync={()=>{ /* retry via saveTx re-sync */ }}/>
+      </React.Suspense>
+    );
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
 
     return null;

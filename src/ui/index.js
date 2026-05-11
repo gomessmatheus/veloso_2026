@@ -10,7 +10,6 @@
  * - Não importar diretamente de src/ui/Button.jsx etc. — sempre via index.
  * - _inject.js é detalhe de implementação: NÃO exportar.
  */
-
 // ── Primitivas ────────────────────────────────────────────
 export { Button, IconButton }      from './Button.jsx';
 export { Input }                   from './Input.jsx';
@@ -22,8 +21,7 @@ export { Icon }                    from './Icon.jsx';
 export { Modal }                   from './Modal.jsx';
 export { Toggle }                  from './Toggle.jsx';
 export { Skeleton, DashboardSkeleton, TableSkeleton, PipelineSkeleton } from './Skeleton.jsx';
-
-export { CurrencyRateBadge }           from './CurrencyRateBadge.jsx';
-
+export { CurrencyRateBadge }       from './CurrencyRateBadge.jsx';
+export { Overline }                from './Overline.jsx';
 // ── Tokens (re-export para conveniência) ──────────────────
 export { theme, t, css }           from '../lib/theme.js';

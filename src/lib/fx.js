@@ -146,16 +146,30 @@ export async function fetchRates({ force = false } = {}) {
  * @param {number} amount
  * @param {'BRL'|'USD'|'EUR'} fromCurrency
  * @param {'BRL'|'USD'|'EUR'} toCurrency
- * @param {{ USD: number, EUR: number }} rates
+ * @param {{ USD: number, EUR: number }|null|undefined} rates
+ * @returns {number} Sempre um número; nunca NaN, null ou undefined (Princípio #9).
  */
 export function convert(amount, fromCurrency, toCurrency, rates) {
-  if (!amount || fromCurrency === toCurrency) return amount;
-  const r = (cur) => rates[cur] || 0;
-  if (toCurrency === 'BRL') return r(fromCurrency) > 0 ? amount * r(fromCurrency) : amount;
-  if (fromCurrency === 'BRL') return r(toCurrency) > 0 ? amount / r(toCurrency) : amount;
+  // Garante retorno numérico em qualquer caso (sem NaN na UI)
+  const n = Number(amount);
+  if (!n || isNaN(n)) return 0;
+  if (fromCurrency === toCurrency) return n;
+
+  const r = (cur) => Number(rates?.[cur] ?? 0);
+
+  if (toCurrency === 'BRL') {
+    const rate = r(fromCurrency);
+    return rate > 0 ? n * rate : n;
+  }
+  if (fromCurrency === 'BRL') {
+    const rate = r(toCurrency);
+    return rate > 0 ? n / rate : n;
+  }
   // Cruzada via BRL
-  if (!r(fromCurrency) || !r(toCurrency)) return amount;
-  return (amount * r(fromCurrency)) / r(toCurrency);
+  const fromRate = r(fromCurrency);
+  const toRate   = r(toCurrency);
+  if (!fromRate || !toRate) return n;
+  return (n * fromRate) / toRate;
 }
 
 /** Formata número como moeda no locale pt-BR */

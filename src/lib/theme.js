@@ -11,6 +11,17 @@
  *   mas não carregada).
  */
 
+/**
+ * Design tokens Ranked — única fonte de verdade visual.
+ *
+ * ESCALA TIPOGRÁFICA MÍNIMA: 11px (ds.font.size.xs).
+ * Valores abaixo de 11px NÃO devem ser introduzidos:
+ *   - WCAG AA prático: texto abaixo de 11px falha contraste em fundos claros
+ *   - Legibilidade em mobile: densidades abaixo de 11px são ilegíveis em 360px
+ *   - Regra de conformidade: `fontSize: 9` e `fontSize: 10` são proibidos
+ *
+ * TODO Fase 13: migrar para Tailwind v4 @theme — PR isolado, aprovação explícita.
+ */
 export const theme = {
   // ── COLOR SCALES ─────────────────────────────────────────
   color: {
@@ -73,6 +84,13 @@ export const theme = {
     },
     weight: { regular: 400, medium: 500, semibold: 600 },
     lineHeight: { tight: 1.2, normal: 1.4, relaxed: 1.55 },
+    letterSpacing: {
+      tight:    '-0.01em', // headings
+      normal:   '0em',
+      wide:     '0.04em',  // corpo uppercase discreto
+      wider:    '0.08em',  // status pills
+      widest:   '0.12em',  // overline padrão
+    },
     tabular: { fontVariantNumeric: 'tabular-nums' },
   },
 

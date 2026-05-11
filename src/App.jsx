@@ -91,10 +91,10 @@ const ROLE_META = {
   influencer:  { label:"Influenciador",  color: ds.color.success[500] },
 };
 const ROLE_NAV = {
-  admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa"],
-  agente:      ["dashboard","contratos","marcas","financeiro"],
-  atendimento: ["dashboard","acompanhamento","contratos","marcas"],
-  influencer:  ["dashboard","acompanhamento","financeiro"],
+  admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa","cotacoes"],
+  agente:      ["dashboard","contratos","marcas","financeiro","cotacoes"],
+  atendimento: ["dashboard","acompanhamento","contratos","marcas","cotacoes"],
+  influencer:  ["dashboard","acompanhamento","financeiro","cotacoes"],
 };
 const ROLE_CAN = {
   admin:       { editContracts:true,  seeValues:true,  seeCaixa:true,   editDeliverables:true, seeRoteiros:true,  seeFullFinanceiro:true  },
@@ -890,13 +890,6 @@ const NAV_ITEMS = [
   { id:"caixa",          label:"Caixa",      icon:"landmark"        },
   { id:"cotacoes",       label:"Cotações",   icon:"trendingUp"      },
 ];
-
-const ROLE_NAV = {
-  admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa","cotacoes"],
-  agente:      ["dashboard","contratos","marcas","financeiro","cotacoes"],
-  atendimento: ["dashboard","acompanhamento","contratos","marcas","cotacoes"],
-  influencer:  ["dashboard","acompanhamento","financeiro","cotacoes"],
-};
 
 function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts, role, userName, deliverables }) {
   const my = useMemo(() => getMyPresence(), []);

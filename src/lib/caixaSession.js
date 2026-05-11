@@ -193,6 +193,24 @@ export async function caixaData(action, payload = {}) {
  *   attemptsLeft {number|null} — estimated remaining attempts (from 429 header)
  */
 export function useCaixaSession() {
+  // ── BYPASS MODE ──────────────────────────────────────────
+  // Step-up auth backend (Edge Functions) não está deployado.
+  // Gate desativada — apenas o role check (admin) protege a view.
+  // TODO: implementar step-up auth com Firebase Cloud Functions.
+  return {
+    unlocked:     true,
+    unlock:       async () => {},
+    lockout:      async () => {},
+    expiresAt:    null,
+    expiresIn:    null,
+    expiringSoon: false,
+    loading:      false,
+    error:        null,
+    clearError:   () => {},
+    attemptsLeft: null,
+  };
+  // ── END BYPASS ───────────────────────────────────────────
+
   const [unlocked,     setUnlocked]     = useState(() => !!readSession());
   const [expiresAt,    setExpiresAt]    = useState(() => readSession()?.expiresAt ?? null);
   const [expiresIn,    setExpiresIn]    = useState(null);

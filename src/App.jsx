@@ -91,10 +91,10 @@ const ROLE_META = {
   influencer:  { label:"Influenciador",  color: ds.color.success[500] },
 };
 const ROLE_NAV = {
-  admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa","cotacoes"],
-  agente:      ["dashboard","contratos","marcas","financeiro","cotacoes"],
-  atendimento: ["dashboard","acompanhamento","contratos","marcas","cotacoes"],
-  influencer:  ["dashboard","acompanhamento","financeiro","cotacoes"],
+  admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa"],
+  agente:      ["dashboard","contratos","marcas","financeiro"],
+  atendimento: ["dashboard","acompanhamento","contratos","marcas"],
+  influencer:  ["dashboard","acompanhamento","financeiro"],
 };
 const ROLE_CAN = {
   admin:       { editContracts:true,  seeValues:true,  seeCaixa:true,   editDeliverables:true, seeRoteiros:true,  seeFullFinanceiro:true  },
@@ -888,7 +888,6 @@ const NAV_ITEMS = [
   { id:"marcas",         label:"Marcas",     icon:"tag"             },
   { id:"financeiro",     label:"Financeiro", icon:"banknote"        },
   { id:"caixa",          label:"Caixa",      icon:"landmark"        },
-  { id:"cotacoes",       label:"Cotações",   icon:"trendingUp"      },
 ];
 
 function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts, role, userName, deliverables }) {
@@ -1080,14 +1079,8 @@ function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobil
       </div>
       <div style={{ flex:1 }}/>
 
-      {/* Live FX rates — replaces manual input fields */}
-      <CurrencyRateBadge size="sm" showRefresh/>
-
-      {/* Sync status pill */}
-      <div style={{ display:'flex', alignItems:'center', gap:ds.space[1], padding:`3px ${ds.space[3]}`, background:`${statusColor}12`, border:`1px solid ${statusColor}30`, borderRadius:ds.radius.full }}>
-        <div style={{ width:6, height:6, borderRadius:'50%', background:statusColor }}/>
-        <span style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:'0.08em', textTransform:'uppercase', color:statusColor }}>{statusLabel}</span>
-      </div>
+      {/* Sync status dot (minimal) */}
+      <div style={{ width:6, height:6, borderRadius:'50%', background:statusColor, flexShrink:0 }} title={statusLabel}/>
 
       {/* CTA */}
       {(view==="contratos"||view==="dashboard") && (
@@ -4079,7 +4072,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot} onNewContract={(prefillBrandId)=>setModal({type:"contract",data:null,prefillBrandId})}/>;
     if (view==="caixa")          return <Caixa contracts={activeContracts} openCopilot={openCopilot}/>;
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
-    if (view==="cotacoes")       return <CotacoesView/>;
+
     return null;
   } catch(e) {
     setErr(e?.message || String(e));
@@ -4554,6 +4547,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
     { id:"comissoes",   label:`Comissões (${contracts.filter(c=>c.hasCommission).length})` },
     { id:"nf",          label:`Notas Fiscais` },
     { id:"pagamentos",  label:"Pagamentos" },
+    { id:"cotacoes",    label:"Cotações" },
   ];
 
   return (
@@ -4566,7 +4560,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
               <h1 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-.02em", marginBottom:ds.space[1] }}>Financeiro</h1>
               <p style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>Gestão de NFs, comissões Ranked e pagamentos</p>
             </div>
-            <CurrencyRateBadge size="sm" showRefresh/>
+
           </div>
         </div>
       )}
@@ -4790,6 +4784,11 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
       {tab==="pagamentos" && (
         <PaymentsList contracts={contracts} saveC={saveC} rates={rates}/>
       )}
+      {tab==="cotacoes" && (
+        <div style={{ paddingTop:ds.space[4] }}>
+          <CotacoesView/>
+        </div>
+      )}
     </div>
   );
 }
@@ -4919,20 +4918,13 @@ function txColor(type)    { return TX_TYPES.find(t=>t.id===type)?.color    || ds
 function txIconName(type) { return TX_TYPES.find(t=>t.id===type)?.iconName || "minus"; }
 function txEmoji(type)    { return TX_TYPES.find(t=>t.id===type)?.iconName || "minus"; }
 
-// ─── Balance Password Button ───────────────────────────────
+// ─── Balance Editor Button ─────────────────────────────────
 function EditBalanceButton({ acc, accounts, index, saveAcc }) {
   const [open, setOpen] = useState(false);
-  const [pw, setPw] = useState("");
-  const [step, setStep] = useState("locked");
+  const [step, setStep] = useState("editing");
   const [newBalance, setNewBalance] = useState("");
   const [newDate, setNewDate] = useState(new Date().toISOString().substr(0,10));
   const [newNote, setNewNote] = useState("");
-  const [err, setErr] = useState(false);
-
-  const checkPw = () => {
-    if (pw === BALANCE_PASSWORD) { setStep("editing"); setErr(false); setNewBalance(String(acc.balance||"0")); }
-    else { setErr(true); setPw(""); }
-  };
 
   const save = () => {
     const entry = { date:newDate, balance:Number(newBalance)||0, note:newNote };
@@ -4946,22 +4938,12 @@ function EditBalanceButton({ acc, accounts, index, saveAcc }) {
 
   if (!open) return (
     <button onClick={()=>setOpen(true)} style={{ width:"100%",padding:"7px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
-      🔒 Atualizar saldo
+      Atualizar saldo
     </button>
   );
 
   return (
     <div style={{ background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"12px",marginTop:8 }}>
-      {step==="locked" && <>
-        <div style={{ fontSize:11,color:TX2,marginBottom:8,fontWeight:600 }}>Senha para editar saldo</div>
-        <div style={{ display:"flex",gap:6 }}>
-          <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&checkPw()} autoFocus placeholder="••••••••"
-            style={{ flex:1,padding:"7px 10px",fontSize:12,background:err?`${RED}08`:B1,border:`1px solid ${err?RED:LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
-          <button onClick={checkPw} style={{ padding:"7px 12px",background:RED,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>OK</button>
-          <button onClick={()=>{setOpen(false);setErr(false);setPw("");}} style={{ padding:"7px 10px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
-        </div>
-        {err&&<div style={{ fontSize:ds.font.size.xs,color:RED,marginTop:4 }}>Senha incorreta</div>}
-      </>}
       {step==="editing" && <>
         <div style={{ fontSize:11,color:TX2,marginBottom:10,fontWeight:600 }}>Registrar novo saldo</div>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
@@ -4980,7 +4962,7 @@ function EditBalanceButton({ acc, accounts, index, saveAcc }) {
           style={{ width:"100%",padding:"7px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none",marginBottom:8 }}/>
         <div style={{ display:"flex",gap:6 }}>
           <button onClick={save} style={{ flex:1,padding:"7px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>✓ Salvar</button>
-          <button onClick={()=>{setOpen(false);setStep("locked");setPw("");}} style={{ padding:"7px 12px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>Cancelar</button>
+          <button onClick={()=>{setOpen(false);setStep("editing");}} style={{ padding:"7px 12px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>Cancelar</button>
         </div>
       </>}
     </div>
@@ -5910,7 +5892,7 @@ ${Object.entries(cats).map(([cat,items])=>`
 
 
 function Caixa({ contracts, openCopilot }) {
-  const [unlocked, setUnlocked] = useState(false);
+  const [unlocked, setUnlocked] = useState(true); // senha removida
   const [tab, setTab] = useState("dash");
   const [transactions, setTransactions] = useState([]);
   const [baseBalance, setBaseBalance] = useState(0);
@@ -6270,17 +6252,10 @@ function Caixa({ contracts, openCopilot }) {
 // ─── Saldo Base Editor ────────────────────────────────────
 function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
   const [editing, setEditing] = useState(false);
-  const [pw, setPw] = useState("");
-  const [step, setStep] = useState("locked");
   const [val, setVal] = useState(String(baseBalance||"0"));
   const [date, setDate] = useState(baseDate||new Date().toISOString().substr(0,10));
-  const [err, setErr] = useState(false);
 
-  const check = () => {
-    if (pw === BALANCE_PASSWORD) { setStep("editing"); setVal(String(baseBalance||"0")); setErr(false); }
-    else { setErr(true); setPw(""); }
-  };
-  const save = () => { onSave(val, date); setEditing(false); setStep("locked"); setPw(""); };
+  const save = () => { onSave(val, date); setEditing(false); };
 
   return (
     <div style={{ ...G,padding:"12px 18px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap" }}>
@@ -6293,15 +6268,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
         </div>
       </div>
       {!editing ? (
-        <button onClick={()=>{setEditing(true);setStep("locked");}} style={{ padding:"6px 14px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",gap:6 }}>🔒 Alterar saldo base</button>
-      ) : step==="locked" ? (
-        <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-          <input type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}} onKeyDown={e=>e.key==="Enter"&&check()} autoFocus placeholder="Senha"
-            style={{ padding:"6px 10px",fontSize:12,background:err?`${RED}08`:B2,border:`1px solid ${err?RED:LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none",width:120 }}/>
-          <button onClick={check} style={{ padding:"6px 12px",background:RED,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>OK</button>
-          <button onClick={()=>{setEditing(false);setErr(false);setPw("");}} style={{ padding:"6px 8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
-          {err&&<span style={{ fontSize:ds.font.size.xs,color:RED }}>Incorreta</span>}
-        </div>
+        <button onClick={()=>{setEditing(true);}} style={{ padding:"6px 14px",fontSize:11,fontWeight:600,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",gap:6 }}>Alterar saldo base</button>
       ) : (
         <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
           <input type="number" value={val} onChange={e=>setVal(e.target.value)} autoFocus placeholder="0,00"
@@ -6309,7 +6276,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
           <input type="date" value={date} onChange={e=>setDate(e.target.value)}
             style={{ padding:"6px 10px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
           <button onClick={save} style={{ padding:"6px 14px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>Salvar</button>
-          <button onClick={()=>{setEditing(false);setStep("locked");setPw("");}} style={{ padding:"6px 8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
+          <button onClick={()=>{setEditing(false);}} style={{ padding:"6px 8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
         </div>
       )}
     </div>

@@ -1506,7 +1506,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
             aria-controls={`tabpanel-${t.id}`}
             tabIndex={tab===t.id ? 0 : -1}
             onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`,transition:TRANS,marginBottom:-1,background:"none",border:"none",borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`,fontFamily:"inherit",outline:"none" }}>
+            style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`,transition:TRANS,marginBottom:-1,background:"none",border:"none",fontFamily:"inherit",outline:"none" }}>
             {t.label}
           </button>
         ))}

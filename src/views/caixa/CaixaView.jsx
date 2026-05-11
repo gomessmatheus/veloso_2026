@@ -23,6 +23,11 @@ import {
 } from "../../lib/finance.js";
 import { formatDate } from "../../lib/format.js";
 import { useQueryState } from "../../lib/url-state.js";
+import {
+  defaultPeriod, periodForPreset, shiftPeriod, canNavigate,
+  periodLabel as getPeriodLabel, periodDays, serializePeriod, parsePeriod,
+  monthInPeriod,
+} from "../../lib/period.js";
 
 // ─── Tokens (local — mirrors App.jsx globals) ─────────────
 // These are duplicated intentionally until a shared tokens file exists.
@@ -483,7 +488,184 @@ function DREView({ transactions, year }) {
 }
 
 // ─── Caixa Dashboard ─────────────────────────────────────
-function CaixaDash({ transactions, baseBalance, saldoTotal }) {
+
+// ─── PeriodPicker popover / bottom-sheet ─────────────────
+const PRESETS_LIST = [
+  { id:"month",       label:"Este mês" },
+  { id:"prev_month",  label:"Mês anterior" },
+  { id:"last_30d",    label:"Últimos 30 dias" },
+  { id:"last_90d",    label:"Últimos 90 dias" },
+  { id:"quarter",     label:"Trimestre atual" },
+  { id:"ytd",         label:"Ano até hoje (YTD)" },
+  { id:"fiscal_year", label:`Ano fiscal ${new Date().getFullYear()}` },
+  { id:"custom",      label:"Personalizado…" },
+];
+
+function PeriodPicker({ period: initial, transactions, onApply, onClose, isMobile, colors }) {
+  const { B1, B2, LN, LN2, TX, TX2, TX3, RED, GRN } = colors ?? {};
+  const [draft, setDraft]         = useState(initial);
+  const [customFrom, setCustomFrom] = useState(initial.from);
+  const [customTo,   setCustomTo]   = useState(initial.to);
+  const [error,      setError]      = useState(null);
+  const presetRefs = useRef([]);
+
+  // Trap focus inside picker
+  useEffect(() => {
+    const trap = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", trap);
+    return () => window.removeEventListener("keydown", trap);
+  }, [onClose]);
+
+  // Auto-focus first preset on open
+  useEffect(() => { presetRefs.current[0]?.focus(); }, []);
+
+  const selectPreset = (id) => {
+    if (id === "custom") {
+      setDraft({ presetId:"custom", from:draft.from, to:draft.to });
+    } else {
+      const p = periodForPreset(id, new Date());
+      setDraft(p);
+      setCustomFrom(p.from);
+      setCustomTo(p.to);
+      setError(null);
+    }
+  };
+
+  const handleKeyNav = (e, idx) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); presetRefs.current[Math.min(idx+1,PRESETS_LIST.length-1)]?.focus(); }
+    if (e.key === "ArrowUp")   { e.preventDefault(); presetRefs.current[Math.max(idx-1,0)]?.focus(); }
+    if (e.key === "Enter")     { selectPreset(PRESETS_LIST[idx].id); }
+  };
+
+  const apply = () => {
+    if (draft.presetId === "custom") {
+      if (!customFrom || !customTo) { setError("Preencha as duas datas."); return; }
+      if (customFrom > customTo)    { setError("Data inicial deve ser anterior ou igual à final."); return; }
+      const days = Math.round((new Date(customTo+"T00:00:00") - new Date(customFrom+"T00:00:00")) / 86400000) + 1;
+      if (days > 5 * 365) {
+        if (!window.confirm("Período maior que 5 anos pode deixar a lista lenta. Continuar?")) return;
+      }
+      onApply({ presetId:"custom", from:customFrom, to:customTo });
+    } else {
+      onApply(draft);
+    }
+  };
+
+  const popStyle = isMobile ? {
+    position:"fixed", bottom:0, left:0, right:0,
+    background:B1, borderRadius:"18px 18px 0 0",
+    padding:"20px 18px 32px", boxShadow:"0 -8px 28px rgba(0,0,0,.16)",
+    zIndex:500, maxHeight:"88vh", overflowY:"auto",
+  } : {
+    position:"absolute", top:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)",
+    background:B1, border:`1px solid ${LN}`, borderRadius:12,
+    padding:"18px 18px 14px", boxShadow:"0 8px 28px rgba(0,0,0,.13)",
+    zIndex:300, minWidth:296, maxWidth:340,
+  };
+
+  const fieldStyle = {
+    width:"100%", padding:"7px 10px", fontSize:12,
+    background:B1, border:`1px solid ${LN}`,
+    borderRadius:6, color:TX, fontFamily:"inherit",
+    outline:"none", boxSizing:"border-box",
+  };
+
+  return (
+    <>
+      {isMobile && (
+        <div onClick={onClose}
+          style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.38)",zIndex:499 }}/>
+      )}
+      <div role="dialog" aria-modal="false" aria-label="Selecionar período" style={popStyle}>
+        {/* Mobile handle */}
+        {isMobile && (
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+            <span style={{ fontWeight:700,fontSize:15,color:TX }}>Período</span>
+            <button onClick={onClose} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:TX2 }}>×</button>
+          </div>
+        )}
+
+        {/* Presets */}
+        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:".1em",marginBottom:6 }}>Presets</div>
+        {PRESETS_LIST.map((p, idx) => (
+          <button key={p.id}
+            ref={el => presetRefs.current[idx] = el}
+            onClick={() => selectPreset(p.id)}
+            onKeyDown={e => handleKeyNav(e, idx)}
+            style={{
+              display:"flex", alignItems:"center", gap:10,
+              width:"100%", padding:"8px 10px", marginBottom:1,
+              background: draft.presetId===p.id ? `${TX}0a` : "none",
+              border:"none", borderRadius:7,
+              cursor:"pointer", fontFamily:"inherit",
+              fontSize:13, color:TX, textAlign:"left",
+              transition:"background .12s",
+            }}
+            onMouseEnter={e=>e.currentTarget.style.background=`${TX}07`}
+            onMouseLeave={e=>e.currentTarget.style.background=draft.presetId===p.id?`${TX}0a`:"none"}
+          >
+            <span style={{
+              width:14, height:14, borderRadius:"50%", flexShrink:0, display:"inline-block",
+              border:`2px solid ${draft.presetId===p.id?"#2563EB":LN2}`,
+              background: draft.presetId===p.id ? "#2563EB" : "none",
+              transition:"border-color .12s, background .12s",
+            }}/>
+            {p.label}
+          </button>
+        ))}
+
+        {/* Divider */}
+        <div style={{ height:1, background:LN, margin:"10px -18px" }}/>
+
+        {/* Date range inputs */}
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10 }}>
+          <div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>De</div>
+            <input type="date"
+              value={draft.presetId==="custom" ? customFrom : draft.from}
+              readOnly={draft.presetId!=="custom"}
+              onChange={e=>{ setCustomFrom(e.target.value); setError(null); }}
+              style={{ ...fieldStyle, background:draft.presetId!=="custom"?B2:B1, cursor:draft.presetId!=="custom"?"not-allowed":"auto" }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Até</div>
+            <input type="date"
+              value={draft.presetId==="custom" ? customTo : draft.to}
+              readOnly={draft.presetId!=="custom"}
+              onChange={e=>{ setCustomTo(e.target.value); setError(null); }}
+              style={{ ...fieldStyle, background:draft.presetId!=="custom"?B2:B1, cursor:draft.presetId!=="custom"?"not-allowed":"auto" }}
+            />
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <p role="alert" style={{ fontSize:11,color:RED,margin:"6px 0 0",display:"flex",alignItems:"center",gap:4 }}>
+            <DsIcon name="alertCircle" size={11} color={RED}/>{error}
+          </p>
+        )}
+
+        {/* Actions */}
+        <div style={{ display:"flex",justifyContent:"flex-end",gap:8,marginTop:14 }}>
+          <button onClick={onClose}
+            style={{ padding:"7px 14px",fontSize:12,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2,fontFamily:"inherit" }}>
+            Cancelar
+          </button>
+          <button onClick={apply}
+            style={{ padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6,background:TX,border:"none",color:"white",fontFamily:"inherit" }}
+            onKeyDown={e=>e.key==="Enter"&&apply()}>
+            Aplicar
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod }) {
   const months = Array.from({length:12},(_,i)=>i);
   const currentYear = new Date().getFullYear();
   const MONTHS_SH2 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -662,19 +844,24 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
         <div style={{ display:"flex",alignItems:"flex-end",gap:4,height:120 }}>
           {monthData.map((d,i)=>{
             const isCurrentYear = currentYear===new Date().getFullYear();
-            const isFuture = isCurrentYear && i > new Date().getMonth();
+            const isFuture  = isCurrentYear && i > new Date().getMonth();
+            const inPeriod  = activePeriod ? monthInPeriod(activePeriod, currentYear, i) : false;
             const projStyle = isFuture ? {
               opacity:0.45,
               backgroundImage:"repeating-linear-gradient(45deg,transparent 0 4px,rgba(0,0,0,.08) 4px 8px)",
             } : {};
             return (
-              <div key={i} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
+              <div key={i} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                borderRadius:"4px 4px 0 0",
+                boxShadow: inPeriod ? `0 -2px 0 0 #2563EB` : "none",
+                background: inPeriod ? "#2563EB08" : "none",
+              }}>
                 <div style={{ width:"100%",display:"flex",gap:1,alignItems:"flex-end",height:100 }}>
                   <div style={{ flex:1,background:GRN,height:`${maxVal>0?d.entradas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.entradas>0?3:0,...projStyle }}/>
                   <div style={{ flex:1,background:RED,height:`${maxVal>0?d.saidas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.saidas>0?3:0,...projStyle }}/>
                   {d.dividendos>0&&<div style={{ flex:1,background:"#7C3AED",height:`${maxVal>0?d.dividendos/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",...projStyle }}/>}
                 </div>
-                <div style={{ fontSize:8,color:isFuture?TX3+"88":TX3,textAlign:"center" }}>{d.month}</div>
+                <div style={{ fontSize:8,color:inPeriod?BLU:isFuture?TX3+"88":TX3,fontWeight:inPeriod?700:400,textAlign:"center" }}>{d.month}</div>
               </div>
             );
           })}
@@ -889,9 +1076,10 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
 
 
 // ─── Contador Export Modal ────────────────────────────────
-function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose }) {
+function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose, initialFrom, initialTo }) {
   const [period, setPeriod] = useState("month");
-  const [selMonth, setSelMonth] = useState(new Date().toISOString().substr(0,7));
+  const _defMonth = initialFrom ? initialFrom.slice(0,7) : new Date().toISOString().substr(0,7);
+  const [selMonth, setSelMonth] = useState(_defMonth);
   const [selYear, setSelYear] = useState(String(new Date().getFullYear()));
 
   const filtered = transactions.filter(t => {
@@ -1119,20 +1307,9 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const [tab, setTab] = useQueryState("caixa_tab", "dash", {
     parse: (v) => ["dash","lancamentos","dre","indicadores"].includes(v) ? v : null,
   });
-  const [monthOffset, setMonthOffset] = useQueryState("caixa_mes", 0, {
-    serialize: (offset) => {
-      const d = new Date();
-      const t = new Date(d.getFullYear(), d.getMonth() + offset, 1);
-      return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}`;
-    },
-    parse: (str) => {
-      const m = /^(\d{4})-(\d{2})$/.exec(str);
-      if (!m) return null;
-      const y = parseInt(m[1],10), mo = parseInt(m[2],10);
-      if (mo < 1 || mo > 12) return null;
-      const now = new Date();
-      return (y - now.getFullYear()) * 12 + (mo - 1 - now.getMonth());
-    },
+  const [period, setPeriod] = useQueryState("caixa_periodo", defaultPeriod(), {
+    serialize: serializePeriod,
+    parse: (s) => parsePeriod(s) ?? defaultPeriod(),
   });
   const [search, setSearch] = useQueryState("caixa_q", "");
   const [filterType2, setFilterType2] = useQueryState("caixa_tipo", "all");
@@ -1170,11 +1347,8 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
   const [minVal, setMinVal] = useQueryState("caixa_min", "");
   const [maxVal, setMaxVal] = useQueryState("caixa_max", "");
-  // Month/year picker (Task 2)
-  const [pickerOpen, setPickerOpen]   = useState(false);
-  const [pickerMonth, setPickerMonth] = useState(0); // 0-based
-  const [pickerYear, setPickerYear]   = useState(new Date().getFullYear());
-  const pickerRef = useRef(null);
+  // Period picker state
+  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
 
   // ── Role gate (Task 2) ─────────────────────────────────
   if (role !== "admin") {
@@ -1203,30 +1377,33 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const totalDividendos = _agg.totalDividendos;
   const saldoTotal      = _agg.saldoTotal;
 
-  // ── Month navigation ────────────────────────────────────
-  const now = new Date();
-  const viewDate  = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-  const viewYear  = viewDate.getFullYear();
-  const viewMonth = viewDate.getMonth();
-  const monthKey  = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}`;
-  const MONTHS_LONG2 = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  const monthLabel = `${MONTHS_LONG2[viewMonth]} ${viewYear}`;
+  // ── Period-based filtering ───────────────────────────────
+  const periodTx = useMemo(() =>
+    transactions.filter(t => t.date >= period.from && t.date <= period.to),
+    [transactions, period.from, period.to]
+  );
+  const monthTx = useMemo(() =>
+    periodTx
+      .filter(t => filterType2==="all" || t.type===filterType2)
+      .filter(t => !search || t.description?.toLowerCase().includes(search.toLowerCase()) || t.category?.toLowerCase().includes(search.toLowerCase()) || t.notes?.toLowerCase().includes(search.toLowerCase()))
+      .filter(t => !minVal || Number(t.amount) >= Number(minVal))
+      .filter(t => !maxVal || Number(t.amount) <= Number(maxVal))
+      .sort((a,b) => b.date.localeCompare(a.date)),
+    [periodTx, filterType2, search, minVal, maxVal]
+  );
 
-  const monthTx = transactions
-    .filter(t => t.date?.startsWith(monthKey))
-    .filter(t => filterType2==="all" || t.type===filterType2)
-    .filter(t => !search || t.description?.toLowerCase().includes(search.toLowerCase()) || t.category?.toLowerCase().includes(search.toLowerCase()) || t.notes?.toLowerCase().includes(search.toLowerCase()))
-    .filter(t => !minVal || Number(t.amount) >= Number(minVal))
-    .filter(t => !maxVal || Number(t.amount) <= Number(maxVal))
-    .sort((a,b) => b.date.localeCompare(a.date));
-
-  // Unfiltered total for the counter (Task 1)
-  const totalDoMes = transactions.filter(t => t.date?.startsWith(monthKey));
-  const _monthAgg       = aggregate(monthTx, 0);
+  const totalDoMes  = periodTx;
+  const _monthAgg   = useMemo(() => aggregate(periodTx, 0), [periodTx]);
   const monthEntradas   = _monthAgg.totalEntradas;
   const monthSaidas     = _monthAgg.totalOutflows;
   const monthDividendos = _monthAgg.totalDividendos;
   const monthNet        = monthEntradas - monthSaidas - monthDividendos;
+  const pDays           = periodDays(period);
+  const pLabel          = getPeriodLabel(period);
+  const pCanNav         = canNavigate(period.presetId);
+  // backward compat aliases
+  const monthLabel      = pLabel;
+  const monthKey        = period.from.slice(0,7);
 
   const TABS = [
     { id:"dash",        label:"Dashboard" },
@@ -1344,7 +1521,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
       {/* Dashboard */}
       <div id="tabpanel-dash" role="tabpanel" aria-labelledby="tab-dash" tabIndex={0} hidden={tab!=="dash"}>
-        {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal}/>}
+        {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} activePeriod={period}/>}
       </div>
 
       {/* Lançamentos por mês */}
@@ -1377,81 +1554,65 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
               ))}
             </div>
           </div>
-          {/* Month nav with picker (Task 2) */}
+          {/* ── Period nav ────────────────────────────────── */}
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-            <button onClick={()=>setMonthOffset(o=>o-1)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,width:32,height:32,cursor:"pointer",color:TX2,fontSize:16 }}>‹</button>
+            {/* ‹ prev */}
+            <button
+              onClick={()=>setPeriod(p=>shiftPeriod(p,-1))}
+              disabled={!pCanNav}
+              title={pCanNav?"Período anterior":"Período relativo — não navegável"}
+              style={{ background:"none",border:`1px solid ${pCanNav?LN:LN+"80"}`,borderRadius:6,width:32,height:32,cursor:pCanNav?"pointer":"not-allowed",color:pCanNav?TX2:TX3,fontSize:16,flexShrink:0 }}>
+              ‹
+            </button>
+
+            {/* Period label + subtotals + picker */}
             <div style={{ flex:1,textAlign:"center",position:"relative" }}>
-              {/* Clickable month label */}
-              <button onClick={()=>{
-                  setPickerMonth(viewMonth);
-                  setPickerYear(viewYear);
-                  setPickerOpen(p=>!p);
-                }}
-                style={{ background:"none",border:"none",fontWeight:700,fontSize:15,color:TX,cursor:"pointer",fontFamily:"inherit",padding:"2px 8px",borderRadius:4,
-                  border:`1px solid transparent`,transition:"border-color .15s" }}
+              <button
+                onClick={()=>setPeriodPickerOpen(o=>!o)}
+                aria-expanded={periodPickerOpen} aria-haspopup="dialog"
+                style={{ background:"none",border:`1px solid transparent`,fontWeight:700,fontSize:15,color:TX,cursor:"pointer",fontFamily:"inherit",padding:"2px 8px",borderRadius:4,transition:"border-color .15s" }}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=LN}
-                onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}
-                aria-expanded={pickerOpen} aria-haspopup="dialog">
-                {monthLabel} ▾
+                onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
+                {pLabel} ▾
               </button>
-              <div style={{ fontSize:11,color:TX2 }}>
+              <div style={{ fontSize:11,color:TX2,marginTop:1 }}>
                 <span style={{ color:GRN }}>+{fmtMoney(monthEntradas)}</span>
                 {" · "}
                 <span style={{ color:RED }}>−{fmtMoney(monthSaidas)}</span>
                 {monthDividendos>0&&<><span style={{ color:TX2 }}> · </span><span style={{ color:"#7C3AED" }}>div {fmtMoney(monthDividendos)}</span></>}
                 {" · "}
-                <span style={{ fontWeight:700, color:monthNet>=0?GRN:RED }}>{monthNet>=0?"+":""}{fmtMoney(monthNet)}</span>
+                <span style={{ fontWeight:700,color:monthNet>=0?GRN:RED }}>{monthNet>=0?"+":""}{fmtMoney(monthNet)}</span>
+                {pDays>31&&<span style={{ marginLeft:6,fontSize:10,color:TX3,background:B2,border:`1px solid ${LN}`,borderRadius:99,padding:"1px 6px" }}>({pDays} dias)</span>}
               </div>
-              {/* Month/year picker popover */}
-              {pickerOpen && (() => {
-                const txYears = [...new Set(transactions.map(t=>t.date?.substr(0,4)).filter(Boolean).map(Number))];
-                const currY = new Date().getFullYear();
-                const years = [...new Set([...txYears, currY, currY-1, currY-2])].sort((a,b)=>b-a);
-                return (
-                  <div ref={pickerRef} role="dialog" aria-modal="false" aria-label="Selecionar mês e ano"
-                    style={{ position:"absolute",top:"calc(100% + 6px)",left:"50%",transform:"translateX(-50%)",
-                      background:B1,border:`1px solid ${LN}`,borderRadius:10,padding:"16px",
-                      boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:200,display:"flex",flexDirection:"column",gap:10,minWidth:220 }}
-                    onKeyDown={e=>{if(e.key==="Escape") setPickerOpen(false);}}>
-                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-                      <div>
-                        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Mês</div>
-                        <select autoFocus value={pickerMonth} onChange={e=>setPickerMonth(Number(e.target.value))}
-                          style={{ width:"100%",padding:"6px 8px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}>
-                          {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map((m,i)=>(
-                            <option key={i} value={i}>{m}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Ano</div>
-                        <select value={pickerYear} onChange={e=>setPickerYear(Number(e.target.value))}
-                          style={{ width:"100%",padding:"6px 8px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}>
-                          {years.map(y=><option key={y} value={y}>{y}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <div style={{ display:"flex",gap:6 }}>
-                      <button onClick={()=>{
-                          const now2=new Date();
-                          const offset=(pickerYear-now2.getFullYear())*12+(pickerMonth-now2.getMonth());
-                          setMonthOffset(offset);
-                          setPickerOpen(false);
-                        }}
-                        style={{ flex:1,padding:"7px",fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6,background:TX,border:"none",color:"white" }}>
-                        Ir
-                      </button>
-                      <button onClick={()=>setPickerOpen(false)}
-                        style={{ padding:"7px 10px",fontSize:12,cursor:"pointer",borderRadius:6,background:"none",border:`1px solid ${LN}`,color:TX2 }}>
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
+
+              {/* ── Period picker popover ─── */}
+              {periodPickerOpen&&(
+                <PeriodPicker
+                  period={period}
+                  transactions={transactions}
+                  onApply={(p)=>{ setPeriod(p); setPeriodPickerOpen(false); }}
+                  onClose={()=>setPeriodPickerOpen(false)}
+                  isMobile={useIsMobile()}
+                  colors={{ B1,B2,LN,LN2,TX,TX2,TX3,RED,GRN }}
+                />
+              )}
             </div>
-            <button onClick={()=>setMonthOffset(o=>o+1)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,width:32,height:32,cursor:"pointer",color:TX2,fontSize:16 }}>›</button>
-            <button onClick={()=>setMonthOffset(0)} style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,padding:"0 12px",height:32,cursor:"pointer",color:TX2,fontSize:11,fontWeight:600 }}>Hoje</button>
+
+            {/* › next */}
+            <button
+              onClick={()=>setPeriod(p=>shiftPeriod(p,+1))}
+              disabled={!pCanNav}
+              title={pCanNav?"Próximo período":"Período relativo — não navegável"}
+              style={{ background:"none",border:`1px solid ${pCanNav?LN:LN+"80"}`,borderRadius:6,width:32,height:32,cursor:pCanNav?"pointer":"not-allowed",color:pCanNav?TX2:TX3,fontSize:16,flexShrink:0 }}>
+              ›
+            </button>
+
+            {/* Reset to current month */}
+            <button onClick={()=>setPeriod(defaultPeriod())}
+              style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,padding:"0 10px",height:32,cursor:"pointer",color:TX2,fontSize:11,fontWeight:600,flexShrink:0 }}>
+              Padrão
+            </button>
+
             <DsButton variant="primary" size="sm" onClick={()=>setTxModal({})} leftIcon={<DsIcon name="plus" size={13} color={ds.color.neutral[0]}/>}>Lançamento</DsButton>
           </div>
 
@@ -1472,7 +1633,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
           {monthTx.length===0 ? (
             <div style={{ textAlign:"center",padding:"48px 0",color:TX3 }}>
-              Nenhum lançamento em {monthLabel}.
+              Nenhum lançamento neste período.
               <br/><DsButton variant="primary" size="sm" style={{marginTop:12}} onClick={()=>setTxModal({})}>+ Adicionar</DsButton>
             </div>
           ) : (
@@ -1620,10 +1781,10 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
       </div>{/* /tabpanel-dre */}
 
-      {showExport && <ContadorExportModal transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} onClose={()=>setShowExport(false)}/>}
+      {showExport && <ContadorExportModal transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} initialFrom={period.from} initialTo={period.to} onClose={()=>setShowExport(false)}/>}
       {txModal!==null && (
         <TransactionModal accounts={[]} contracts={contracts} initial={txModal.id?txModal:null}
-          defaultDate={`${monthKey}-01`}
+          defaultDate={new Date().toISOString().slice(0,10)}
           onClose={()=>setTxModal(null)}
           onSave={(tx)=>{
             if (Array.isArray(tx)) {

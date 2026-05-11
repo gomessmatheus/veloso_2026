@@ -13,7 +13,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "./supabaseClient.js"; // your existing supabase client
+// Firebase auth — same instance used by the rest of the app
+import { getAuth } from "firebase/auth";
 
 // ── Config ────────────────────────────────────────────────
 const SESSION_KEY      = "caixa_step_up_token";
@@ -27,9 +28,11 @@ const EDGE_BASE        = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL
 
 /** Get Supabase auth JWT for function calls */
 async function getAuthHeader() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("Not authenticated");
-  return `Bearer ${session.access_token}`;
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not authenticated");
+  const token = await user.getIdToken();
+  return `Bearer ${token}`;
 }
 
 /** Read session from sessionStorage */

@@ -35,6 +35,12 @@ import { WeekTimeline }   from "./views/dashboard/WeekTimeline.jsx";
 import { BRAND_CATEGORIES, slugify, inferCategory, runBrandsMigration } from "./lib/brands.js";
 import { detectConflicts, buildConflictDateMap } from "./lib/conflicts.js";
 import { formatDate } from "./lib/format.js";
+import {
+  aggregate, monthlyBreakdown, burnRate as calcBurnRate,
+  liquidityRatio, futureInstallments as calcFutureInstallments,
+  isInflow, isOutflow, isDividend, isTax,
+  TX_TYPES as FIN_TX,
+} from "./lib/finance.js";
 
 // ─── Copiloto Ranked ───────────────────────────────────────
 import { getSuggestions }         from "./lib/copilot/suggestions.js";
@@ -5213,34 +5219,26 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
   const MONTHS_SH2 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   const today = new Date();
 
-  // ── Compromissos futuros (parcelamentos) ──
-  const futureInstallments = useMemo(() => {
-    const todayStr = today.toISOString().substr(0,10);
-    const future = transactions.filter(t =>
-      t.date > todayStr &&
-      t.installmentTotal > 1 &&
-      (t.type==="saida"||t.type==="imposto")
-    );
-    // Group by month
-    const byMonth = {};
-    future.forEach(t => {
-      const key = t.date.substr(0,7); // YYYY-MM
-      if (!byMonth[key]) byMonth[key] = { total:0, items:[] };
-      byMonth[key].total += Number(t.amount)||0;
-      byMonth[key].items.push(t);
-    });
-    return Object.entries(byMonth).sort(([a],[b])=>a.localeCompare(b)).slice(0,6);
-  }, [transactions]);
+  // ── Compromissos futuros (parcelamentos) — via finance.js ──
+  const futureInstallments = useMemo(
+    () => calcFutureInstallments(transactions),
+    [transactions]
+  );
 
   const totalFutureDebt = futureInstallments.reduce((s,[,v])=>s+v.total,0);
 
-  const monthData = months.map(m => {
-    const key = `${currentYear}-${String(m+1).padStart(2,"0")}`;
-    const entradas   = transactions.filter(t=>t.date?.startsWith(key)&&t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-    const saidas     = transactions.filter(t=>t.date?.startsWith(key)&&(t.type==="saida"||t.type==="imposto")).reduce((s,t)=>s+(Number(t.amount)||0),0);
-    const dividendos = transactions.filter(t=>t.date?.startsWith(key)&&t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
-    return { month:MONTHS_SH2[m], entradas, saidas, dividendos, net:entradas-saidas-dividendos };
-  });
+  // Quebra mensal do ano — via finance.js (sem filter+reduce inline)
+  const _breakdown = useMemo(
+    () => monthlyBreakdown(transactions, currentYear),
+    [transactions, currentYear]
+  );
+  const monthData = _breakdown.map((m) => ({
+    month:     MONTHS_SH2[m.monthIndex],
+    entradas:  m.ent,
+    saidas:    m.sai + m.imp,  // combinado para o gráfico de barras
+    dividendos: m.div,
+    net:       m.net,
+  }));
 
   const maxVal = Math.max(...monthData.map(d=>Math.max(d.entradas,d.saidas)),1);
 
@@ -5309,25 +5307,20 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
 
       {/* Decision KPIs */}
       {(() => {
-        const months = Array.from({length:12},(_,i)=>i);
-        const currentYear = new Date().getFullYear();
-        const monthlyData = months.map(m => {
-          const key = `${currentYear}-${String(m+1).padStart(2,"0")}`;
-          const ent = transactions.filter(t=>t.date?.startsWith(key)&&t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-          const sai = transactions.filter(t=>t.date?.startsWith(key)&&(t.type==="saida"||t.type==="imposto")).reduce((s,t)=>s+(Number(t.amount)||0),0);
-          return { ent, sai };
-        }).filter(m => m.ent>0||m.sai>0);
+        // KPIs via finance.js — sem filter+reduce inline
+        const _kpiAgg   = aggregate(transactions, 0); // base 0: queremos % sobre receita pura
+        const totalEnt  = _kpiAgg.totalEntradas;
+        const totalSai  = _kpiAgg.totalOutflows;
+        const lucroLiq  = _kpiAgg.lucroLiquido;
 
-        const totalEnt = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-        const totalSai = transactions.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
-        const totalDiv = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
-        const lucroLiq = totalEnt - totalSai - totalDiv;
-
-        const avgMonthlySai = monthlyData.length > 0 ? monthlyData.reduce((s,m)=>s+m.sai,0)/monthlyData.length : 0;
-        const liquidez = avgMonthlySai > 0 ? saldoTotal / avgMonthlySai : null;
-        const margemLucro = totalEnt > 0 ? (lucroLiq / totalEnt * 100) : null;
+        const br        = calcBurnRate(transactions);
+        const liq       = liquidityRatio(saldoTotal, transactions);
+        const liquidez  = isFinite(liq) && br > 0 ? liq : null;
+        const margemLucro = totalEnt > 0 ? _kpiAgg.margemLiquida : null;
         const roi = totalSai > 0 ? ((totalEnt - totalSai) / totalSai * 100) : null;
-        const burnRate = avgMonthlySai;
+        const burnRate  = br;
+        // monthlyData mantido apenas para o count de base no card
+        const monthlyData = _breakdown.filter(m => (m.sai + m.imp) > 0);
 
         const kpiColor = (val, good, warn) => val >= good ? GRN : val >= warn ? AMB : RED;
         const fmt1 = v => v.toFixed(1);
@@ -5601,27 +5594,30 @@ function NewAccountModal({ onClose, onSave }) {
 function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contracts }) {
   const [year, setYear] = useState(new Date().getFullYear());
   const txYear = transactions.filter(t => t.date?.startsWith(String(year)));
+  const _breakdown_ind = useMemo(() => monthlyBreakdown(txYear, year), [txYear, year]);
 
-  const receita    = txYear.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const despesas   = txYear.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const dividendos = txYear.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const lucroLiq   = receita - despesas - dividendos;
-  const ebitda     = receita - despesas; // sem dividendos (não operacional)
+  // Agregados via finance.js — sem filter+reduce inline
+  const _indAgg    = aggregate(txYear, 0);
+  const receita    = _indAgg.totalEntradas;
+  const despesas   = _indAgg.totalOutflows;  // saida+imposto (compat. legado)
+  const dividendos = _indAgg.totalDividendos;
+  const lucroLiq   = _indAgg.lucroLiquido;
+  const ebitda     = _indAgg.ebitda;         // CORRIGIDO: receitaLiquida - CSP - despOp
 
-  // Custos fixos vs variáveis (fixos = adm+aluguel+util+rh, variáveis = produção+viagem+marketing)
+  // Custos fixos (para ponto de equilíbrio) — mantém lógica existente
   const fixedCats = ["Pessoal / RH","Aluguel / Condomínio","Utilidades (Luz, Água, Internet)","Software / SaaS","Contabilidade","Material de Escritório","Material de Limpeza","Móveis e Eletrodomésticos"];
   const custoFixo = txYear.filter(t=>(t.type==="saida"||t.type==="imposto")&&fixedCats.includes(t.category)).reduce((s,t)=>s+(Number(t.amount)||0),0);
   const custoVar  = despesas - custoFixo;
 
-  // Months with data
-  const monthsWithData = new Set(txYear.map(t=>t.date?.substr(0,7))).size || 1;
-  const despesaMensal = despesas / monthsWithData;
-
-  // Indicators
+  // Liquidez e burn rate via finance.js
+  const br             = calcBurnRate(txYear, year);
+  const monthsWithData = _breakdown_ind.filter(m => (m.sai + m.imp) > 0).length || 1;
+  const despesaMensal  = br || (despesas / monthsWithData);
   const liquidez       = despesaMensal > 0 ? saldoTotal / despesaMensal : null;
-  const margemLucro    = receita > 0 ? (lucroLiq / receita * 100) : null;
-  const margemBruta    = receita > 0 ? ((receita - despesas) / receita * 100) : null;
-  const margemEBITDA   = receita > 0 ? (ebitda / receita * 100) : null;
+
+  const margemLucro    = _indAgg.receitaLiquida > 0 ? _indAgg.margemLiquida : null;
+  const margemBruta    = _indAgg.receitaLiquida > 0 ? _indAgg.margemBruta   : null;
+  const margemEBITDA   = _indAgg.receitaLiquida > 0 ? _indAgg.margemEbitda  : null;
   const roi            = despesas > 0 ? (lucroLiq / despesas * 100) : null;
   const ticketMedio    = contracts.length > 0 ? (contracts.reduce((s,c)=>s+(Number(c.contractValue)||Number(c.monthlyValue)||0),0) / contracts.length) : null;
   const pontoEquil     = receita > 0 && (1 - custoVar/receita) > 0 ? custoFixo / (1 - custoVar/receita) : null;
@@ -5729,9 +5725,10 @@ function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose })
   });
 
   const nfItems = filtered.filter(t => t.nfFile || t.nfLink);
-  const totalEnt = filtered.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const totalSai = filtered.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const totalDiv = filtered.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const _expAgg  = aggregate(filtered, 0);
+  const totalEnt = _expAgg.totalEntradas;
+  const totalSai = _expAgg.totalOutflows;
+  const totalDiv = _expAgg.totalDividendos;
 
   const periodLabel = period==="month" ? new Date(selMonth+"-15").toLocaleDateString("pt-BR",{month:"long",year:"numeric"})
     : period==="year" ? selYear : "Todos os períodos";
@@ -5947,10 +5944,12 @@ function Caixa({ contracts, openCopilot }) {
   if (!unlocked) return <CaixaPasswordGate onUnlock={()=>setUnlocked(true)}/>;
 
   // ── Computed saldo ──────────────────────────────────────
-  const totalEntradas   = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const totalSaidas     = transactions.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const totalDividendos = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const saldoTotal      = (Number(baseBalance)||0) + totalEntradas - totalSaidas - totalDividendos;
+  // Agregados centralizados — via finance.js (sem filter+reduce inline)
+  const _agg            = aggregate(transactions, baseBalance);
+  const totalEntradas   = _agg.totalEntradas;
+  const totalSaidas     = _agg.totalOutflows;  // saida+imposto combinados (display "Saídas totais")
+  const totalDividendos = _agg.totalDividendos;
+  const saldoTotal      = _agg.saldoTotal;
 
   // ── Month navigation ────────────────────────────────────
   const now = new Date();
@@ -5969,9 +5968,10 @@ function Caixa({ contracts, openCopilot }) {
     .filter(t => !maxVal || Number(t.amount) <= Number(maxVal))
     .sort((a,b) => b.date.localeCompare(a.date));
 
-  const monthEntradas   = monthTx.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const monthSaidas     = monthTx.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
-  const monthDividendos = monthTx.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const _monthAgg       = aggregate(monthTx, 0);
+  const monthEntradas   = _monthAgg.totalEntradas;
+  const monthSaidas     = _monthAgg.totalOutflows;
+  const monthDividendos = _monthAgg.totalDividendos;
   const monthNet        = monthEntradas - monthSaidas - monthDividendos;
 
   const TABS = [

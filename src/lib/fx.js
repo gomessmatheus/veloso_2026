@@ -132,11 +132,9 @@ export async function fetchRates({ force = false } = {}) {
     }
   }
 
-  // Todos falharam — retornar stale ou lançar
+  // Todos falharam — retornar stale ou null (nunca throw — callers não precisam de try/catch)
   if (cache) return { ...cache, stale: true, errors };
-  const err = new Error('FX_UNAVAILABLE');
-  err.providers = errors;
-  throw err;
+  return null;
 }
 
 // ─── Utilitários ──────────────────────────────────────────
@@ -197,3 +195,9 @@ export function formatRate(rate) {
   if (!rate) return '—';
   return `R$ ${Number(rate).toFixed(2).replace('.', ',')}`;
 }
+
+// ─── Aliases (nomes alternativos para compatibilidade com spec) ────
+/** @alias saveManualRates */
+export const saveManualOverride  = saveManualRates;
+/** @alias clearManualRates */
+export const clearManualOverride = clearManualRates;

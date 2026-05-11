@@ -34,6 +34,7 @@ import { WeekTimeline }   from "./views/dashboard/WeekTimeline.jsx";
 // ─── Brand lib ─────────────────────────────────────────────
 import { BRAND_CATEGORIES, slugify, inferCategory, runBrandsMigration } from "./lib/brands.js";
 import { detectConflicts, buildConflictDateMap } from "./lib/conflicts.js";
+import { formatDate } from "./lib/format.js";
 
 // ─── Copiloto Ranked ───────────────────────────────────────
 import { getSuggestions }         from "./lib/copilot/suggestions.js";
@@ -5334,7 +5335,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
         return (
           <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
             {/* Liquidez */}
-            <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${liquidez===null?LN:kpiColor(liquidez,3,1.5)}` }}>
+            <div title="Liquidez = Saldo atual ÷ Despesa mensal média. Atenção < 3x · Regular 3–6x · Excelente > 6x." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${liquidez===null?LN:kpiColor(liquidez,3,1.5)}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Liquidez</div>
               <div style={{ fontSize:22,fontWeight:700,color:liquidez===null?TX3:kpiColor(liquidez,3,1.5) }}>
                 {liquidez===null?"—":`${fmt1(liquidez)}x`}
@@ -5346,7 +5347,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
             </div>
 
             {/* Margem de Lucro */}
-            <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${margemLucro===null?LN:kpiColor(margemLucro,30,10)}` }}>
+            <div title="Margem Líquida = Lucro Líquido ÷ Receita. Atenção < 10% · Regular 10–20% · Excelente > 20%." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${margemLucro===null?LN:kpiColor(margemLucro,30,10)}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Margem Líquida</div>
               <div style={{ fontSize:22,fontWeight:700,color:margemLucro===null?TX3:kpiColor(margemLucro,30,10) }}>
                 {margemLucro===null?"—":`${fmt1(margemLucro)}%`}
@@ -5358,7 +5359,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
             </div>
 
             {/* ROI Operacional */}
-            <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${roi===null?LN:kpiColor(roi,50,20)}` }}>
+            <div title="ROI Operacional = (Receita − Custos) ÷ Custos. Atenção < 50% · Regular 50–100% · Excelente > 100%." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${roi===null?LN:kpiColor(roi,50,20)}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>ROI Operacional</div>
               <div style={{ fontSize:22,fontWeight:700,color:roi===null?TX3:kpiColor(roi,50,20) }}>
                 {roi===null?"—":`${fmt1(roi)}%`}
@@ -5370,7 +5371,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
             </div>
 
             {/* Burn Rate */}
-            <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${BLU}` }}>
+            <div title="Burn Rate = média de saídas mensais (meses com movimento). Quanto menor, melhor para runway." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${BLU}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Burn Rate</div>
               <div style={{ fontSize:22,fontWeight:700,color:TX }}>{fmtMoney(burnRate)}</div>
               <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>saídas/mês (média)</div>
@@ -5641,37 +5642,37 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
     {
       group: "Rentabilidade",
       items: [
-        { label:"Margem de Lucro Líquida", value:margemLucro!=null?`${fmt2(margemLucro)}%`:"—", desc:"Lucro líquido / Receita", color:margemLucro!=null?(margemLucro>20?GRN:margemLucro>5?AMB:RED):TX2, good:margemLucro!=null&&margemLucro>20 },
-        { label:"Margem Bruta", value:margemBruta!=null?`${fmt2(margemBruta)}%`:"—", desc:"(Receita − Despesas) / Receita", color:margemBruta!=null?(margemBruta>30?GRN:margemBruta>10?AMB:RED):TX2, good:margemBruta!=null&&margemBruta>30 },
-        { label:"EBITDA", value:fmtMoney(ebitda), desc:"Resultado antes de impostos e dividendos", color:ebitda>=0?GRN:RED, good:ebitda>0 },
-        { label:"Margem EBITDA", value:margemEBITDA!=null?`${fmt2(margemEBITDA)}%`:"—", desc:"EBITDA / Receita", color:margemEBITDA!=null?(margemEBITDA>25?GRN:margemEBITDA>10?AMB:RED):TX2, good:margemEBITDA!=null&&margemEBITDA>25 },
-        { label:"ROI", value:roi!=null?`${fmt2(roi)}%`:"—", desc:"Lucro Líquido / Total Investido", color:roi!=null?(roi>0?GRN:RED):TX2, good:roi!=null&&roi>0 },
+        { label:"Margem de Lucro Líquida", tooltip:"Lucro líquido ÷ Receita Líquida.", value:margemLucro!=null?`${fmt2(margemLucro)}%`:"—", desc:"Lucro líquido / Receita", color:margemLucro!=null?(margemLucro>20?GRN:margemLucro>5?AMB:RED):TX2, good:margemLucro!=null&&margemLucro>20 },
+        { label:"Margem Bruta", tooltip:"(Receita − Custos) ÷ Receita Líquida.", value:margemBruta!=null?`${fmt2(margemBruta)}%`:"—", desc:"(Receita − Despesas) / Receita", color:margemBruta!=null?(margemBruta>30?GRN:margemBruta>10?AMB:RED):TX2, good:margemBruta!=null&&margemBruta>30 },
+        { label:"EBITDA", tooltip:"Receita Líquida − Custos − Despesas Operacionais (D&A=0).", value:fmtMoney(ebitda), desc:"Resultado antes de impostos e dividendos", color:ebitda>=0?GRN:RED, good:ebitda>0 },
+        { label:"Margem EBITDA", tooltip:"EBITDA ÷ Receita Líquida.", value:margemEBITDA!=null?`${fmt2(margemEBITDA)}%`:"—", desc:"EBITDA / Receita", color:margemEBITDA!=null?(margemEBITDA>25?GRN:margemEBITDA>10?AMB:RED):TX2, good:margemEBITDA!=null&&margemEBITDA>25 },
+        { label:"ROI", tooltip:"Lucro Líquido ÷ Total Investido.", value:roi!=null?`${fmt2(roi)}%`:"—", desc:"Lucro Líquido / Total Investido", color:roi!=null?(roi>0?GRN:RED):TX2, good:roi!=null&&roi>0 },
       ]
     },
     {
       group: "Liquidez & Caixa",
       items: [
-        { label:"Liquidez (meses)", value:liquidez!=null?`${liquidez.toFixed(1)}x`:"—", desc:"Saldo atual cobre quantos meses de despesas", color:liquidez!=null?(liquidez>3?GRN:liquidez>1?AMB:RED):TX2, good:liquidez!=null&&liquidez>3 },
-        { label:"Saldo em Caixa", value:fmtMoney(saldoTotal), desc:"Base inicial + lançamentos acumulados", color:saldoTotal>=0?TX:RED, good:saldoTotal>0 },
-        { label:"Despesa Mensal Média", value:fmtMoney(despesaMensal), desc:`Média de ${monthsWithData} meses com dados`, color:TX2, good:null },
+        { label:"Liquidez (meses)", tooltip:"Saldo atual ÷ Despesa mensal média.", value:liquidez!=null?`${liquidez.toFixed(1)}x`:"—", desc:"Saldo atual cobre quantos meses de despesas", color:liquidez!=null?(liquidez>3?GRN:liquidez>1?AMB:RED):TX2, good:liquidez!=null&&liquidez>3 },
+        { label:"Saldo em Caixa", tooltip:"Saldo base + lançamentos acumulados.", value:fmtMoney(saldoTotal), desc:"Base inicial + lançamentos acumulados", color:saldoTotal>=0?TX:RED, good:saldoTotal>0 },
+        { label:"Despesa Mensal Média", tooltip:"Média das saídas dos meses com movimento.", value:fmtMoney(despesaMensal), desc:`Média de ${monthsWithData} meses com dados`, color:TX2, good:null },
       ]
     },
     {
       group: "Operacional",
       items: [
-        { label:"Ticket Médio Contratos", value:ticketMedio!=null?fmtMoney(ticketMedio):"—", desc:"Valor médio por contrato ativo", color:TX, good:null },
-        { label:"Ponto de Equilíbrio", value:pontoEquil!=null?fmtMoney(pontoEquil):"—", desc:"Receita mínima para cobrir todos os custos", color:receita>0&&pontoEquil!=null?(receita>=pontoEquil?GRN:RED):TX2, good:receita>0&&pontoEquil!=null&&receita>=pontoEquil },
-        { label:"Prazo Médio Recebimento", value:fmtDias(pmr), desc:"Média dos prazos de contratos", color:pmr!=null?(pmr<60?GRN:pmr<90?AMB:RED):TX2, good:pmr!=null&&pmr<60 },
-        { label:"Prazo Médio Estoque", value:"N/A", desc:"Não aplicável — empresa de serviços", color:TX3, good:null },
+        { label:"Ticket Médio Contratos", tooltip:"Soma dos contratos ativos ÷ nº de contratos.", value:ticketMedio!=null?fmtMoney(ticketMedio):"—", desc:"Valor médio por contrato ativo", color:TX, good:null },
+        { label:"Ponto de Equilíbrio", tooltip:"Receita mínima necessária para cobrir custos fixos + variáveis.", value:pontoEquil!=null?fmtMoney(pontoEquil):"—", desc:"Receita mínima para cobrir todos os custos", color:receita>0&&pontoEquil!=null?(receita>=pontoEquil?GRN:RED):TX2, good:receita>0&&pontoEquil!=null&&receita>=pontoEquil },
+        { label:"Prazo Médio Recebimento", tooltip:"Média dos prazos de pagamento dos contratos.", value:fmtDias(pmr), desc:"Média dos prazos de contratos", color:pmr!=null?(pmr<60?GRN:pmr<90?AMB:RED):TX2, good:pmr!=null&&pmr<60 },
+        { label:"Prazo Médio Estoque", tooltip:"N/A — empresa de serviços.", value:"N/A", desc:"Não aplicável — empresa de serviços", color:TX3, good:null },
       ]
     },
     {
       group: "Receita",
       items: [
-        { label:"Receita Total", value:fmtMoney(receita), desc:`Todas as entradas de ${year}`, color:GRN, good:null },
-        { label:"Despesas Totais", value:fmtMoney(despesas), desc:`Saídas + impostos de ${year}`, color:RED, good:null },
-        { label:"Dividendos Distribuídos", value:fmtMoney(dividendos), desc:`Distribuição de lucros de ${year}`, color:"#7C3AED", good:null },
-        { label:"Custo Fixo Total", value:fmtMoney(custoFixo), desc:"RH, aluguel, utilidades, adm", color:TX2, good:null },
+        { label:"Receita Total", tooltip:"Soma das entradas do ano fiscal.", value:fmtMoney(receita), desc:`Todas as entradas de ${year}`, color:GRN, good:null },
+        { label:"Despesas Totais", tooltip:"Saídas + impostos do ano fiscal.", value:fmtMoney(despesas), desc:`Saídas + impostos de ${year}`, color:RED, good:null },
+        { label:"Dividendos Distribuídos", tooltip:"Soma dos lançamentos do tipo dividendos.", value:fmtMoney(dividendos), desc:`Distribuição de lucros de ${year}`, color:"#7C3AED", good:null },
+        { label:"Custo Fixo Total", tooltip:"RH + aluguel + utilidades + administrativo.", value:fmtMoney(custoFixo), desc:"RH, aluguel, utilidades, adm", color:TX2, good:null },
       ]
     }
   ];
@@ -5693,7 +5694,7 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
           <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${LN}` }}>{group.group}</div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10 }}>
             {group.items.map((ind,i)=>(
-              <div key={i} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${ind.color}` }}>
+              <div key={i} title={ind.tooltip||""} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${ind.color}` }}>
                 <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:4 }}>
                   <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,lineHeight:1.3,flex:1 }}>{ind.label}</div>
                   {ind.good===true&&<span style={{ fontSize:ds.font.size.xs,color:GRN,flexShrink:0,marginLeft:6 }}>✓</span>}
@@ -5920,6 +5921,7 @@ function Caixa({ contracts, openCopilot }) {
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [dreYear, setDreYear] = useState(new Date().getFullYear());
+  const tabRefs = useRef({});
   const [monthOffset, setMonthOffset] = useState(0);
   const [search, setSearch] = useState("");
   const [filterType2, setFilterType2] = useState("all");
@@ -5981,7 +5983,7 @@ function Caixa({ contracts, openCopilot }) {
   ];
 
   return (
-    <div style={{ padding:"24px 28px", maxWidth:1100 }}>
+    <div style={{ padding:"24px 28px", maxWidth:"min(1280px, calc(100% - 48px))" }}>
       <div style={{ marginBottom:20 }}>
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:4 }}>
           <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
@@ -6018,12 +6020,37 @@ function Caixa({ contracts, openCopilot }) {
       <SaldoBaseEditor baseBalance={baseBalance} baseDate={baseDate} onSave={updateBase}/>
 
       {/* Tabs */}
-      <div style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20,marginTop:16,alignItems:"center" }}>
+      <div
+        role="tablist"
+        aria-label="Seções do Controle Financeiro"
+        style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20,marginTop:16,alignItems:"center" }}
+        onKeyDown={(e)=>{
+          const visible = TABS.filter(t=>!t.hidden);
+          const idx = visible.findIndex(t=>t.id===tab);
+          let next = idx;
+          if (e.key==="ArrowRight") next = (idx+1) % visible.length;
+          else if (e.key==="ArrowLeft") next = (idx-1+visible.length) % visible.length;
+          else if (e.key==="Home") next = 0;
+          else if (e.key==="End") next = visible.length-1;
+          else return;
+          e.preventDefault();
+          const nextId = visible[next].id;
+          setTab(nextId);
+          tabRefs.current[nextId]?.focus();
+        }}>
         {TABS.filter(t=>!t.hidden).map(t=>(
-          <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`,transition:TRANS,marginBottom:-1 }}>
+          <button
+            key={t.id}
+            ref={el=>{ tabRefs.current[t.id]=el; }}
+            id={`tab-${t.id}`}
+            role="tab"
+            aria-selected={tab===t.id}
+            aria-controls={`tabpanel-${t.id}`}
+            tabIndex={tab===t.id ? 0 : -1}
+            onClick={()=>setTab(t.id)}
+            style={{ padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",color:tab===t.id?TX:TX2,borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`,transition:TRANS,marginBottom:-1,background:"none",border:"none",borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`,fontFamily:"inherit",outline:"none" }}>
             {t.label}
-          </div>
+          </button>
         ))}
         <div style={{ flex:1 }}/>
         <DsButton variant="secondary" size="sm"
@@ -6035,9 +6062,12 @@ function Caixa({ contracts, openCopilot }) {
       </div>
 
       {/* Dashboard */}
-      {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal}/>}
+      <div id="tabpanel-dash" role="tabpanel" aria-labelledby="tab-dash" tabIndex={0} hidden={tab!=="dash"}>
+        {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal}/>}
+      </div>
 
       {/* Lançamentos por mês */}
+      <div id="tabpanel-lancamentos" role="tabpanel" aria-labelledby="tab-lancamentos" tabIndex={0} hidden={tab!=="lancamentos"}>
       {tab==="lancamentos" && (
         <div>
           {/* Filters */}
@@ -6130,8 +6160,11 @@ function Caixa({ contracts, openCopilot }) {
           )}
         </div>
       )}
+      </div>{/* /tabpanel-lancamentos */}
 
-      {tab==="indicadores" && <IndicadoresFinanceiros transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} contracts={contracts}/>}
+      <div id="tabpanel-indicadores" role="tabpanel" aria-labelledby="tab-indicadores" tabIndex={0} hidden={tab!=="indicadores"}>
+        {tab==="indicadores" && <IndicadoresFinanceiros transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} contracts={contracts}/>}
+      </div>
 
       {/* IA Financeira */}
       {tab==="ia" && (() => {
@@ -6214,6 +6247,7 @@ function Caixa({ contracts, openCopilot }) {
       })()}
 
       {/* DRE */}
+      <div id="tabpanel-dre" role="tabpanel" aria-labelledby="tab-dre" tabIndex={0} hidden={tab!=="dre"}>
       {tab==="dre" && (
         <div>
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
@@ -6228,6 +6262,8 @@ function Caixa({ contracts, openCopilot }) {
           <DREView transactions={transactions} year={dreYear}/>
         </div>
       )}
+
+      </div>{/* /tabpanel-dre */}
 
       {showExport && <ContadorExportModal transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} onClose={()=>setShowExport(false)}/>}
       {txModal!==null && (
@@ -6263,7 +6299,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
         <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Saldo Base (ponto de partida)</div>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:16,fontWeight:700,color:TX }}>{fmtMoney(Number(baseBalance)||0)}</span>
-          {baseDate&&<span style={{ fontSize:11,color:TX2 }}>em {fmtDate(baseDate)}</span>}
+          {baseDate&&<span style={{ fontSize:11,color:TX2 }}>em {formatDate(baseDate)}</span>}
           {!baseDate&&<span style={{ fontSize:11,color:TX3 }}>não definido</span>}
         </div>
       </div>

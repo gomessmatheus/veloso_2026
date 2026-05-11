@@ -49,3 +49,19 @@ export function formatDate(value) {
     year:  "numeric",
   }).format(d);
 }
+
+/**
+ * Formata número como moeda BRL.
+ * @param {number} n
+ * @param {{ decimals?: number }} [opts]
+ * @returns {string}
+ */
+export function formatBRL(n, { decimals = 0 } = {}) {
+  if (n == null || !isFinite(n)) return "—";
+  return new Intl.NumberFormat("pt-BR", {
+    style:                "currency",
+    currency:             "BRL",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n);
+}

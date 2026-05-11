@@ -1,69 +1,99 @@
-# Veloso 2026 · OP
+# Migrations
 
-Dashboard operacional colaborativo — contratos, entregas, comissões e NF da Copa do Mundo 2026.
-
-**Multi-usuário em tempo real** via Firebase Firestore.
+Scripts de migração de dados Firestore. **Sempre idempotentes.**
 
 ---
 
-## Stack
+## 2026-05 — Backfill `lockedRate` em contratos estrangeiros
 
-| Camada     | Tecnologia                     |
-|------------|-------------------------------|
-| Frontend   | React 18 + Vite               |
-| Banco      | Firebase Firestore (Realtime) |
-| Deploy     | Vercel                        |
+**Arquivo:** `scripts/migrations/2026-05-add-lockedRate-defaults.mjs`
 
----
+**Problema:** Contratos em EUR/USD criados antes da Fase 7 não têm o campo
+`lockedRate`. Sem ele, o `FxContractCard` não consegue calcular a variação
+cambial e pode renderizar valores incorretos.
 
-## Setup rápido
+**O que faz:**
+- Lê contratos onde `currency ≠ 'BRL'` **e** `lockedRate` é `undefined`
+- Contratos com `lockedRate` já definido (mesmo `null`) são ignorados
+- Se o contrato tem `signedAt`: busca cotação histórica na AwesomeAPI para
+  aquela data e salva como `lockedRate`
+- Se não tem `signedAt`: salva `lockedRate = null`, `lockedRateAt = null` e
+  adiciona `migrations.lockedRateBackfilled = false` para revisão manual
 
-### 1. Criar projeto no Firebase
-1. Acesse console.firebase.google.com
-2. "Add project" → dê um nome → desative Google Analytics → "Create project"
-3. No menu lateral: "Build" → "Firestore Database" → "Create database" → "Start in test mode" → escolha região us-east1
+### Pré-requisitos
 
-### 2. Pegar as credenciais
-1. Clique na engrenagem ⚙️ → "Project settings"
-2. Role até "Your apps" → clique em `</>` (Web)
-3. Registre o app (nome qualquer) → copie o bloco `firebaseConfig`
-
-### 3. Configurar variáveis de ambiente
 ```bash
-cp .env.example .env
-```
-Preencha `.env` com os valores do `firebaseConfig`.
+# Firebase Admin SDK
+npm install --save-dev firebase-admin
 
-### 4. Rodar local
+# Credencial de serviço
+# Baixe em: Firebase Console → Configurações → Contas de serviço → Gerar nova chave privada
+# Salve como serviceAccount.json na raiz do projeto (não commitar no git!)
+echo "serviceAccount.json" >> .gitignore
+```
+
+### Rodar
+
 ```bash
-npm install
-npm run dev
+# 1. Dry run (padrão) — lê dados, simula, NÃO grava
+node scripts/migrations/2026-05-add-lockedRate-defaults.mjs
+
+# ou explícito:
+node scripts/migrations/2026-05-add-lockedRate-defaults.mjs --dry
+
+# 2. Aplicar — grava no Firestore
+GOOGLE_APPLICATION_CREDENTIALS=./serviceAccount.json \
+  node scripts/migrations/2026-05-add-lockedRate-defaults.mjs --apply
 ```
 
-### 5. Deploy no Vercel
-1. Push para o GitHub
-2. Importe no vercel.com
-3. Adicione as 6 variáveis `VITE_FIREBASE_*` em Environment Variables
-4. Deploy
+### Exemplo de saída (dry run)
 
-### 6. Regras do Firestore (acesso público ao time)
-No Firebase Console → Firestore → Rules, cole o conteúdo de `firebase/firestore.rules`.
+```
+══════════════════════════════════════════════════════════
+  Migration: 2026-05 add-lockedRate-defaults
+  Modo: 🔍 DRY RUN (nenhuma gravação)
+══════════════════════════════════════════════════════════
+
+📄 Lendo contracts...
+   Total de documentos: 12
+
+🎯 Candidatos (currency ≠ BRL, sem lockedRate): 2
+
+  [1/2] Paco Rabanne (EUR, assinado 15/01/2026)
+    ✓ lockedRate = 6.42 (EUR/BRL em 15/01/2026)
+  [2/2] Outro Cliente (USD, sem signedAt → revisão manual)
+
+══════════════════════════════════════════════════════════
+  RELATÓRIO
+  Total processados:              2
+  Com cotação histórica:          1 ✓
+  Sem signedAt (revisão manual):  1 ⚠️
+  Sem cotação (revisão manual):   0 ⚠️
+  Modo:                           DRY RUN — nada foi gravado
+══════════════════════════════════════════════════════════
+```
+
+### Pós-migration
+
+Para identificar contratos que precisam de revisão manual, filtre no Firestore:
+```
+WHERE data.migrations.lockedRateBackfilled == false
+```
+
+Em seguida, abra cada contrato no app, acesse **Editar → Cotação na
+assinatura** e preencha manualmente.
+
+### Idempotência
+
+A guarda é `!('lockedRate' in contract)`. Rodar o script duas vezes não
+altera nenhum contrato que já passou pela migration — mesmo que `lockedRate`
+seja `null`.
 
 ---
 
-## Estrutura
+## Convenção para novas migrations
 
-```
-veloso2026-op/
-├── src/
-│   ├── App.jsx        ← componentes e lógica
-│   ├── db.js          ← operações Firestore + Realtime
-│   ├── firebase.js    ← client init
-│   └── main.jsx
-├── firebase/
-│   └── firestore.rules
-├── .env.example
-├── index.html
-├── vite.config.js
-└── package.json
-```
+- Arquivo: `scripts/migrations/YYYY-MM-descricao-curta.mjs`
+- Sempre com `--dry` como padrão e `--apply` para gravar
+- Sempre idempotentes (guarda explícita de "já foi aplicada")
+- Sempre logar relatório ao final

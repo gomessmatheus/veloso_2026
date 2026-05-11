@@ -67,16 +67,15 @@ async function fromAwesomeAPI() {
 }
 
 async function fromFrankfurter() {
-  const [rEUR, rUSD] = await Promise.all([
-    fetch('https://api.frankfurter.app/latest?from=EUR&to=BRL',
-      { signal: AbortSignal.timeout(6000) }),
-    fetch('https://api.frankfurter.app/latest?from=USD&to=BRL',
-      { signal: AbortSignal.timeout(6000) }),
-  ]);
-  if (!rEUR.ok || !rUSD.ok) throw new Error('frankfurter');
-  const [dEUR, dUSD] = await Promise.all([rEUR.json(), rUSD.json()]);
-  const EUR = parseFloat(dEUR.rates?.BRL);
-  const USD = parseFloat(dUSD.rates?.BRL);
+  // 1 call: BRL como base, pede EUR e USD → inverte para obter BRL por moeda
+  const res = await fetch(
+    'https://api.frankfurter.app/latest?from=BRL&to=EUR,USD',
+    { signal: AbortSignal.timeout(6000) },
+  );
+  if (!res.ok) throw new Error(`frankfurter ${res.status}`);
+  const d   = await res.json();
+  const EUR = d.rates?.EUR > 0 ? parseFloat((1 / d.rates.EUR).toFixed(6)) : null;
+  const USD = d.rates?.USD > 0 ? parseFloat((1 / d.rates.USD).toFixed(6)) : null;
   if (!EUR || !USD) throw new Error('frankfurter: bad data');
   return { USD, EUR, fetchedAt: Date.now(), source: 'frankfurter' };
 }

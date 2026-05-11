@@ -1263,34 +1263,43 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const isMobile = useIsMobile();
 
   // tab state moved to useQueryState above
-  const [transactions, setTransactions] = useState([]);
-  const [baseBalance, setBaseBalance] = useState(0);
-  const [baseDate, setBaseDate]       = useState("");
+  // ── Seed from localStorage immediately so UI never flashes empty ──
+  const [transactions, setTransactions] = useState(() => lsLoad("caixa_tx", []));
+  const [baseBalance, setBaseBalance]   = useState(() => lsLoad("caixa_base", 0));
+  const [baseDate, setBaseDate]         = useState(() => lsLoad("caixa_base_date", ""));
   const prevTxIds = useRef([]);
 
-  // Load data from Firebase on mount
+  // Sync from Firebase after auth is ready — retry once on empty
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    const load = async (attempt = 0) => {
       try {
         const [txs, base, bdate] = await Promise.all([
           loadCaixaTx(),
           getSetting("caixa_base"),
           getSetting("caixa_base_date"),
         ]);
+        if (cancelled) return;
+        // If Firebase returned empty on first try, wait for auth init and retry once
+        if (txs?.length === 0 && lsLoad("caixa_tx", []).length > 0 && attempt === 0) {
+          setTimeout(() => load(1), 1200);
+          return;
+        }
         const list = txs?.length > 0 ? txs : lsLoad("caixa_tx", []);
         setTransactions(list);
         prevTxIds.current = list.map(t => t.id);
-        if (base  != null) setBaseBalance(Number(base) || 0);
-        if (bdate)         setBaseDate(bdate);
-        lsSave("caixa_tx", list);
+        // Only update base if Firebase returned a real value
+        if (base  != null && base  !== "") setBaseBalance(Number(base) || 0);
+        if (bdate && bdate !== "")         setBaseDate(bdate);
+        // Keep localStorage in sync only if we got real data
+        if (list.length > 0) lsSave("caixa_tx", list);
       } catch(e) {
         if (import.meta.env.DEV) console.error("[Caixa] load:", e);
-        toast?.("Falha ao carregar dados do caixa. Usando cópia local.", "warning");
-        setTransactions(lsLoad("caixa_tx", []));
-        setBaseBalance(lsLoad("caixa_base", 0));
-        setBaseDate(lsLoad("caixa_base_date", ""));
+        // localStorage already seeded — no need to overwrite
       }
-    })();
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
   const [txModal, setTxModal] = useState(null);
   const [showExport, setShowExport] = useState(false);

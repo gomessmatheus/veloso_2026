@@ -24,6 +24,14 @@ const RANK = { BLOCK: 3, WARN: 2, INFO: 1 };
 
 const DEFAULT_WINDOW = 7; // days
 
+/**
+ * Categorias genéricas não carregam semântica competitiva e não devem
+ * acionar conflito de mesma categoria. "OUTROS" é o valor padrão de toda
+ * marca criada sem categoria explícita — tratá-lo como exclusivo geraria
+ * falsos positivos entre marcas de segmentos completamente diferentes.
+ */
+const GENERIC_CATEGORIES = new Set(["OUTROS", ""]);
+
 // ─── Helpers ─────────────────────────────────────────────
 
 /**
@@ -87,7 +95,7 @@ export function detectConflicts(candidate, existing, brands, contracts) {
   const candidateOverride = candidateContract?.exclusivityOverride || "DEFAULT";
   if (candidateOverride === "NONE") return []; // this contract is exempt
 
-  const candidateWindow  = candidateBrand?.exclusivityWindowDays ?? DEFAULT_WINDOW;
+  const candidateWindow   = candidateBrand?.exclusivityWindowDays ?? DEFAULT_WINDOW;
   const candidateCategory = candidateBrand?.category || null;
   const candidateBlocks   = !!candidateBrand?.blockConflicts;
 
@@ -143,7 +151,15 @@ export function detectConflicts(candidate, existing, brands, contracts) {
     }
 
     // ── Same category ────────────────────────────────────
-    if (candidateCategory && otherBrand?.category && candidateCategory === otherBrand.category) {
+    // Categorias genéricas ("OUTROS") não têm semântica competitiva —
+    // ignorá-las evita falsos positivos entre marcas de segmentos distintos
+    // que nunca tiveram a categoria definida explicitamente.
+    if (
+      candidateCategory &&
+      otherBrand?.category &&
+      candidateCategory === otherBrand.category &&
+      !GENERIC_CATEGORIES.has(candidateCategory)
+    ) {
       const severity = (candidateBlocks || otherBlocks) ? "BLOCK" : "WARN";
       conflicts.push({
         severity,

@@ -26,13 +26,14 @@ import {
   saveManualRates,
   clearManualRates,
   readManualRates,
-  saveManualOverride,    // alias D3
-  clearManualOverride,   // alias D3
+  saveManualOverride,
+  clearManualOverride,
   fetchRates,
   convert,
   formatRate,
   formatRelativeTime,
   formatMoney,
+  calcLockedVariation,
   TTL_MS,
 } from '../fx.js';
 
@@ -562,5 +563,82 @@ describe('formatMoney', () => {
   it('EUR formata com símbolo correto', () => {
     const r = formatMoney(2600, 'EUR');
     expect(r).toContain('2.600');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 13. calcLockedVariation
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('calcLockedVariation', () => {
+  // Casos normais
+  it('alta: cotação subiu 10%', () => {
+    expect(calcLockedVariation(6.38, 5.80)).toBeCloseTo(10.0, 1);
+  });
+
+  it('queda: cotação caiu 5%', () => {
+    expect(calcLockedVariation(5.51, 5.80)).toBeCloseTo(-5.0, 1);
+  });
+
+  it('sem variação: retorna 0 (não null)', () => {
+    expect(calcLockedVariation(5.80, 5.80)).toBeCloseTo(0, 5);
+  });
+
+  // Princípio #9 — nunca NaN, Infinity, 0% espúrio
+  it('lockedRate = null → retorna null (nunca NaN)', () => {
+    const result = calcLockedVariation(6.40, null);
+    expect(result).toBeNull();
+    expect(result).not.toBeNaN?.();
+  });
+
+  it('lockedRate = undefined → retorna null', () => {
+    expect(calcLockedVariation(6.40, undefined)).toBeNull();
+  });
+
+  it('lockedRate = 0 → retorna null (evita divisão por zero)', () => {
+    expect(calcLockedVariation(6.40, 0)).toBeNull();
+  });
+
+  it('currentRate = null → retorna null', () => {
+    expect(calcLockedVariation(null, 5.80)).toBeNull();
+  });
+
+  it('currentRate = 0 → retorna null', () => {
+    expect(calcLockedVariation(0, 5.80)).toBeNull();
+  });
+
+  it('ambos null → retorna null', () => {
+    expect(calcLockedVariation(null, null)).toBeNull();
+  });
+
+  it('ambos NaN → retorna null', () => {
+    expect(calcLockedVariation(NaN, NaN)).toBeNull();
+  });
+
+  it('lockedRate = "abc" (string inválida) → retorna null', () => {
+    expect(calcLockedVariation(6.40, 'abc')).toBeNull();
+  });
+
+  // Precisão numérica
+  it('resultado nunca tem Infinity', () => {
+    const result = calcLockedVariation(6.40, 5.80);
+    expect(isFinite(result)).toBe(true);
+  });
+
+  it('resultado nunca tem NaN', () => {
+    const result = calcLockedVariation(6.40, 5.80);
+    expect(isNaN(result)).toBe(false);
+  });
+
+  // Casos de fronteira
+  it('valor muito pequeno de lockedRate (sem Infinity)', () => {
+    const result = calcLockedVariation(6.40, 0.001);
+    expect(isFinite(result)).toBe(true);
+    expect(isNaN(result)).toBe(false);
+  });
+
+  it('retorna number, não string — caller é responsável por toFixed()', () => {
+    const result = calcLockedVariation(6.38, 5.80);
+    expect(typeof result).toBe('number');
   });
 });

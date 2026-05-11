@@ -464,7 +464,7 @@ function Btn({ children, onClick, variant="default", size="md", icon:Icon, disab
 }
 
 function Badge({ children, color="#475569", bg }) {
-  return <span style={{ display:"inline-block", padding:"2px 7px", fontSize:9, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", borderRadius:4, background: bg||`${color}20`, border:`1px solid ${color}40`, color }}>{children}</span>;
+  return <span style={{ display:"inline-block", padding:"2px 7px", fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", borderRadius:4, background: bg||`${color}20`, border:`1px solid ${color}40`, color }}>{children}</span>;
 }
 
 function Input({ value, onChange, placeholder, type="text", style:st }) {
@@ -640,7 +640,7 @@ function RichTextEditor({ value, onChange, onAutoSave, title, minHeight = 440 })
           {/* Size */}
           <select defaultValue="3" onMouseDown={e=>e.stopPropagation()}
             onChange={e=>{exec("fontSize",e.target.value);editorRef.current?.focus();}}
-            style={{height:24,padding:"0 4px",fontSize:10,background:"transparent",border:"1px solid rgba(255,255,255,.18)",borderRadius:4,color:"#D4D4D8",fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
+            style={{height:28,padding:"0 6px",fontSize:ds.font.size.xs,background:"transparent",border:"1px solid rgba(255,255,255,.18)",borderRadius:4,color:"#D4D4D8",fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
             {[["2","P"],["3","M"],["4","G"],["5","T"]].map(([v,l])=><option key={v} value={v} style={{color:TX,background:B1}}>{l}</option>)}
           </select>
 
@@ -695,28 +695,28 @@ function RichTextEditor({ value, onChange, onAutoSave, title, minHeight = 440 })
         <Tb ttl="Limpar formatação" onDown={()=>{exec("removeFormat");exec("backColor","#FFFFFF");}} fs={11} fw={500}>✕</Tb>
 
         {/* Auto-save indicator */}
-        <span style={{marginLeft:"auto",fontSize:9,color:savedAt?GRN:TX3,flexShrink:0,display:"flex",alignItems:"center",gap:3}}>
+        <span style={{marginLeft:"auto",fontSize:ds.font.size.xs,color:savedAt?GRN:TX3,flexShrink:0,display:"flex",alignItems:"center",gap:3}}>
           {savedAt ? <>✓ Salvo {savedAt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</> : `${charCount} car.`}
         </span>
 
         <button onMouseDown={e=>{e.preventDefault();exportRoteiro(value,title);}}
-          style={{marginLeft:8,padding:"3px 10px",height:26,fontSize:10,fontWeight:700,background:`${RED}10`,border:`1px solid ${RED}30`,borderRadius:5,color:RED,cursor:"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+          style={{marginLeft:8,padding:"4px 10px",height:30,fontSize:ds.font.size.xs,fontWeight:700,background:`${RED}10`,border:`1px solid ${RED}30`,borderRadius:5,color:RED,cursor:"pointer",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
           ↗ Exportar
         </button>
       </div>
 
       {/* ── Section chips ── */}
       <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderBottom:`1px solid ${LN}`,background:B2,flexWrap:"wrap"}}>
-        <span style={{fontSize:9,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:".1em",marginRight:4}}>+ Seção</span>
+        <span style={{fontSize:ds.font.size.xs,fontWeight:700,color:TX3,textTransform:"uppercase",letterSpacing:".1em",marginRight:4}}>+ Seção</span>
         {SECTIONS.map(s=>(
           <button key={s} onMouseDown={e=>{e.preventDefault();insertSection(s);}}
-            style={{fontSize:10,padding:"2px 9px",background:B1,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:TX2,fontWeight:600,transition:"all .12s"}}
+            style={{fontSize:ds.font.size.xs,padding:"2px 9px",background:B1,border:`1px solid ${LN}`,borderRadius:99,cursor:"pointer",color:TX2,fontWeight:600,transition:"all .12s"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=RED;e.currentTarget.style.color=RED;e.currentTarget.style.background=`${RED}08`;}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=LN;e.currentTarget.style.color=TX2;e.currentTarget.style.background=B1;}}>
             {s}
           </button>
         ))}
-        <span style={{marginLeft:"auto",fontSize:9,color:TX3}}>Selecione texto para formatar</span>
+        <span style={{marginLeft:"auto",fontSize:ds.font.size.xs,color:TX3}}>Selecione texto para formatar</span>
       </div>
 
       {/* ── Writing area ── */}
@@ -746,14 +746,14 @@ function Toggle({ on, onToggle }) {
 }
 
 function SRule({ children }) {
-  return <div style={{ fontSize:9, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", color:TX3, display:"flex", alignItems:"center", gap:10, margin:"18px 0 12px" }}>
+  return <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", color:TX3, display:"flex", alignItems:"center", gap:10, margin:"18px 0 12px" }}>
     {children}<div style={{ flex:1, height:1, background:LN }}/>
   </div>;
 }
 
 function Field({ label, children, full }) {
   return <div style={{ display:"flex", flexDirection:"column", gap:4, gridColumn:full?"1/-1":"auto" }}>
-    <label style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2 }}>{label}</label>
+    <label style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2 }}>{label}</label>
     {children}
   </div>;
 }
@@ -761,7 +761,7 @@ function Field({ label, children, full }) {
 function CommToggle({ on, onToggle, label }) {
   return <div style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }} onClick={e=>{e.stopPropagation();onToggle();}}>
     <Toggle on={on} onToggle={()=>{}}/>
-    {label && <span style={{ fontSize:10, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:on?GRN:TX2 }}>{on?"✓ Comissão Ranked (a pagar)":"Sem comissão"}</span>}
+    {label && <span style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:on?GRN:TX2 }}>{on?"✓ Comissão Ranked (a pagar)":"Sem comissão"}</span>}
   </div>;
 }
 
@@ -956,7 +956,7 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
 
       {/* Nav */}
       <nav aria-label="Navegação principal" style={{ padding:`${ds.space[3]} ${ds.space[2]}`, flex:1, overflowY:'auto' }}>
-        <div style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:'0.12em', textTransform:'uppercase', color:ds.color.neutral[400], padding:`${ds.space[1]} ${ds.space[2]}`, marginBottom:ds.space[1] }}>
+        <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:'0.12em', textTransform:'uppercase', color:ds.color.neutral[400], padding:`${ds.space[1]} ${ds.space[2]}`, marginBottom:ds.space[1] }}>
           Navegação
         </div>
         {NAV_ITEMS.filter(item => allowedNav.includes(item.id)).map(item => {
@@ -1003,11 +1003,11 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
           <div style={{ display:'flex', alignItems:'center', marginBottom:ds.space[3] }}>
             {[...onlineUsers.filter(u=>u.sessionId!==my.sessionId), {...my,isMe:true}].slice(0,5).map((u,i) => (
               <div key={u.sessionId||i} title={u.isMe?`${u.name} (você)`:u.name}
-                style={{ width:22, height:22, borderRadius:'50%', background:u.color,
+                style={{ width:26, height:26, borderRadius:'50%', background:u.color,
                   border:`2px solid ${ds.color.neutral[0]}`,
                   display:'flex', alignItems:'center', justifyContent:'center',
-                  fontSize:9, fontWeight:700, color:'#fff',
-                  marginLeft:i>0?-6:0, zIndex:10-i, position:'relative', flexShrink:0 }}>
+                  fontSize:ds.font.size.xs, fontWeight:700, color:'#fff',
+                  marginLeft:i>0?-8:0, zIndex:10-i, position:'relative', flexShrink:0 }}>
                 {u.name?.charAt(0).toUpperCase()}
                 {u.isMe && <div style={{ position:'absolute', bottom:-1, right:-1, width:6, height:6, borderRadius:'50%', background:ds.color.success[500], border:`1px solid ${ds.color.neutral[0]}` }}/>}
               </div>
@@ -1085,7 +1085,7 @@ function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobil
       {/* Sync status pill */}
       <div style={{ display:'flex', alignItems:'center', gap:ds.space[1], padding:`3px ${ds.space[3]}`, background:`${statusColor}12`, border:`1px solid ${statusColor}30`, borderRadius:ds.radius.full }}>
         <div style={{ width:6, height:6, borderRadius:'50%', background:statusColor }}/>
-        <span style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:'0.08em', textTransform:'uppercase', color:statusColor }}>{statusLabel}</span>
+        <span style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:'0.08em', textTransform:'uppercase', color:statusColor }}>{statusLabel}</span>
       </div>
 
       {/* CTA */}
@@ -1299,30 +1299,30 @@ function DeliverableCard({ item, contracts, onEdit, stageId }) {
       <div style={{ fontSize: 12, fontWeight: 600, color: isLate ? RED : TX, marginBottom: 6, lineHeight: 1.3 }}>{item.title}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
         {contract && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>
             <span style={{ width: 5, height: 5, borderRadius: "50%", background: contract.color, display: "inline-block" }} />
             {contract.company.split("/")[0].trim()}
           </span>
         )}
-        <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>{TYPE_LABEL[item.type] || item.type}</span>
+        <span style={{ fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>{TYPE_LABEL[item.type] || item.type}</span>
         {item.plannedPostDate && (
-          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2, marginLeft: "auto" }}>
+          <span style={{ fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2, marginLeft: "auto" }}>
             📅 {fmtDate(item.plannedPostDate)}
           </span>
         )}
       </div>
       {dl && stageId !== "done" && (
-        <div style={{ marginTop: 6, fontSize: 10, fontWeight: 600, color: isLate ? RED : isUrgent ? AMB : TX3 }}>
+        <div style={{ marginTop: 6, fontSize:ds.font.size.xs, fontWeight: 600, color: isLate ? RED : isUrgent ? AMB : TX3 }}>
           {isLate ? `${Math.abs(daysUntil)}d atrasado` : daysUntil === 0 ? "Hoje" : `${daysUntil}d`}
           {item.stageDateOverrides?.[stageId] ? " (manual)" : ""}
         </div>
       )}
       {item.responsible?.[stageId] && (
-        <div style={{ marginTop: 4, fontSize: 10, color: TX3 }}>👤 {item.responsible[stageId]}</div>
+        <div style={{ marginTop: 4, fontSize:ds.font.size.xs, color: TX3 }}>👤 {item.responsible[stageId]}</div>
       )}
       {exceptions.length > 0 && (
         <div title={exceptions.map(e=>`${e.label}: ${e.got}d disponíveis (mín. ${e.need}d)`).join(" · ")}
-          style={{ marginTop:4, fontSize:9, fontWeight:700, color:"#EA580C", background:"rgba(234,88,12,.1)", borderRadius:4, padding:"1px 6px", display:"inline-block", cursor:"help" }}>
+          style={{ marginTop:4, fontSize:ds.font.size.xs, fontWeight:700, color:"#EA580C", background:"rgba(234,88,12,.1)", borderRadius:4, padding:"1px 6px", display:"inline-block", cursor:"help" }}>
           ⚠️ {exceptions.length} exceção{exceptions.length>1?"ões":""}
         </div>
       )}
@@ -1361,9 +1361,9 @@ function PipelineColumn({ stage, items, contracts, onEdit, onDrop, onReorder }) 
       <div style={{ padding: "10px 12px", borderBottom: `1px solid ${LN}`, background: B1, display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: TX, flex: 1 }}>{stage.label}</span>
         {lateCount > 0 && (
-          <span style={{ fontSize: 9, fontWeight: 700, background: "#FFF1F2", color: RED, padding: "2px 6px", borderRadius: 99, border: "1px solid #FCA5A5" }}>{lateCount} atrasado{lateCount>1?"s":""}</span>
+          <span style={{ fontSize:ds.font.size.xs, fontWeight: 700, background: "#FFF1F2", color: RED, padding: "2px 6px", borderRadius: 99, border: "1px solid #FCA5A5" }}>{lateCount} atrasado{lateCount>1?"s":""}</span>
         )}
-        <span style={{ fontSize: 9, fontWeight: 700, background: B3, color: TX2, padding: "2px 7px", borderRadius: 99 }}>{items.length}</span>
+        <span style={{ fontSize:ds.font.size.xs, fontWeight: 700, background: B3, color: TX2, padding: "2px 7px", borderRadius: 99 }}>{items.length}</span>
       </div>
       <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 0, minHeight: 80 }}>
         {items.map(item => (
@@ -1504,7 +1504,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
         <div style={{ display: "flex", background: B2, border: `1px solid ${LN}`, borderRadius: 6, overflow: "hidden" }}>
           {[["pipeline","Pipeline"],["calendar","Calendário"]].map(([v,l]) => (
             <div key={v} onClick={() => setView(v)}
-              style={{ padding: "5px 12px", fontSize: 10, fontWeight: 700, cursor: "pointer", transition: TRANS, color: view===v?TX:TX2, background: view===v?B3:"transparent" }}>{l}</div>
+              style={{ padding: "5px 12px", fontSize:ds.font.size.xs, fontWeight: 700, cursor: "pointer", transition: TRANS, color: view===v?TX:TX2, background: view===v?B3:"transparent" }}>{l}</div>
           ))}
         </div>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
@@ -1832,13 +1832,13 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
         {f.plannedPostDate&&(<><SRule>Cronograma automático</SRule>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
             {STAGES.filter(s=>s.id!=="done").map(s=>{const auto=stageDates[s.id];const override=f.stageDateOverrides?.[s.id];const dl=daysLeft(override||auto);const exc=validateDeliverable(f).find(e=>e.stage===s.id);return(<div key={s.id} style={{background:exc?`rgba(234,88,12,.06)`:B2,border:`1px solid ${exc?"rgba(234,88,12,.3)":LN}`,borderRadius:8,padding:"10px 12px"}}>
-              <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>{s.label}{exc&&<span title={exc.rule} style={{fontSize:10,cursor:"help"}}>⚠️</span>}</div>
+              <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>{s.label}{exc&&<span title={exc.rule} style={{fontSize:ds.font.size.xs,cursor:"help"}}>⚠️</span>}</div>
               <div style={{fontSize:12,fontWeight:600,color:dl!==null&&dl<0?RED:TX,marginBottom:4}}>{fmtDate(override||auto)}</div>
-              {dl!==null&&<div style={{fontSize:10,color:dl<0?RED:dl<=1?AMB:TX3,marginBottom:5}}>{dl<0?`${Math.abs(dl)}d atrás`:dl===0?"Hoje":`${dl}d`}</div>}
-              {exc&&<div style={{fontSize:9,color:"#EA580C",fontWeight:600,marginBottom:4}}>{exc.got}d / mín. {exc.need}d</div>}
-              <div style={{fontSize:9,color:TX3,marginBottom:4,fontStyle:"italic"}}>{s.rule}</div>
-              <input type="date" value={f.stageDateOverrides?.[s.id]||""} onChange={e=>setF(x=>({...x,stageDateOverrides:{...(x.stageDateOverrides||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX3,fontFamily:"inherit",outline:"none"}}/>
-              <input value={f.responsible?.[s.id]||""} placeholder="Responsável" onChange={e=>setF(x=>({...x,responsible:{...(x.responsible||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:10,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",outline:"none",marginTop:4}}/>
+              {dl!==null&&<div style={{fontSize:ds.font.size.xs,color:dl<0?RED:dl<=1?AMB:TX3,marginBottom:5}}>{dl<0?`${Math.abs(dl)}d atrás`:dl===0?"Hoje":`${dl}d`}</div>}
+              {exc&&<div style={{fontSize:ds.font.size.xs,color:"#EA580C",fontWeight:600,marginBottom:4}}>{exc.got}d / mín. {exc.need}d</div>}
+              <div style={{fontSize:ds.font.size.xs,color:TX3,marginBottom:4,fontStyle:"italic"}}>{s.rule}</div>
+              <input type="date" value={f.stageDateOverrides?.[s.id]||""} onChange={e=>setF(x=>({...x,stageDateOverrides:{...(x.stageDateOverrides||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:ds.font.size.xs,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX3,fontFamily:"inherit",outline:"none"}}/>
+              <input value={f.responsible?.[s.id]||""} placeholder="Responsável" onChange={e=>setF(x=>({...x,responsible:{...(x.responsible||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:ds.font.size.xs,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",outline:"none",marginTop:4}}/>
             </div>);})}</div></>)}
         {(f.stage==="postagem"||f.stage==="done")&&(<><SRule>Publicação</SRule>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -1878,8 +1878,8 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
             <div onClick={()=>setOpenNet(openNet===net?null:net)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",cursor:"pointer",background:B2,transition:TRANS}} onMouseEnter={e=>e.currentTarget.style.background=B3} onMouseLeave={e=>e.currentTarget.style.background=B2}>
               <span style={{fontSize:12,fontWeight:600,color:TX}}>{NET_EMOJI[net]} {net}</span>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                {reach>0&&<span style={{fontSize:10,color:TX2}}>{reach.toLocaleString("pt-BR")} alcance</span>}
-                {eng&&<span style={{fontSize:10,fontWeight:700,color:GRN}}>{eng}% eng.</span>}
+                {reach>0&&<span style={{fontSize:ds.font.size.xs,color:TX2}}>{reach.toLocaleString("pt-BR")} alcance</span>}
+                {eng&&<span style={{fontSize:ds.font.size.xs,fontWeight:700,color:GRN}}>{eng}% eng.</span>}
                 <span style={{fontSize:11,color:TX2}}>{openNet===net?"▲":"▼"}</span>
               </div>
             </div>
@@ -1925,7 +1925,7 @@ function CostsSection({ contract: c, saveC, contracts }) {
   return (
     <div style={{ ...G, padding:"18px 20px" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-        <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Custos do Contrato</div>
+        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Custos do Contrato</div>
         <Btn onClick={addCost} variant="ghost" size="sm" icon={Plus}>Adicionar</Btn>
       </div>
 
@@ -1938,17 +1938,17 @@ function CostsSection({ contract: c, saveC, contracts }) {
       {costs.map((cost, i) => (
         <div key={cost.id||i} style={{ display:"grid", gridTemplateColumns:"1fr 130px 140px 32px", gap:8, marginBottom:8, alignItems:"end" }}>
           <div>
-            {i===0 && <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Descrição</div>}
+            {i===0 && <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Descrição</div>}
             <input value={cost.label} placeholder="ex: Passagem aérea" onChange={e=>updCost(i,"label",e.target.value)} onBlur={saveCost}
               style={{width:"100%",padding:"8px 10px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
           </div>
           <div>
-            {i===0 && <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Valor R$</div>}
+            {i===0 && <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Valor R$</div>}
             <input type="number" min="0" value={cost.value} placeholder="0" onChange={e=>updCost(i,"value",e.target.value)} onBlur={saveCost}
               style={{width:"100%",padding:"8px 10px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
           </div>
           <div>
-            {i===0 && <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Categoria</div>}
+            {i===0 && <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:4}}>Categoria</div>}
             <select value={cost.category||"production"} onChange={e=>{updCost(i,"category",e.target.value);saveCost();}}
               style={{width:"100%",padding:"8px 10px",background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontSize:12,fontFamily:"inherit",outline:"none"}}>
               {Object.entries(CAT_LABEL).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
@@ -1968,7 +1968,7 @@ function CostsSection({ contract: c, saveC, contracts }) {
           {costs.filter(x=>Number(x.value)>0).map((x,i) => (
             <div key={i} style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
               <span style={{fontSize:11,color:TX3,display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:9,padding:"1px 6px",borderRadius:99,background:`${CAT_COLOR[x.category]||TX3}15`,color:CAT_COLOR[x.category]||TX3}}>{CAT_LABEL[x.category]}</span>
+                <span style={{fontSize:ds.font.size.xs,padding:"1px 6px",borderRadius:99,background:`${CAT_COLOR[x.category]||TX3}15`,color:CAT_COLOR[x.category]||TX3}}>{CAT_LABEL[x.category]}</span>
                 {x.label||"Custo"}
               </span>
               <span style={{fontSize:11,color:RED}}>- {fmtMoney(Number(x.value))}</span>
@@ -2022,13 +2022,13 @@ function FxContractCard({ contract: c, rates }) {
             <span style={{ color:ds.color.neutral[500] }}> ≈ {fmtMoney(brlValue)}</span>
           )}
         </div>
-        <div style={{ fontSize:9, color:ds.color.neutral[400] }}>
+        <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400] }}>
           Cotação atual: {formatRate(rate)}
           {stale && <span style={{ color:ds.color.warning[500] }}> · desatualizada</span>}
           {!stale && fetchedAt && <span> · {formatRelativeTime(fetchedAt)}</span>}
         </div>
         {lockedRate > 0 && (
-          <div style={{ fontSize:9, color:ds.color.neutral[400], marginTop:1 }}>
+          <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:1 }}>
             Na assinatura: {formatRate(lockedRate)}
             {c.lockedRateAt && (
               <span> em {new Date(c.lockedRateAt).toLocaleDateString('pt-BR')}</span>
@@ -2255,22 +2255,22 @@ Responda APENAS com o JSON.` }]
               { label:"Engajamento",    value:fmtEng(avgEng), accent:avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX2):TX2 },
             ].map((k,i) => (
               <div key={i} style={{ ...G, padding: isMob ? "12px 14px" : "16px 18px" }}>
-                <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>{k.label}</div>
+                <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>{k.label}</div>
                 <div style={{ fontSize: isMob ? 16 : 20, fontWeight:700,color:k.accent||TX,lineHeight:1 }}>{k.value}</div>
-                {k.sub&&<div style={{fontSize:10,color:TX2,marginTop:4}}>{k.sub}</div>}
+                {k.sub&&<div style={{fontSize:ds.font.size.xs,color:TX2,marginTop:4}}>{k.sub}</div>}
               </div>
             ))}
           </div>
           {c.notes && (
             <div style={{ ...G, padding:"16px 18px", marginBottom:16 }}>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>Observações</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>Observações</div>
               <p style={{ fontSize:13,color:TX,lineHeight:1.6 }}>{c.notes}</p>
             </div>
           )}
           {/* Pipeline summary */}
           {cDeliverables.length>0 && (
             <div style={{ ...G, padding:"16px 18px" }}>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Pipeline de Produção</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Pipeline de Produção</div>
               {cDeliverables.map(d => {
                 const stage = STAGES.find(s=>s.id===d.stage);
                 const dl2 = d.plannedPostDate&&stage ? daysLeft(addDays(d.plannedPostDate,stage.days)) : null;
@@ -2281,8 +2281,8 @@ Responda APENAS com o JSON.` }]
                     <div style={{ width:6,height:6,borderRadius:"50%",background:isDone?GRN:isLate?RED:AMB,flexShrink:0 }}/>
                     <span style={{ fontSize:12,fontWeight:500,color:isLate?RED:TX,flex:1 }}>{d.title}</span>
                     <Badge color={isDone?GRN:isLate?RED:TX2}>{stage?.label||d.stage}</Badge>
-                    {d.plannedPostDate&&<span style={{fontSize:10,color:TX2}}>post {fmtDate(d.plannedPostDate)}</span>}
-                    {isDone?<span style={{fontSize:10,fontWeight:700,color:GRN}}>✓ Entregue</span>:dl2!==null&&<span style={{fontSize:10,fontWeight:700,color:dlColor(dl2)}}>{dl2<0?`${Math.abs(dl2)}d atraso`:`${dl2}d`}</span>}
+                    {d.plannedPostDate&&<span style={{fontSize:ds.font.size.xs,color:TX2}}>post {fmtDate(d.plannedPostDate)}</span>}
+                    {isDone?<span style={{fontSize:ds.font.size.xs,fontWeight:700,color:GRN}}>✓ Entregue</span>:dl2!==null&&<span style={{fontSize:ds.font.size.xs,fontWeight:700,color:dlColor(dl2)}}>{dl2<0?`${Math.abs(dl2)}d atraso`:`${dl2}d`}</span>}
                   </div>
                 );
               })}
@@ -2296,7 +2296,7 @@ Responda APENAS com o JSON.` }]
         <div>
           {/* Deliverables */}
           {cDeliverables.length>0 && <>
-            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Pipeline</div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Pipeline</div>
             <div style={{ border:`1px solid ${LN}`,borderRadius:10,overflow:"hidden",marginBottom:20 }}>
               {cDeliverables.map((d,i) => {
                 const stage=STAGES.find(s=>s.id===d.stage);
@@ -2314,16 +2314,16 @@ Responda APENAS com o JSON.` }]
           </>}
           {/* Posts */}
           {cPosts.length>0 && <>
-            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Posts registrados</div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Posts registrados</div>
             <div style={{ border:`1px solid ${LN}`,borderRadius:10,overflow:"hidden" }}>
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 80px 80px 80px",padding:"8px 16px",background:B2,borderBottom:`1px solid ${LN}`,fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3 }}>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 80px 80px 80px",padding:"8px 16px",background:B2,borderBottom:`1px solid ${LN}`,fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3 }}>
                 <div>Título</div><div>Views</div><div>Alcance</div><div>Curtidas</div><div>Coment.</div><div>Engaj.</div><div>Link</div>
               </div>
               {cPosts.map((p,i) => {
                 const pRch=sumNetworkMetrics(p,"reach"),pLk=sumNetworkMetrics(p,"likes"),pCm=sumNetworkMetrics(p,"comments");const eng=pRch>0?((pLk+pCm)/pRch*100):calcEngagement(p);
                 return (
                   <div key={p.id} style={{ display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 80px 80px 80px",padding:"10px 16px",borderBottom:i<cPosts.length-1?`1px solid ${LN}`:"none",fontSize:12,alignItems:"center" }}>
-                    <div style={{ fontWeight:500,color:p.isPosted?TX:TX2 }}>{p.title}{!p.isPosted&&<span style={{fontSize:10,color:TX3,marginLeft:6}}>(planejado)</span>}</div>
+                    <div style={{ fontWeight:500,color:p.isPosted?TX:TX2 }}>{p.title}{!p.isPosted&&<span style={{fontSize:ds.font.size.xs,color:TX3,marginLeft:6}}>(planejado)</span>}</div>
                     <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.views||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.reach||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.likes||0).toLocaleString("pt-BR")||"—"}</div>
@@ -2349,7 +2349,7 @@ Responda APENAS com o JSON.` }]
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:20 }}>
           {/* NF */}
           <div style={{ ...G, padding:"18px 20px" }}>
-            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:14 }}>Nota Fiscal</div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:14 }}>Nota Fiscal</div>
             {nfEntries.length===0&&<div style={{fontSize:12,color:TX3}}>Sem NF configurada</div>}
             {nfEntries.map((e,i) => {
               const nfFile = c.nfFiles?.[e.key];
@@ -2358,11 +2358,11 @@ Responda APENAS com o JSON.` }]
                   <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:nfFile||e.isEmitted?8:0 }}>
                     <div>
                       <div style={{ fontSize:12,fontWeight:600,color:TX }}>{e.label}</div>
-                      {e.date&&<div style={{fontSize:10,color:TX2}}>{fmtDate(e.date)}</div>}
+                      {e.date&&<div style={{fontSize:ds.font.size.xs,color:TX2}}>{fmtDate(e.date)}</div>}
                     </div>
                     <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                       {e.amount>0&&<span style={{fontSize:12,fontWeight:700,color:TX}}>{fmtMoney(e.amount,c.currency)}</span>}
-                      <div onClick={()=>toggleNF(c.id,e.key)} style={{ padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isEmitted?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isEmitted?GRN+"44":LN2}`,color:e.isEmitted?GRN:TX2 }}>
+                      <div onClick={()=>toggleNF(c.id,e.key)} style={{ padding:"4px 10px",fontSize:ds.font.size.xs,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isEmitted?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isEmitted?GRN+"44":LN2}`,color:e.isEmitted?GRN:TX2 }}>
                         {e.isEmitted?"✓ Emitida":"Emitir"}
                       </div>
                     </div>
@@ -2373,9 +2373,9 @@ Responda APENAS com o JSON.` }]
                       <span style={{ fontSize:16 }}>📄</span>
                       <div style={{ flex:1,minWidth:0 }}>
                         <div style={{ fontSize:11,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{nfFile.name}</div>
-                        <div style={{ fontSize:9,color:TX3 }}>{new Date(nfFile.uploadedAt).toLocaleDateString("pt-BR")}</div>
+                        <div style={{ fontSize:ds.font.size.xs,color:TX3 }}>{new Date(nfFile.uploadedAt).toLocaleDateString("pt-BR")}</div>
                       </div>
-                      <a href={nfFile.data} download={nfFile.name} style={{ padding:"3px 8px",fontSize:10,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:4,textDecoration:"none",flexShrink:0 }}>↓</a>
+                      <a href={nfFile.data} download={nfFile.name} style={{ padding:"3px 8px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:4,textDecoration:"none",flexShrink:0 }}>↓</a>
                       <button onClick={async()=>{const nf={...(c.nfFiles||{})};delete nf[e.key];await saveC(contracts.map(x=>x.id===c.id?{...x,nfFiles:nf}:x));}} style={{ padding:"3px 6px",fontSize:11,background:"none",border:`1px solid ${LN}`,borderRadius:4,cursor:"pointer",color:TX2 }}>×</button>
                     </div>
                   ) : (
@@ -2401,7 +2401,7 @@ Responda APENAS com o JSON.` }]
           {/* Commission */}
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
-              <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Comissão Ranked (a pagar) (20%)</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Comissão Ranked (a pagar) (20%)</div>
               <CommToggle on={c.hasCommission} onToggle={()=>toggleComm(c.id)} label/>
             </div>
             {!c.hasCommission&&<div style={{fontSize:12,color:TX3}}>Sem comissão neste contrato</div>}
@@ -2410,11 +2410,11 @@ Responda APENAS com o JSON.` }]
               <div key={e.key} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<commEntries.length-1?`1px solid ${LN}`:"none" }}>
                 <div>
                   <div style={{ fontSize:12,fontWeight:600,color:TX }}>{e.label}</div>
-                  {e.date&&<div style={{fontSize:10,color:TX2}}>{fmtDate(e.date)}</div>}
+                  {e.date&&<div style={{fontSize:ds.font.size.xs,color:TX2}}>{fmtDate(e.date)}</div>}
                 </div>
                 <div style={{ display:"flex",alignItems:"center",gap:10 }}>
                   <span style={{ fontSize:13,fontWeight:700,color:RED }}>{fmtMoney(e.amount,c.currency)}</span>
-                  <div onClick={()=>toggleCommPaid(c.id,e.key)} style={{ padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isPaid?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isPaid?GRN+"44":LN2}`,color:e.isPaid?GRN:TX2 }}>
+                  <div onClick={()=>toggleCommPaid(c.id,e.key)} style={{ padding:"4px 12px",fontSize:ds.font.size.xs,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:e.isPaid?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${e.isPaid?GRN+"44":LN2}`,color:e.isPaid?GRN:TX2 }}>
                     {e.isPaid?"✓ Pago à Ranked":"Marcar pago"}
                   </div>
                 </div>
@@ -2436,7 +2436,7 @@ Responda APENAS com o JSON.` }]
         <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
-              <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Notas do Briefing</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Notas do Briefing</div>
               <DsButton variant="primary" size="sm"
                 onClick={()=>openCopilot?.({contractId:c.id, actionId:"generate-briefing-structure"})}
                 leftIcon={<DsIcon name="sparkles" size={13} color={ds.color.neutral[0]}/>}>
@@ -2446,16 +2446,16 @@ Responda APENAS com o JSON.` }]
             <textarea value={briefingNote} onChange={e=>setBriefingNote(e.target.value)} onBlur={()=>saveNote(briefingNote)}
               rows={12} placeholder="Cole aqui o briefing da marca, ou use o Copiloto para criar automaticamente com os principais pontos, dos & don'ts e tom de voz…"
               style={{ width:"100%",padding:"12px",background:B2,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontSize:13,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none" }}/>
-            <div style={{ fontSize:10,color:TX3,marginTop:6 }}>Auto-salvo ao sair do campo · Copiloto gera estrutura baseada no contrato</div>
+            <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:6 }}>Auto-salvo ao sair do campo · Copiloto gera estrutura baseada no contrato</div>
           </div>
           <div style={{ ...G, padding:"18px 20px" }}>
-            <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Arquivo do Briefing</div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Arquivo do Briefing</div>
             {briefingFile ? (
               <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:B2,borderRadius:8,border:`1px solid ${LN}` }}>
                 <span style={{ fontSize:20 }}>📄</span>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:12,fontWeight:600,color:TX }}>{briefingFile.name}</div>
-                  <div style={{ fontSize:10,color:TX2 }}>Enviado {new Date(briefingFile.uploadedAt).toLocaleDateString("pt-BR")}</div>
+                  <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>Enviado {new Date(briefingFile.uploadedAt).toLocaleDateString("pt-BR")}</div>
                 </div>
                 <a href={briefingFile.data} download={briefingFile.name}
                   style={{ padding:"5px 12px",fontSize:11,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none" }}>
@@ -2500,7 +2500,7 @@ Responda APENAS com o JSON.` }]
               <div style={{ ...G, padding:"20px 24px", borderLeft:`4px solid ${scoreColor}`, display:"flex",alignItems:"center",gap:20 }}>
                 <div style={{ textAlign:"center",flexShrink:0 }}>
                   <div style={{ fontSize:36,fontWeight:700,color:scoreColor,lineHeight:1 }}>{aiReport.performance?.score}</div>
-                  <div style={{ fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:TX2,marginTop:4 }}>Score</div>
+                  <div style={{ fontSize:ds.font.size.xs,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:TX2,marginTop:4 }}>Score</div>
                 </div>
                 <div>
                   <div style={{ fontSize:14,fontWeight:700,color:TX,marginBottom:4 }}>{aiReport.performance?.label} · {c.company}</div>
@@ -2509,29 +2509,29 @@ Responda APENAS com o JSON.` }]
               </div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16 }}>
                 <div style={{ ...G, padding:"16px 18px" }}>
-                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Entregas</div>
+                  <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Entregas</div>
                   <p style={{ fontSize:12,color:TX,lineHeight:1.6 }}>{aiReport.deliveryStatus}</p>
                 </div>
                 <div style={{ ...G, padding:"16px 18px" }}>
-                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Financeiro</div>
+                  <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Financeiro</div>
                   <p style={{ fontSize:12,color:TX,lineHeight:1.6 }}>{aiReport.financialStatus}</p>
                 </div>
                 {aiReport.engagementAnalysis&&<div style={{ ...G, padding:"16px 18px", gridColumn:"1/-1" }}>
-                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Engajamento</div>
+                  <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Engajamento</div>
                   <p style={{ fontSize:12,color:TX,lineHeight:1.6 }}>{aiReport.engagementAnalysis}</p>
                 </div>}
               </div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16 }}>
                 {aiReport.highlights?.length>0&&<div style={{ ...G, padding:"16px 18px",borderLeft:`3px solid ${GRN}` }}>
-                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:GRN,marginBottom:10 }}>✓ Pontos positivos</div>
+                  <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:GRN,marginBottom:10 }}>✓ Pontos positivos</div>
                   {aiReport.highlights.map((h,i)=><div key={i} style={{fontSize:12,color:TX,padding:"4px 0",borderBottom:i<aiReport.highlights.length-1?`1px solid ${LN}`:"none"}}>{h}</div>)}
                 </div>}
                 {aiReport.risks?.length>0&&<div style={{ ...G, padding:"16px 18px",borderLeft:`3px solid ${RED}` }}>
-                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:RED,marginBottom:10 }}>⚠ Riscos</div>
+                  <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:RED,marginBottom:10 }}>⚠ Riscos</div>
                   {aiReport.risks.map((r,i)=><div key={i} style={{fontSize:12,color:TX,padding:"4px 0",borderBottom:i<aiReport.risks.length-1?`1px solid ${LN}`:"none"}}>{r}</div>)}
                 </div>}
                 {aiReport.nextSteps?.length>0&&<div style={{ ...G, padding:"16px 18px",borderLeft:`3px solid ${BLU}` }}>
-                  <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:BLU,marginBottom:10 }}>→ Próximos passos</div>
+                  <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:BLU,marginBottom:10 }}>→ Próximos passos</div>
                   {aiReport.nextSteps.map((s,i)=><div key={i} style={{fontSize:12,color:TX,padding:"4px 0",borderBottom:i<aiReport.nextSteps.length-1?`1px solid ${LN}`:"none"}}>{s}</div>)}
                 </div>}
               </div>
@@ -2682,24 +2682,24 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
                   <BrandInitial brand={brand} size={40}/>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:700, fontSize:14, color:TX, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{brand.name}</div>
-                    <span style={{ fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:99, background:`${brand.primaryColor||"#374151"}18`, color:brand.primaryColor||TX2 }}>{catLabel}</span>
+                    <span style={{ fontSize:ds.font.size.xs, fontWeight:700, padding:"1px 7px", borderRadius:99, background:`${brand.primaryColor||"#374151"}18`, color:brand.primaryColor||TX2 }}>{catLabel}</span>
                   </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
-                    <div style={{ fontSize:9, color:TX3, marginBottom:2 }}>LTV</div>
+                    <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>LTV</div>
                     <div style={{ fontSize:13, fontWeight:800, color:TX }}>{ltv>0?fmtMoney(ltv):"—"}</div>
                   </div>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
-                    <div style={{ fontSize:9, color:TX3, marginBottom:2 }}>Contratos</div>
+                    <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>Contratos</div>
                     <div style={{ fontSize:13, fontWeight:800, color:TX }}>{active} ativos</div>
                   </div>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
-                    <div style={{ fontSize:9, color:TX3, marginBottom:2 }}>Engajamento</div>
+                    <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>Engajamento</div>
                     <div style={{ fontSize:13, fontWeight:800, color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX2):TX3 }}>{fmtEng(eng)}</div>
                   </div>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
-                    <div style={{ fontSize:9, color:TX3, marginBottom:2 }}>Último prazo</div>
+                    <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>Último prazo</div>
                     <div style={{ fontSize:12, fontWeight:600, color:TX }}>{lastC?fmtDate(lastC):"—"}</div>
                   </div>
                 </div>
@@ -2787,7 +2787,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6, flexWrap:"wrap" }}>
               <h1 style={{ fontSize:22, fontWeight:800, color:TX, letterSpacing:"-.02em" }}>{brand.name}</h1>
-              <span style={{ fontSize:9, fontWeight:700, padding:"2px 9px", borderRadius:99, background:`${brand.primaryColor||"#374151"}18`, color:brand.primaryColor||TX2 }}>{catLabel}</span>
+              <span style={{ fontSize:ds.font.size.xs, fontWeight:700, padding:"2px 9px", borderRadius:99, background:`${brand.primaryColor||"#374151"}18`, color:brand.primaryColor||TX2 }}>{catLabel}</span>
             </div>
             {/* Contact chips */}
             {brand.contact?.email && <div style={{ fontSize:11, color:TX2, marginBottom:3 }}>📧 {brand.contact.email}</div>}
@@ -2808,7 +2808,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
             { label:"Eng. médio",         value: fmtEng(eng),                            accent:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX2):TX2 },
           ].map(kpi => (
             <div key={kpi.label} style={{ background:B2, borderRadius:10, padding:"12px 14px" }}>
-              <div style={{ fontSize:9, color:TX3, marginBottom:4, textTransform:"uppercase", letterSpacing:".08em", fontWeight:700 }}>{kpi.label}</div>
+              <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:4, textTransform:"uppercase", letterSpacing:".08em", fontWeight:700 }}>{kpi.label}</div>
               <div style={{ fontSize:18, fontWeight:800, color:kpi.accent }}>{kpi.value}</div>
             </div>
           ))}
@@ -2841,7 +2841,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
                 onMouseLeave={e=>e.currentTarget.style.background=B1}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:600, fontSize:13, color:c.archived?TX2:TX, marginBottom:3 }}>
-                    {c.company}{c.archived&&<span style={{ fontSize:10, color:TX3, marginLeft:6 }}>Arquivado</span>}
+                    {c.company}{c.archived&&<span style={{ fontSize:ds.font.size.xs, color:TX3, marginLeft:6 }}>Arquivado</span>}
                   </div>
                   <div style={{ fontSize:11, color:TX2 }}>
                     {total>0?fmtMoney(total,c.currency):"Valor TBD"}
@@ -2882,7 +2882,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
                       { label:"Eng. médio", value: fmtEng(avgE) },
                     ].map(m=>(
                       <div key={m.label} style={{ background:B2, borderRadius:10, padding:"12px 14px" }}>
-                        <div style={{ fontSize:9, color:TX3, marginBottom:4, textTransform:"uppercase", letterSpacing:".08em", fontWeight:700 }}>{m.label}</div>
+                        <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:4, textTransform:"uppercase", letterSpacing:".08em", fontWeight:700 }}>{m.label}</div>
                         <div style={{ fontSize:18, fontWeight:800, color:TX }}>{m.value}</div>
                       </div>
                     ))}
@@ -2968,7 +2968,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
               <div style={{ width:20, height:20, borderRadius:"50%", background:"#fff", position:"absolute", top:2, left:editForm.blockConflicts?22:2, transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.15)" }}/>
             </div>
           </div>
-          <div style={{ fontSize:10, color:TX3, marginTop:4 }}>Usado para detectar conflitos de marca concorrente no agendamento.</div>
+          <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:4 }}>Usado para detectar conflitos de marca concorrente no agendamento.</div>
         </Modal>
       )}
     </div>
@@ -3050,10 +3050,10 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:700, fontSize:15, color:TX, lineHeight:1.2, marginBottom:5 }}>{c.company}</div>
                     <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
-                      {c.currency!=="BRL"&&<span style={{ fontSize:9, padding:"2px 7px", borderRadius:99, background:`${BLU}14`, color:BLU, fontWeight:700 }}>{c.currency}</span>}
-                      {c.paymentType==="monthly"&&<span style={{ fontSize:9, padding:"2px 7px", borderRadius:99, background:`${TX3}12`, color:TX3, fontWeight:700 }}>Mensal</span>}
+                      {c.currency!=="BRL"&&<span style={{ fontSize:ds.font.size.xs, padding:"2px 7px", borderRadius:99, background:`${BLU}14`, color:BLU, fontWeight:700 }}>{c.currency}</span>}
+                      {c.paymentType==="monthly"&&<span style={{ fontSize:ds.font.size.xs, padding:"2px 7px", borderRadius:99, background:`${TX3}12`, color:TX3, fontWeight:700 }}>Mensal</span>}
                       {c.hasTravel&&<span style={{ fontSize:11 }}>✈️</span>}
-                      {c.archived&&<span style={{ fontSize:9, padding:"2px 7px", borderRadius:99, background:`${TX3}12`, color:TX3, fontWeight:700 }}>Arquivado</span>}
+                      {c.archived&&<span style={{ fontSize:ds.font.size.xs, padding:"2px 7px", borderRadius:99, background:`${TX3}12`, color:TX3, fontWeight:700 }}>Arquivado</span>}
                     </div>
                   </div>
                   <div style={{ textAlign:"right", flexShrink:0 }}>
@@ -3113,7 +3113,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
       <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)", minWidth:860 }}>
         <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 70px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
           {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links",""].map((h,i)=>(
-            <div key={i} style={{ padding:"0 12px", fontSize:9, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
+            <div key={i} style={{ padding:"0 12px", fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
           ))}
         </div>
         {displayContracts.map(c=>{
@@ -3162,7 +3162,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
                 <div style={{ height:3, background:"rgba(0,0,0,.08)", borderRadius:2, marginBottom:3 }}>
                   <div style={{ height:3, background:tot&&don/tot===1?GRN:c.color, width:`${tot?Math.min(100,don/tot*100):0}%`, borderRadius:2 }}/>
                 </div>
-                <div style={{ fontSize:9, color:TX3 }}>{don}/{tot}</div>
+                <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>{don}/{tot}</div>
               </div>
               <div style={{ padding:"0 12px", color:TX2 }}>{cp}/{c.numPosts}</div>
               <div style={{ padding:"0 12px", color:TX2 }}>{cs}/{c.numStories}</div>
@@ -3322,8 +3322,8 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
           userSelect: "none",
         }}>
         <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-          <span style={{ fontSize:9, flexShrink:0, opacity:.7 }}>📄</span>
-          <span style={{ fontSize:10, fontWeight:500, color:TX, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>
+          <span style={{ fontSize:ds.font.size.xs, flexShrink:0, opacity:.7 }}>📄</span>
+          <span style={{ fontSize:ds.font.size.xs, fontWeight:500, color:TX, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>
             {del.title}
           </span>
         </div>
@@ -3346,12 +3346,12 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
 
       {/* ── Contract filter pills ── */}
       <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10,marginBottom:14,scrollbarWidth:"none"}}>
-        <div onClick={()=>setCalF("all")} style={{padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:99,flexShrink:0,background:calFilter==="all"?TX:B2,color:calFilter==="all"?"white":TX2,border:`1px solid ${calFilter==="all"?TX:LN}`,transition:TRANS}}>
+        <div onClick={()=>setCalF("all")} style={{padding:"4px 12px",fontSize:ds.font.size.xs,fontWeight:700,cursor:"pointer",borderRadius:99,flexShrink:0,background:calFilter==="all"?TX:B2,color:calFilter==="all"?"white":TX2,border:`1px solid ${calFilter==="all"?TX:LN}`,transition:TRANS}}>
           Todos
         </div>
         {contracts.map(c=>(
           <div key={c.id} onClick={()=>setCalF(calFilter===c.id?"all":c.id)}
-            style={{padding:"4px 12px",fontSize:10,fontWeight:600,cursor:"pointer",borderRadius:99,flexShrink:0,display:"flex",alignItems:"center",gap:5,
+            style={{padding:"4px 12px",fontSize:ds.font.size.xs,fontWeight:600,cursor:"pointer",borderRadius:99,flexShrink:0,display:"flex",alignItems:"center",gap:5,
               background:calFilter===c.id?`${c.color}18`:B2,
               color:calFilter===c.id?c.color:TX2,
               border:`1px solid ${calFilter===c.id?c.color+"50":LN}`,
@@ -3366,7 +3366,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
         {/* Day headers */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:B2,borderBottom:`1px solid ${LN}`}}>
           {DAY_LABELS.map((d,i)=>(
-            <div key={i} style={{padding:"10px 0",textAlign:"center",fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3}}>{d}</div>
+            <div key={i} style={{padding:"10px 0",textAlign:"center",fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3}}>{d}</div>
           ))}
         </div>
 
@@ -3439,7 +3439,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                     {dayDels.length>3&&<div style={{width:6,height:6,borderRadius:"50%",background:TX3}}/>}
                   </div>
                 )}
-                {isMobile && travels.length>0 && <div style={{textAlign:"center",fontSize:10,marginTop:2}}>✈️</div>}
+                {isMobile && travels.length>0 && <div style={{textAlign:"center",fontSize:ds.font.size.xs,marginTop:2}}>✈️</div>}
 
                 {/* Contract events (payment, deadline) — small badges (desktop only) */}
                 {!isMobile && cEvents.slice(0,2).map((ev,ei)=>(
@@ -3449,7 +3449,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                 ))}
 
                 {!isMobile && dayDels.length>3 && (
-                  <div style={{fontSize:9,color:TX3,fontWeight:600,marginTop:2}}>+{dayDels.length-3} mais</div>
+                  <div style={{fontSize:ds.font.size.xs,color:TX3,fontWeight:600,marginTop:2}}>+{dayDels.length-3} mais</div>
                 )}
               </div>
             );
@@ -3521,7 +3521,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
       {!isMobile && (
         <div style={{display:"flex",gap:16,marginTop:12,flexWrap:"wrap"}}>
           {Object.entries(SBADGE||{}).map(([k,[l,c]])=>(
-            <div key={k} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:TX2}}>
+            <div key={k} style={{display:"flex",alignItems:"center",gap:5,fontSize:ds.font.size.xs,color:TX2}}>
               <span style={{width:8,height:8,borderRadius:2,background:`${c}30`,border:`1.5px solid ${c}`,display:"inline-block"}}/>
               {l}
             </div>
@@ -3659,7 +3659,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
             <option value="STRICT">Estrita (qualquer outra marca no período = conflito)</option>
             <option value="NONE">Nenhuma (este contrato não gera nem sofre conflito)</option>
           </Select>
-          <div style={{ fontSize:10, color:TX3, marginTop:3 }}>Controla como conflitos de agenda são detectados para este contrato.</div>
+          <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:3 }}>Controla como conflitos de agenda são detectados para este contrato.</div>
         </Field>
       </div>
 
@@ -3667,7 +3667,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
       <div style={{display:"flex",background:B2,border:`1px solid ${LN}`,borderRadius:6,overflow:"hidden",marginBottom:14,width:"fit-content"}}>
         {[["single","Único"],["split","Parcelas"],["monthly","Mensal"]].map(([v,l])=>(
           <div key={v} onClick={()=>set("paymentType",v)}
-            style={{padding:"6px 14px",fontSize:10,fontWeight:700,cursor:"pointer",color:f.paymentType===v?TX:TX2,background:f.paymentType===v?B3:"transparent",transition:"all .1s"}}>{l}</div>
+            style={{padding:"6px 14px",fontSize:ds.font.size.xs,fontWeight:700,cursor:"pointer",color:f.paymentType===v?TX:TX2,background:f.paymentType===v?B3:"transparent",transition:"all .1s"}}>{l}</div>
         ))}
       </div>
 
@@ -3768,7 +3768,7 @@ function ContractModal({ modal, setModal, contracts, saveC }) {
             <Field label="Nº de diárias"><Input type="number" min="0" value={f.travelDays||""} onChange={e=>set("travelDays",e.target.value)} placeholder="0"/></Field>
           </div>
           {/* Travel dates */}
-          <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:6}}>Datas de viagem</div>
+          <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:6}}>Datas de viagem</div>
           {(f.travelDates||[]).map((td,i)=>(
             <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 32px",gap:8,alignItems:"end"}}>
               <Field label={`Dia ${i+1}`}><Input type="date" value={td.date||""} onChange={e=>{const d=[...(f.travelDates||[])];d[i]={...d[i],date:e.target.value};set("travelDates",d);}}/></Field>
@@ -3879,12 +3879,12 @@ function PostModal({ modal, setModal, contracts, posts, saveP, toast }) {
       <SRule>Redes Sociais</SRule>
       <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:6}}>
         {NETWORKS.map(n=>{const sel=(f.networks||[]).includes(n);return(
-          <div key={n} onClick={()=>toggleNet(n)} style={{padding:"5px 12px",fontSize:10,fontWeight:700,cursor:"pointer",borderRadius:99,background:sel?RED+"22":"rgba(255,255,255,.05)",color:sel?RED:TX2,border:`1px solid ${sel?RED+"44":LN}`,transition:"all .1s"}}>
+          <div key={n} onClick={()=>toggleNet(n)} style={{padding:"5px 12px",fontSize:ds.font.size.xs,fontWeight:700,cursor:"pointer",borderRadius:99,background:sel?RED+"22":"rgba(255,255,255,.05)",color:sel?RED:TX2,border:`1px solid ${sel?RED+"44":LN}`,transition:"all .1s"}}>
             {sel&&"✓ "}{n}
           </div>
         );})}
       </div>
-      {extraNets>0&&<div style={{fontSize:10,color:BLU,fontWeight:700,marginTop:6}}>✓ +{extraNets} repost{extraNets>1?"s":""} contabilizado{extraNets>1?"s":""} automaticamente</div>}
+      {extraNets>0&&<div style={{fontSize:ds.font.size.xs,color:BLU,fontWeight:700,marginTop:6}}>✓ +{extraNets} repost{extraNets>1?"s":""} contabilizado{extraNets>1?"s":""} automaticamente</div>}
 
       <SRule>Métricas</SRule>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
@@ -3894,7 +3894,7 @@ function PostModal({ modal, setModal, contracts, posts, saveP, toast }) {
         ))}
       </div>
       <div style={{marginTop:12,padding:"10px 14px",background:B2,border:`1px solid ${LN}`,borderRadius:8}}>
-        <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4}}>Engajamento calculado</div>
+        <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4}}>Engajamento calculado</div>
         <div style={{fontSize:18,fontWeight:700,color:liveEng!=null?(liveEng>=3?GRN:liveEng>=1?AMB:TX2):TX3}}>{fmtEng(liveEng)||"— preencha alcance e interações"}</div>
       </div>
     </Modal>
@@ -4106,9 +4106,9 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
 
   const MetricCard = ({label, value, sub, color}) => (
     <div style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"14px 16px",textAlign:"center"}}>
-      <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:6}}>{label}</div>
+      <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:6}}>{label}</div>
       <div style={{fontSize:20,fontWeight:700,color:color||TX,lineHeight:1}}>{value}</div>
-      {sub&&<div style={{fontSize:10,color:TX3,marginTop:3}}>{sub}</div>}
+      {sub&&<div style={{fontSize:ds.font.size.xs,color:TX3,marginTop:3}}>{sub}</div>}
     </div>
   );
 
@@ -4141,7 +4141,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         {/* AI Summary */}
         {aiSummary ? (
           <div style={{background:`${GRN}08`,border:`1px solid ${GRN}25`,borderRadius:8,padding:"14px 16px",marginBottom:20}}>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:GRN,marginBottom:6}}>Resumo Executivo</div>
+            <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:GRN,marginBottom:6}}>Resumo Executivo</div>
             <p style={{fontSize:13,color:TX,lineHeight:1.6}}>{aiSummary}</p>
           </div>
         ) : (
@@ -4153,7 +4153,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         )}
 
         {/* Brand KPIs */}
-        <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Métricas de Performance</div>
+        <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Métricas de Performance</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
           <MetricCard label="Visualizações" value={totalViews>0?totalViews.toLocaleString("pt-BR"):"—"} sub="total acumulado"/>
           <MetricCard label="Alcance" value={totalReach>0?totalReach.toLocaleString("pt-BR"):"—"} sub="pessoas únicas"/>
@@ -4162,7 +4162,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         </div>
 
         {/* ROI KPIs */}
-        <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Custo por Resultado (ROI)</div>
+        <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Custo por Resultado (ROI)</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
           <MetricCard label="CPM" value={CPM!=null?`R$ ${CPM.toFixed(2)}`:"—"} sub="custo por mil views" color={CPM!=null&&CPM<50?GRN:AMB}/>
           <MetricCard label="CPV" value={CPV!=null?`R$ ${CPV.toFixed(4)}`:"—"} sub="custo por visualização"/>
@@ -4171,12 +4171,12 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         </div>
 
         {/* Delivery */}
-        <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Entregas do Contrato</div>
+        <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Entregas do Contrato</div>
         <div style={{...G,padding:"14px 16px",marginBottom:20}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
             <span style={{fontSize:12,color:TX2}}>
             {doneDels} de {totalDels} entregas concluídas
-            {doneDelsFromPosts>0&&<span style={{fontSize:10,color:TX3,marginLeft:6}}>({doneDelsFromPosts} via Posts{doneDelsFromPipeline>0?`, ${doneDelsFromPipeline} via Pipeline`:""})</span>}
+            {doneDelsFromPosts>0&&<span style={{fontSize:ds.font.size.xs,color:TX3,marginLeft:6}}>({doneDelsFromPosts} via Posts{doneDelsFromPipeline>0?`, ${doneDelsFromPipeline} via Pipeline`:""})</span>}
           </span>
             <span style={{fontSize:13,fontWeight:700,color:completionRate===100?GRN:completionRate>=50?AMB:RED}}>{completionRate}%</span>
           </div>
@@ -4194,16 +4194,16 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         {/* Posts breakdown */}
         {cPosts.length > 0 && (
           <>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Detalhamento por Publicação</div>
+            <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10}}>Detalhamento por Publicação</div>
             <div style={{border:`1px solid ${LN}`,borderRadius:8,overflow:"hidden",marginBottom:16}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 90px 80px 80px",padding:"7px 14px",background:B2,fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:TX3}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 90px 80px 80px",padding:"7px 14px",background:B2,fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:TX3}}>
                 <div>Publicação</div><div>Views</div><div>Alcance</div><div>Curtidas</div><div>Coment.</div><div>Eng.%</div>
               </div>
               {cPosts.map((p,i)=>{
                 const pRch=sumNetworkMetrics(p,"reach"),pLk=sumNetworkMetrics(p,"likes"),pCm=sumNetworkMetrics(p,"comments");const eng=pRch>0?((pLk+pCm)/pRch*100):calcEngagement(p);
                 return(
                   <div key={p.id} style={{display:"grid",gridTemplateColumns:"1fr 90px 90px 90px 80px 80px",padding:"9px 14px",borderTop:`1px solid ${LN}`,fontSize:11,alignItems:"center"}}>
-                    <div style={{fontWeight:500,color:TX}}>{p.title}{p.link&&<a href={p.link} target="_blank" rel="noreferrer" style={{color:RED,marginLeft:6,fontSize:10}}>↗</a>}</div>
+                    <div style={{fontWeight:500,color:TX}}>{p.title}{p.link&&<a href={p.link} target="_blank" rel="noreferrer" style={{color:RED,marginLeft:6,fontSize:ds.font.size.xs}}>↗</a>}</div>
                     <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"views")||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"reach")||0).toLocaleString("pt-BR")||"—"}</div>
                     <div style={{color:TX2,fontVariantNumeric:"tabular-nums"}}>{(sumNetworkMetrics(p,"likes")||0).toLocaleString("pt-BR")||"—"}</div>
@@ -4216,7 +4216,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
           </>
         )}
 
-        <div style={{fontSize:10,color:TX3,textAlign:"center",paddingTop:12,borderTop:`1px solid ${LN}`}}>
+        <div style={{fontSize:ds.font.size.xs,color:TX3,textAlign:"center",paddingTop:12,borderTop:`1px solid ${LN}`}}>
           Relatório gerado por ENTREGAS · @veloso.lucas_ · Ranked Produções
         </div>
       </div>
@@ -4330,7 +4330,7 @@ function MobileNav({ view, setView, role, userName, deliverables, contracts }) {
               transition:`border-color ${ds.motion.fast}` }}>
             <DsIcon name={item.icon} size={20}
               color={active ? ds.color.neutral[900] : ds.color.neutral[400]}/>
-            <span style={{ fontSize:9, fontWeight:active?ds.font.weight.semibold:ds.font.weight.regular,
+            <span style={{ fontSize:ds.font.size.xs, fontWeight:active?ds.font.weight.semibold:ds.font.weight.regular,
               color:active?ds.color.neutral[900]:ds.color.neutral[400], letterSpacing:'0.02em' }}>
               {item.label}
             </span>
@@ -4344,7 +4344,7 @@ function MobileNav({ view, setView, role, userName, deliverables, contracts }) {
           borderTop: isSunday ? `2px solid ${WA_GREEN}` : '2px solid transparent',
           background: isSunday ? `${WA_GREEN}08` : 'transparent' }}>
         <DsIcon name="phone" size={20} color={isSunday ? WA_DARK : ds.color.neutral[400]}/>
-        <span style={{ fontSize:9, fontWeight:isSunday?ds.font.weight.semibold:ds.font.weight.regular,
+        <span style={{ fontSize:ds.font.size.xs, fontWeight:isSunday?ds.font.weight.semibold:ds.font.weight.regular,
           color:isSunday?WA_DARK:ds.color.neutral[400] }}>WA</span>
       </div>
     </div>
@@ -4395,12 +4395,12 @@ function PaymentsList({ contracts, saveC, rates }) {
       {/* Summary */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
         <div style={{ ...G, padding:"14px 16px", borderLeft:`3px solid ${GRN}` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Recebido</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Recebido</div>
           <div style={{ fontSize:18,fontWeight:700,color:GRN }}>{fmtMoney(totalReceived)}</div>
           <div style={{ fontSize:11,color:TX2 }}>{payments.filter(p=>p.received).length} pagamentos</div>
         </div>
         <div style={{ ...G, padding:"14px 16px", borderLeft:`3px solid ${AMB}` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>A receber</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>A receber</div>
           <div style={{ fontSize:18,fontWeight:700,color:AMB }}>{fmtMoney(totalPending)}</div>
           <div style={{ fontSize:11,color:TX2 }}>{payments.filter(p=>!p.received).length} pendentes</div>
         </div>
@@ -4430,7 +4430,7 @@ function PaymentsList({ contracts, saveC, rates }) {
                   {p.received ? (
                     <div>
                       <div style={{ fontSize:11,fontWeight:700,color:GRN }}>✓ Recebido</div>
-                      <div style={{ fontSize:10,color:TX2 }}>{fmtDate(recDate)}</div>
+                      <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>{fmtDate(recDate)}</div>
                     </div>
                   ) : (
                     <div style={{ fontSize:12,fontWeight:700,color:dlColor(dl) }}>
@@ -4532,9 +4532,9 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
           { label:"NFs a emitir", value:nfPending.length, sub:`de ${contracts.length}`, accent:nfPending.length>0?AMB:GRN },
         ].map((k,i) => (
           <div key={i} style={{ ...G, padding: isMobile?"12px 14px":"16px 18px", flexShrink:0, minWidth:isMobile?140:undefined, flex:isMobile?"none":"1" }}>
-            <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:6 }}>{k.label}</div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:6 }}>{k.label}</div>
             <div style={{ fontSize:isMobile?18:22,fontWeight:800,color:k.accent||TX,lineHeight:1,letterSpacing:"-.02em" }}>{k.value}</div>
-            <div style={{ fontSize:10,color:TX3,marginTop:4 }}>{k.sub}</div>
+            <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>{k.sub}</div>
           </div>
         ))}
       </div>
@@ -4574,7 +4574,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
                         {c.contractDeadline?`prazo ${fmtDate(c.contractDeadline)}`:"Sem prazo"}
                       </div>
                     </div>
-                    <div style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:99, fontSize:10, fontWeight:700,
+                    <div style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:99, fontSize:ds.font.size.xs, fontWeight:700,
                       background: nfDone?`${GRN}15`:`${AMB}15`,
                       color: nfDone?GRN:AMB }}>
                       {nfDone?"✓ NF ok":"NF pendente"}
@@ -4582,20 +4582,20 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <div style={{ background:B2, borderRadius:8, padding:"10px 12px" }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Valor bruto</div>
+                      <div style={{ fontSize:ds.font.size.xs, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Valor bruto</div>
                       <div style={{ fontSize:16, fontWeight:800, color:TX }}>{fmtMoney(gross,c.currency)}</div>
-                      {costs>0&&<div style={{ fontSize:10, color:AMB, marginTop:2 }}>- {fmtMoney(costs)} custos</div>}
+                      {costs>0&&<div style={{ fontSize:ds.font.size.xs, color:AMB, marginTop:2 }}>- {fmtMoney(costs)} custos</div>}
                     </div>
                     {c.hasCommission ? (
                       <div style={{ background:B2, borderRadius:8, padding:"10px 12px" }}>
-                        <div style={{ fontSize:9, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Comissão Ranked</div>
+                        <div style={{ fontSize:ds.font.size.xs, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Comissão Ranked</div>
                         <div style={{ fontSize:16, fontWeight:800, color:comm-commP>0?RED:GRN }}>{fmtMoney(comm,c.currency)}</div>
-                        {commP===comm&&<div style={{ fontSize:10, color:GRN, marginTop:2 }}>✓ Quitado</div>}
-                        {commP>0&&commP<comm&&<div style={{ fontSize:10, color:TX3, marginTop:2 }}>{fmtMoney(commP)} pago</div>}
+                        {commP===comm&&<div style={{ fontSize:ds.font.size.xs, color:GRN, marginTop:2 }}>✓ Quitado</div>}
+                        {commP>0&&commP<comm&&<div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:2 }}>{fmtMoney(commP)} pago</div>}
                       </div>
                     ) : (
                       <div style={{ background:B2, borderRadius:8, padding:"10px 12px" }}>
-                        <div style={{ fontSize:9, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Comissão</div>
+                        <div style={{ fontSize:ds.font.size.xs, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:4 }}>Comissão</div>
                         <div style={{ fontSize:14, color:TX3 }}>Sem comissão</div>
                       </div>
                     )}
@@ -4617,7 +4617,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
                 <div>
                   <div style={{ fontSize:11, color:TX2, marginBottom:2 }}>Valor bruto</div>
                   <div style={{ fontSize:14, fontWeight:700, color:TX }}>{fmtMoney(gross,c.currency)}</div>
-                  {costs>0&&<div style={{ fontSize:10, color:AMB }}>- {fmtMoney(costs)} custos</div>}
+                  {costs>0&&<div style={{ fontSize:ds.font.size.xs, color:AMB }}>- {fmtMoney(costs)} custos</div>}
                 </div>
                 <div>
                   <div style={{ fontSize:11, color:TX2, marginBottom:2 }}>Líquido</div>
@@ -4628,13 +4628,13 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
                   {c.hasCommission ? (
                     <div>
                       <div style={{ fontSize:13, fontWeight:700, color:comm-commP>0?RED:GRN }}>{fmtMoney(comm,c.currency)}</div>
-                      {commP>0&&commP<comm&&<div style={{ fontSize:10, color:TX2 }}>{fmtMoney(commP)} pago</div>}
-                      {commP===comm&&<div style={{ fontSize:10, color:GRN }}>✓ Quitado</div>}
+                      {commP>0&&commP<comm&&<div style={{ fontSize:ds.font.size.xs, color:TX2 }}>{fmtMoney(commP)} pago</div>}
+                      {commP===comm&&<div style={{ fontSize:ds.font.size.xs, color:GRN }}>✓ Quitado</div>}
                     </div>
                   ) : <div style={{ fontSize:12, color:TX3 }}>—</div>}
                 </div>
                 <div style={{ textAlign:"right" }}>
-                  <div style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 9px", borderRadius:99, fontSize:10, fontWeight:700,
+                  <div style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"3px 9px", borderRadius:99, fontSize:ds.font.size.xs, fontWeight:700,
                     background: nfDone?`${GRN}15`:`${AMB}15`,
                     color: nfDone?GRN:AMB,
                     border: `1px solid ${nfDone?GRN+"30":AMB+"30"}` }}>
@@ -4653,15 +4653,15 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
           {/* Summary bar */}
           <div style={{ ...G, padding:"14px 18px", display:"flex", alignItems:"center", gap:24, marginBottom:4 }}>
             <div>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Total comissão</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Total comissão</div>
               <div style={{ fontSize:18,fontWeight:700,color:TX }}>{fmtMoney(totalComm)}</div>
             </div>
             <div>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Pago à Ranked</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Pago à Ranked</div>
               <div style={{ fontSize:18,fontWeight:700,color:GRN }}>{fmtMoney(commPaid)}</div>
             </div>
             <div>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Pendente</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Pendente</div>
               <div style={{ fontSize:18,fontWeight:700,color:commPend>0?RED:GRN }}>{fmtMoney(commPend)}</div>
             </div>
             <div style={{ flex:1 }}/>
@@ -4768,11 +4768,11 @@ function MonthDeliverables({ deliverables, contracts }) {
       {/* Nav arrows */}
       <div style={{ position:"absolute", top:10, right:10, display:"flex", gap:2 }}>
         <button onClick={()=>setOffset(o=>o-1)} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:4, width:20, height:20, cursor:"pointer", color:TX2, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>‹</button>
-        <button onClick={()=>setOffset(0)} style={{ background:offset===0?TX2:"none", border:`1px solid ${LN}`, borderRadius:4, width:20, height:20, cursor:"pointer", color:offset===0?"white":TX2, fontSize:9, display:"flex", alignItems:"center", justifyContent:"center" }} title="Mês atual">●</button>
+        <button onClick={()=>setOffset(0)} style={{ background:offset===0?TX2:"none", border:`1px solid ${LN}`, borderRadius:4, width:20, height:20, cursor:"pointer", color:offset===0?"white":TX2, fontSize:ds.font.size.xs, display:"flex", alignItems:"center", justifyContent:"center" }} title="Mês atual">●</button>
         <button onClick={()=>setOffset(o=>o+1)} style={{ background:"none", border:`1px solid ${LN}`, borderRadius:4, width:20, height:20, cursor:"pointer", color:TX2, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1 }}>›</button>
       </div>
 
-      <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:6 }}>
+      <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:6 }}>
         Entregas · {monthLabelShort} {y !== new Date().getFullYear() ? y : ""}
       </div>
       <div style={{ fontSize:20, fontWeight:700, color:TX, lineHeight:1, marginBottom:4 }}>
@@ -4782,8 +4782,8 @@ function MonthDeliverables({ deliverables, contracts }) {
         <div style={{ height:3, borderRadius:2, background:total>0&&done===total?GRN:RED, width:`${total>0?Math.round(done/total*100):0}%`, transition:"width .4s" }}/>
       </div>
       {total === 0
-        ? <div style={{ fontSize:10, color:TX3 }}>Sem entregáveis</div>
-        : <div style={{ fontSize:10, color:TX2 }}>
+        ? <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>Sem entregáveis</div>
+        : <div style={{ fontSize:ds.font.size.xs, color:TX2 }}>
             {byStage["done"]?`✓ ${byStage["done"]} entregues`:""}
             {byStage["postagem"]?` · 📅 ${byStage["postagem"]} para postar`:""}
             {total - (byStage["done"]||0) - (byStage["postagem"]||0) > 0
@@ -4907,18 +4907,18 @@ function EditBalanceButton({ acc, accounts, index, saveAcc }) {
           <button onClick={checkPw} style={{ padding:"7px 12px",background:RED,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>OK</button>
           <button onClick={()=>{setOpen(false);setErr(false);setPw("");}} style={{ padding:"7px 10px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
         </div>
-        {err&&<div style={{ fontSize:10,color:RED,marginTop:4 }}>Senha incorreta</div>}
+        {err&&<div style={{ fontSize:ds.font.size.xs,color:RED,marginTop:4 }}>Senha incorreta</div>}
       </>}
       {step==="editing" && <>
         <div style={{ fontSize:11,color:TX2,marginBottom:10,fontWeight:600 }}>Registrar novo saldo</div>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
           <div>
-            <div style={{ fontSize:9,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Saldo (R$)</div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Saldo (R$)</div>
             <input type="number" value={newBalance} onChange={e=>setNewBalance(e.target.value)} autoFocus
               style={{ width:"100%",padding:"7px 10px",fontSize:13,fontWeight:700,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
           </div>
           <div>
-            <div style={{ fontSize:9,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Data</div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Data</div>
             <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)}
               style={{ width:"100%",padding:"7px 10px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
           </div>
@@ -5053,7 +5053,7 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
               <div style={{ display:"flex", flexDirection:"column", justifyContent:"flex-end", paddingBottom:2 }}>
                 {numParc && f.amount && parseInt(numParc)>0 && (
                   <div style={{ padding:"10px 12px", background:B1, borderRadius:8, border:`1px solid ${LN}` }}>
-                    <div style={{ fontSize:10, color:TX3, marginBottom:3 }}>Total comprometido</div>
+                    <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:3 }}>Total comprometido</div>
                     <div style={{ fontSize:16, fontWeight:800, color:RED }}>
                       {fmtMoney(parseFloat(f.amount||0) * parseInt(numParc||0))}
                     </div>
@@ -5065,13 +5065,13 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
             {/* Preview das parcelas */}
             {parcPreview.length > 0 && (
               <div>
-                <div style={{ fontSize:10, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX3, marginBottom:8 }}>
+                <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX3, marginBottom:8 }}>
                   Preview — {parcPreview.length} lançamentos serão criados
                 </div>
                 <div style={{ maxHeight:160, overflowY:"auto", display:"flex", flexDirection:"column", gap:4 }}>
                   {parcPreview.map(p => (
                     <div key={p.n} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:B1, borderRadius:6, border:`1px solid ${LN}` }}>
-                      <span style={{ fontSize:10, fontWeight:700, color:BLU, width:32, flexShrink:0 }}>{p.n}/{numParc}</span>
+                      <span style={{ fontSize:ds.font.size.xs, fontWeight:700, color:BLU, width:32, flexShrink:0 }}>{p.n}/{numParc}</span>
                       <span style={{ fontSize:11, color:TX, flex:1 }}>{f.description} ({p.n}/{numParc})</span>
                       <span style={{ fontSize:11, color:TX2 }}>{fmtDate(p.date)}</span>
                       <span style={{ fontSize:11, fontWeight:700, color:RED }}>{fmtMoney(parseFloat(f.amount||0))}</span>
@@ -5131,7 +5131,7 @@ function DREView({ transactions, year }) {
   };
 
   const Section = ({title}) => (
-    <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,padding:"14px 0 4px",borderBottom:`1px solid ${LN}` }}>{title}</div>
+    <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,padding:"14px 0 4px",borderBottom:`1px solid ${LN}` }}>{title}</div>
   );
 
   return (
@@ -5164,7 +5164,7 @@ function DREView({ transactions, year }) {
       <Row label="= Lucro Retido / Prejuízo Acumulado" value={lucro_retido} total bold positive={true}/>
 
       <div style={{ marginTop:16,padding:"12px 14px",background:`${BLU}08`,border:`1px solid ${BLU}20`,borderRadius:8 }}>
-        <div style={{ fontSize:10,color:TX2,marginBottom:4 }}>⚠️ Esta DRE é gerada automaticamente com base nos lançamentos cadastrados. Consulte seu contador para fins legais.</div>
+        <div style={{ fontSize:ds.font.size.xs,color:TX2,marginBottom:4 }}>⚠️ Esta DRE é gerada automaticamente com base nos lançamentos cadastrados. Consulte seu contador para fins legais.</div>
       </div>
     </div>
   );
@@ -5212,7 +5212,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
     <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
       {/* Saldo card */}
       <div style={{ ...G,padding:"16px 20px",borderLeft:`3px solid ${saldoTotal>=0?GRN:RED}` }}>
-        <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo em caixa</div>
+        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo em caixa</div>
         <div style={{ fontSize:28,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{fmtMoney(saldoTotal)}</div>
         <div style={{ fontSize:11,color:TX2,marginTop:4 }}>Base {fmtMoney(Number(baseBalance)||0)} + lançamentos</div>
       </div>
@@ -5222,7 +5222,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
         <div style={{ ...G, padding:"16px 20px", borderLeft:`3px solid ${AMB}` }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:12 }}>
             <div>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Compromissos futuros · Parcelamentos</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Compromissos futuros · Parcelamentos</div>
               <div style={{ fontSize:22,fontWeight:800,color:RED }}>{fmtMoney(totalFutureDebt)}</div>
               <div style={{ fontSize:11,color:TX3,marginTop:2 }}>total comprometido em parcelas futuras</div>
             </div>
@@ -5241,15 +5241,15 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
                       <span style={{ fontSize:11, fontWeight:700, color:TX, width:60 }}>{label}</span>
                       <div style={{ display:"flex", gap:3 }}>
                         {val.items.slice(0,3).map((t,i)=>(
-                          <span key={i} style={{ fontSize:9, padding:"1px 6px", borderRadius:99, background:`${AMB}14`, color:AMB, fontWeight:600, maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          <span key={i} style={{ fontSize:ds.font.size.xs, padding:"1px 6px", borderRadius:99, background:`${AMB}14`, color:AMB, fontWeight:600, maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                             {t.description.replace(/\s*\(\d+\/\d+\)$/,"")}
                           </span>
                         ))}
-                        {val.items.length>3&&<span style={{ fontSize:9,color:TX3 }}>+{val.items.length-3}</span>}
+                        {val.items.length>3&&<span style={{ fontSize:ds.font.size.xs,color:TX3 }}>+{val.items.length-3}</span>}
                       </div>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      {isHeavy && <span style={{ fontSize:10, color:RED, fontWeight:700 }}>⚠ Alto</span>}
+                      {isHeavy && <span style={{ fontSize:ds.font.size.xs, color:RED, fontWeight:700 }}>⚠ Alto</span>}
                       <span style={{ fontSize:12, fontWeight:800, color:RED }}>{fmtMoney(val.total)}</span>
                     </div>
                   </div>
@@ -5300,46 +5300,46 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
           <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
             {/* Liquidez */}
             <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${liquidez===null?LN:kpiColor(liquidez,3,1.5)}` }}>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Liquidez</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Liquidez</div>
               <div style={{ fontSize:22,fontWeight:700,color:liquidez===null?TX3:kpiColor(liquidez,3,1.5) }}>
                 {liquidez===null?"—":`${fmt1(liquidez)}x`}
               </div>
-              <div style={{ fontSize:10,color:TX2,marginTop:3 }}>meses de runway</div>
-              <div style={{ fontSize:9,color:TX3,marginTop:4 }}>
+              <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>meses de runway</div>
+              <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>
                 {liquidez===null?"sem dados":liquidez>=3?"✓ Saudável":liquidez>=1.5?"⚠ Atenção":"🔴 Crítico"}
               </div>
             </div>
 
             {/* Margem de Lucro */}
             <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${margemLucro===null?LN:kpiColor(margemLucro,30,10)}` }}>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Margem Líquida</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Margem Líquida</div>
               <div style={{ fontSize:22,fontWeight:700,color:margemLucro===null?TX3:kpiColor(margemLucro,30,10) }}>
                 {margemLucro===null?"—":`${fmt1(margemLucro)}%`}
               </div>
-              <div style={{ fontSize:10,color:TX2,marginTop:3 }}>lucro ÷ receita</div>
-              <div style={{ fontSize:9,color:TX3,marginTop:4 }}>
+              <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>lucro ÷ receita</div>
+              <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>
                 {margemLucro===null?"sem dados":margemLucro>=30?"✓ Excelente":margemLucro>=10?"⚠ Regular":"🔴 Baixa"}
               </div>
             </div>
 
             {/* ROI Operacional */}
             <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${roi===null?LN:kpiColor(roi,50,20)}` }}>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>ROI Operacional</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>ROI Operacional</div>
               <div style={{ fontSize:22,fontWeight:700,color:roi===null?TX3:kpiColor(roi,50,20) }}>
                 {roi===null?"—":`${fmt1(roi)}%`}
               </div>
-              <div style={{ fontSize:10,color:TX2,marginTop:3 }}>retorno sobre custos</div>
-              <div style={{ fontSize:9,color:TX3,marginTop:4 }}>
+              <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>retorno sobre custos</div>
+              <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>
                 {roi===null?"sem dados":roi>=50?"✓ Excelente":roi>=20?"⚠ Regular":"🔴 Baixo"}
               </div>
             </div>
 
             {/* Burn Rate */}
             <div style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${BLU}` }}>
-              <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Burn Rate</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Burn Rate</div>
               <div style={{ fontSize:22,fontWeight:700,color:TX }}>{fmtMoney(burnRate)}</div>
-              <div style={{ fontSize:10,color:TX2,marginTop:3 }}>saídas/mês (média)</div>
-              <div style={{ fontSize:9,color:TX3,marginTop:4 }}>base {monthlyData.length} meses</div>
+              <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>saídas/mês (média)</div>
+              <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>base {monthlyData.length} meses</div>
             </div>
           </div>
         );
@@ -5348,7 +5348,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
       {/* Bar chart */}
       <div style={{ ...G,padding:"18px 20px" }}>
         <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs Saídas {currentYear}</div>
-        <div style={{ display:"flex",gap:12,fontSize:10,color:TX2,marginBottom:16 }}>
+        <div style={{ display:"flex",gap:12,fontSize:ds.font.size.xs,color:TX2,marginBottom:16 }}>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:GRN,display:"inline-block" }}/>Entradas</span>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:RED,display:"inline-block" }}/>Saídas</span>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:"#7C3AED",display:"inline-block" }}/>Dividendos</span>
@@ -5383,7 +5383,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal }) {
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:600,fontSize:13,color:TX }}>{name}</div>
-                  {name!=="Ambos"&&totalAmbos>0&&<div style={{ fontSize:10,color:TX2 }}>Direto {fmtMoney(total)} + {fmtMoney(totalAmbos/2)} (metade dos "Ambos")</div>}
+                  {name!=="Ambos"&&totalAmbos>0&&<div style={{ fontSize:ds.font.size.xs,color:TX2 }}>Direto {fmtMoney(total)} + {fmtMoney(totalAmbos/2)} (metade dos "Ambos")</div>}
                 </div>
                 <div style={{ fontWeight:700,fontSize:16,color }}>
                   {name==="Ambos"?fmtMoney(total):fmtMoney(effective)}
@@ -5655,17 +5655,17 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
 
       {indicators.map(group=>(
         <div key={group.group} style={{ marginBottom:24 }}>
-          <div style={{ fontSize:10,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${LN}` }}>{group.group}</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${LN}` }}>{group.group}</div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10 }}>
             {group.items.map((ind,i)=>(
               <div key={i} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${ind.color}` }}>
                 <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:4 }}>
-                  <div style={{ fontSize:10,fontWeight:700,color:TX2,lineHeight:1.3,flex:1 }}>{ind.label}</div>
-                  {ind.good===true&&<span style={{ fontSize:10,color:GRN,flexShrink:0,marginLeft:6 }}>✓</span>}
-                  {ind.good===false&&<span style={{ fontSize:10,color:RED,flexShrink:0,marginLeft:6 }}>⚠</span>}
+                  <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,lineHeight:1.3,flex:1 }}>{ind.label}</div>
+                  {ind.good===true&&<span style={{ fontSize:ds.font.size.xs,color:GRN,flexShrink:0,marginLeft:6 }}>✓</span>}
+                  {ind.good===false&&<span style={{ fontSize:ds.font.size.xs,color:RED,flexShrink:0,marginLeft:6 }}>⚠</span>}
                 </div>
                 <div style={{ fontSize:20,fontWeight:700,color:ind.color,lineHeight:1,marginBottom:4 }}>{ind.value}</div>
-                <div style={{ fontSize:10,color:TX3,lineHeight:1.4 }}>{ind.desc}</div>
+                <div style={{ fontSize:ds.font.size.xs,color:TX3,lineHeight:1.4 }}>{ind.desc}</div>
               </div>
             ))}
           </div>
@@ -5820,7 +5820,7 @@ ${Object.entries(cats).map(([cat,items])=>`
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16 }}>
         {[["Entradas",totalEnt,GRN],["Saídas",totalSai,RED],["Dividendos",totalDiv,"#7C3AED"]].map(([l,v,c])=>(
           <div key={l} style={{ ...G,padding:"10px 12px",borderLeft:`3px solid ${c}` }}>
-            <div style={{ fontSize:9,color:TX2,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>{l}</div>
+            <div style={{ fontSize:ds.font.size.xs,color:TX2,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>{l}</div>
             <div style={{ fontSize:15,fontWeight:700,color:c }}>{fmtMoney(v)}</div>
           </div>
         ))}
@@ -5836,16 +5836,16 @@ ${Object.entries(cats).map(([cat,items])=>`
                 <span style={{ fontSize:14 }}>{tx.nfFile?.type?.includes("image")?"🖼":"📄"}</span>
                 <div style={{ flex:1,minWidth:0 }}>
                   <div style={{ fontSize:11,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
-                  <div style={{ fontSize:10,color:TX2 }}>{fmtDate(tx.date)} · {fmtMoney(tx.amount)}</div>
+                  <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>{fmtDate(tx.date)} · {fmtMoney(tx.amount)}</div>
                 </div>
                 {tx.nfFile&&<a href={tx.nfFile.data} download={tx.nfFile.name||`NF_${tx.description}.pdf`}
-                  style={{ padding:"4px 10px",fontSize:10,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>↓ Baixar</a>}
+                  style={{ padding:"4px 10px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>↓ Baixar</a>}
                 {tx.nfLink&&!tx.nfFile&&<a href={tx.nfLink} target="_blank" rel="noreferrer"
-                  style={{ padding:"4px 10px",fontSize:10,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>↗ Ver</a>}
+                  style={{ padding:"4px 10px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>↗ Ver</a>}
               </div>
             ))}
           </div>
-          <div style={{ fontSize:10,color:TX3,marginTop:8 }}>💡 Baixe cada NF individualmente e envie junto com o relatório PDF para o contador.</div>
+          <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:8 }}>💡 Baixe cada NF individualmente e envie junto com o relatório PDF para o contador.</div>
         </>
       )}
       {nfItems.length===0&&filtered.length>0&&(
@@ -5950,7 +5950,7 @@ function Caixa({ contracts, openCopilot }) {
       <div style={{ marginBottom:20 }}>
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:4 }}>
           <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
-          <span style={{ fontSize:10,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
+          <span style={{ fontSize:ds.font.size.xs,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
           <button onClick={()=>setShowExport(true)} style={{ marginLeft:"auto",padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:8,background:"none",border:`1px solid ${LN}`,color:TX2,display:"flex",alignItems:"center",gap:6 }}>
             Exportar para contador
           </button>
@@ -5961,20 +5961,20 @@ function Caixa({ contracts, openCopilot }) {
       {/* KPIs */}
       <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${saldoTotal>=0?TX:RED}` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo Total</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo Total</div>
           <div style={{ fontSize:22,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{fmtMoney(saldoTotal)}</div>
-          <div style={{ fontSize:10,color:TX3,marginTop:2 }}>base + lançamentos</div>
+          <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>base + lançamentos</div>
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${GRN}` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Entradas totais</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Entradas totais</div>
           <div style={{ fontSize:22,fontWeight:700,color:GRN }}>{fmtMoney(totalEntradas)}</div>
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${RED}` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saídas totais</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saídas totais</div>
           <div style={{ fontSize:22,fontWeight:700,color:RED }}>{fmtMoney(totalSaidas)}</div>
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid #7C3AED` }}>
-          <div style={{ fontSize:9,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Dividendos totais</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Dividendos totais</div>
           <div style={{ fontSize:22,fontWeight:700,color:"#7C3AED" }}>{fmtMoney(totalDividendos)}</div>
         </div>
       </div>
@@ -6011,10 +6011,10 @@ function Caixa({ contracts, openCopilot }) {
               style={{ flex:1,minWidth:180,padding:"7px 12px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontFamily:"inherit",outline:"none" }}/>
             {/* Value range filter */}
             <div style={{ display:"flex",alignItems:"center",gap:4,background:B1,border:`1px solid ${LN}`,borderRadius:8,padding:"0 10px" }}>
-              <span style={{ fontSize:10,color:TX3,flexShrink:0 }}>R$</span>
+              <span style={{ fontSize:ds.font.size.xs,color:TX3,flexShrink:0 }}>R$</span>
               <input type="number" value={minVal} onChange={e=>setMinVal(e.target.value)} placeholder="Min"
                 style={{ width:64,padding:"7px 0",fontSize:12,background:"transparent",border:"none",color:TX,fontFamily:"inherit",outline:"none" }}/>
-              <span style={{ fontSize:10,color:TX3 }}>–</span>
+              <span style={{ fontSize:ds.font.size.xs,color:TX3 }}>–</span>
               <input type="number" value={maxVal} onChange={e=>setMaxVal(e.target.value)} placeholder="Max"
                 style={{ width:64,padding:"7px 0",fontSize:12,background:"transparent",border:"none",color:TX,fontFamily:"inherit",outline:"none" }}/>
               {(minVal||maxVal) && (
@@ -6071,11 +6071,11 @@ function Caixa({ contracts, openCopilot }) {
                         {tx.category&&<span>· {tx.category}</span>}
                         {tx.beneficiario&&<span style={{fontWeight:600,color:"#7C3AED"}}>· {tx.beneficiario}</span>}
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
-                        {tx.installmentNum&&tx.installmentTotal&&<span style={{color:BLU,fontWeight:700,fontSize:10,padding:"1px 6px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}20`}}>{tx.installmentNum}/{tx.installmentTotal}x</span>}
+                        {tx.installmentNum&&tx.installmentTotal&&<span style={{color:BLU,fontWeight:700,fontSize:ds.font.size.xs,padding:"1px 6px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}20`}}>{tx.installmentNum}/{tx.installmentTotal}x</span>}
                         {tx.parcelaAtual&&tx.parcelaTotal&&<span style={{color:AMB,fontWeight:700}}>· {tx.parcelaAtual}/{tx.parcelaTotal}x</span>}
                         {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· NF</span>}
                       </div>
-                      {tx.notes&&<div style={{ fontSize:10,color:TX3,marginTop:2 }}>{tx.notes}</div>}
+                      {tx.notes&&<div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>{tx.notes}</div>}
                     </div>
                     <div style={{ textAlign:"right",flexShrink:0 }}>
                       <div style={{ fontSize:15,fontWeight:700,color:tc }}>
@@ -6232,7 +6232,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
   return (
     <div style={{ ...G,padding:"12px 18px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap" }}>
       <div style={{ flex:1 }}>
-        <div style={{ fontSize:9,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Saldo Base (ponto de partida)</div>
+        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Saldo Base (ponto de partida)</div>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:16,fontWeight:700,color:TX }}>{fmtMoney(Number(baseBalance)||0)}</span>
           {baseDate&&<span style={{ fontSize:11,color:TX2 }}>em {fmtDate(baseDate)}</span>}
@@ -6247,7 +6247,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
             style={{ padding:"6px 10px",fontSize:12,background:err?`${RED}08`:B2,border:`1px solid ${err?RED:LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none",width:120 }}/>
           <button onClick={check} style={{ padding:"6px 12px",background:RED,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>OK</button>
           <button onClick={()=>{setEditing(false);setErr(false);setPw("");}} style={{ padding:"6px 8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
-          {err&&<span style={{ fontSize:10,color:RED }}>Incorreta</span>}
+          {err&&<span style={{ fontSize:ds.font.size.xs,color:RED }}>Incorreta</span>}
         </div>
       ) : (
         <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
@@ -6327,7 +6327,7 @@ function CotacoesView() {
 
       {/* Status atual */}
       <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}`, marginBottom:ds.space[4] }}>
-        <div style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:"0.12em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[4] }}>
+        <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:"0.12em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[4] }}>
           Cotação atual
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:ds.space[4], marginBottom:ds.space[4] }}>
@@ -6362,7 +6362,7 @@ function CotacoesView() {
             { label:"EUR · Euro",            value:rates.EUR, symbol:"€"   },
           ].map(item => (
             <div key={item.label} style={{ ...G, padding:`${ds.space[4]} ${ds.space[5]}` }}>
-              <div style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:"0.1em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[2] }}>{item.label}</div>
+              <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:"0.1em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[2] }}>{item.label}</div>
               <div style={{ fontSize:ds.font.size['3xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], fontVariantNumeric:"tabular-nums", letterSpacing:"-0.02em" }}>
                 {formatRate(item.value)}
               </div>
@@ -6376,7 +6376,7 @@ function CotacoesView() {
 
       {/* Override manual */}
       <div style={{ ...G, padding:`${ds.space[5]} ${ds.space[6]}` }}>
-        <div style={{ fontSize:9, fontWeight:ds.font.weight.semibold, letterSpacing:"0.12em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[3] }}>
+        <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:"0.12em", textTransform:"uppercase", color:ds.color.neutral[400], marginBottom:ds.space[3] }}>
           Override manual
         </div>
         {isManual && (
@@ -6442,7 +6442,7 @@ function CopilotButton({ onClick, hasAlert, isMobile }) {
       <DsIcon name="sparkles" size={15} color="#fff"/>
       Copiloto
       {hasAlert && (
-        <span style={{ position:"absolute", top:-4, right:-4, width:16, height:16, background:RED, borderRadius:"50%", border:"2px solid #fff", fontSize:9, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff" }}>!</span>
+        <span style={{ position:"absolute", top:-4, right:-4, width:16, height:16, background:RED, borderRadius:"50%", border:"2px solid #fff", fontSize:ds.font.size.xs, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff" }}>!</span>
       )}
     </button>
   );
@@ -6722,7 +6722,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
             <DsIconButton size="sm" variant="ghost" ariaLabel="Fechar copiloto" onClick={onClose}
               icon={<DsIcon name="x" size={15} color={ds.color.neutral[500]}/>}/>
           </div>
-          <div style={{ fontSize:10, color:TX3, marginLeft:28 }}>Contexto: {contextLabel}</div>
+          <div style={{ fontSize:ds.font.size.xs, color:TX3, marginLeft:28 }}>Contexto: {contextLabel}</div>
         </div>
 
         {/* Tabs */}
@@ -6741,7 +6741,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
           {/* ── Sugestões ── */}
           {tab === "suggestions" && (
             <div>
-              <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, marginBottom:12 }}>
+              <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, marginBottom:12 }}>
                 Sugestões para agora
               </div>
 
@@ -6758,7 +6758,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                       <div style={{ fontSize:11, color:TX2 }}>Instagram · TikTok · YouTube</div>
                     </div>
                     <button onClick={()=>fileRef.current?.click()}
-                      style={{ padding:"5px 14px", fontSize:10, fontWeight:700, color:"#fff", background:COPILOT_PURPLE, border:"none", borderRadius:6, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+                      style={{ padding:"5px 14px", fontSize:ds.font.size.xs, fontWeight:700, color:"#fff", background:COPILOT_PURPLE, border:"none", borderRadius:6, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
                       Enviar print
                     </button>
                   </div>
@@ -6781,7 +6781,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                   <div>
                     <div style={{ fontSize:11, color:ds.color.danger[500], fontWeight:600, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}><DsIcon name="alertTriangle" size={13} color={ds.color.danger[500]}/>{mxError}</div>
                     <button onClick={()=>fileRef.current?.click()}
-                      style={{ padding:"4px 12px", fontSize:10, fontWeight:700, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                      style={{ padding:"4px 12px", fontSize:ds.font.size.xs, fontWeight:700, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
                       Tentar outro print
                     </button>
                   </div>
@@ -6796,7 +6796,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                       </div>
                     </div>
                     <button onClick={resetMetrics}
-                      style={{ padding:"4px 12px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                      style={{ padding:"4px 12px", fontSize:ds.font.size.xs, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
                       Novo print
                     </button>
                   </div>
@@ -6813,17 +6813,17 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                           <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${PLATFORM_COLOR[mxResult.platform]||COPILOT_PURPLE}18`, color:PLATFORM_COLOR[mxResult.platform]||COPILOT_PURPLE }}>
                             {mxResult.platform}
                           </span>
-                          <span style={{ fontSize:10, color:TX3 }}>
+                          <span style={{ fontSize:ds.font.size.xs, color:TX3 }}>
                             {mxResult.confidence==="high"?"✓ Alta confiança":mxResult.confidence==="medium"?"⚠ Confiança média":"⚠ Baixa confiança"}
                           </span>
                         </div>
-                        {mxResult.notes && <div style={{ fontSize:10, color:TX2, lineHeight:1.4 }}>{mxResult.notes}</div>}
+                        {mxResult.notes && <div style={{ fontSize:ds.font.size.xs, color:TX2, lineHeight:1.4 }}>{mxResult.notes}</div>}
                       </div>
                     </div>
 
                     {/* Metrics table — editable */}
                     <div style={{ background:B2, borderRadius:8, padding:"10px 12px", marginBottom:10 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".1em", marginBottom:8 }}>Métricas extraídas (edite se necessário)</div>
+                      <div style={{ fontSize:ds.font.size.xs, fontWeight:700, color:TX3, textTransform:"uppercase", letterSpacing:".1em", marginBottom:8 }}>Métricas extraídas (edite se necessário)</div>
                       {(PLATFORM_FIELDS[mxResult.platform] || Object.keys(mxResult.metrics || {})).map(key => {
                         const raw = mxResult.metrics?.[key];
                         if (raw === null || raw === undefined) return null;
@@ -6845,7 +6845,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
 
                     {/* Deliverable selector */}
                     <div style={{ marginBottom:10 }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:TX2, marginBottom:4 }}>Salvar em qual entregável?</div>
+                      <div style={{ fontSize:ds.font.size.xs, fontWeight:700, color:TX2, marginBottom:4 }}>Salvar em qual entregável?</div>
                       <select value={mxDelivId} onChange={e=>setMxDelivId(e.target.value)}
                         style={{ width:"100%", padding:"7px 10px", fontSize:11, background:B2, border:`1px solid ${LN}`, borderRadius:8, color:TX, fontFamily:"inherit", outline:"none" }}>
                         <option value="">— Selecione o entregável —</option>
@@ -6899,7 +6899,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                       </div>
                       {!result && (
                         <button onClick={()=>handleRunAction(s)} disabled={!!generating}
-                          style={{ padding:"5px 12px", fontSize:10, fontWeight:700, color: isGen?"#fff":COPILOT_PURPLE, background: isGen?COPILOT_PURPLE:"none", border:`1.5px solid ${COPILOT_PURPLE}`, borderRadius:6, cursor:generating?"wait":"pointer", flexShrink:0, fontFamily:"inherit", whiteSpace:"nowrap", transition:TRANS }}>
+                          style={{ padding:"5px 12px", fontSize:ds.font.size.xs, fontWeight:700, color: isGen?"#fff":COPILOT_PURPLE, background: isGen?COPILOT_PURPLE:"none", border:`1.5px solid ${COPILOT_PURPLE}`, borderRadius:6, cursor:generating?"wait":"pointer", flexShrink:0, fontFamily:"inherit", whiteSpace:"nowrap", transition:TRANS }}>
                           {isGen ? "Gerando…" : "Gerar"}
                         </button>
                       )}
@@ -6916,23 +6916,23 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                         </div>
                         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                           <button onClick={()=>copyToClipboard(result.content)}
-                            style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                            style={{ padding:"4px 10px", fontSize:ds.font.size.xs, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
                             <DsIcon name="copy" size={11} color={ds.color.neutral[500]}/> Copiar
                           </button>
                           {result.type === "report" && (
                             <button onClick={()=>saveReport(result, s.title)}
-                              style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}40`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                              style={{ padding:"4px 10px", fontSize:ds.font.size.xs, fontWeight:600, color:COPILOT_PURPLE, background:"none", border:`1px solid ${COPILOT_PURPLE}40`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
                               <DsIcon name="save" size={11} color={COPILOT_PURPLE}/> Salvar
                             </button>
                           )}
                           {result.type === "whatsapp" && (
                             <button onClick={()=>openWhatsApp(result.content)}
-                              style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:WA_DARK, background:"none", border:"1px solid rgba(37,211,102,.4)", borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                              style={{ padding:"4px 10px", fontSize:ds.font.size.xs, fontWeight:600, color:WA_DARK, background:"none", border:"1px solid rgba(37,211,102,.4)", borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
                               <DsIcon name="phone" size={11} color={WA_DARK}/> WhatsApp
                             </button>
                           )}
                           <button onClick={()=>handleRunAction(s)} disabled={!!generating}
-                            style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX3, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:generating?"wait":"pointer", fontFamily:"inherit" }}>
+                            style={{ padding:"4px 10px", fontSize:ds.font.size.xs, fontWeight:600, color:TX3, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:generating?"wait":"pointer", fontFamily:"inherit" }}>
                             ↺ Regenerar
                           </button>
                         </div>
@@ -6956,7 +6956,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, justifyContent:"center", marginTop:14 }}>
                       {["Qual o status desta semana?","Resumo para WhatsApp","Tem algo atrasado?","Como está minha margem?"].map(q=>(
                         <div key={q} onClick={()=>setInput(q)}
-                          style={{ padding:"5px 12px", fontSize:10, background:B2, border:`1px solid ${LN}`, borderRadius:99, cursor:"pointer", color:TX2, transition:TRANS }}
+                          style={{ padding:"5px 12px", fontSize:ds.font.size.xs, background:B2, border:`1px solid ${LN}`, borderRadius:99, cursor:"pointer", color:TX2, transition:TRANS }}
                           onMouseEnter={e=>e.currentTarget.style.borderColor=COPILOT_PURPLE}
                           onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>
                           {q}
@@ -7003,7 +7003,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
           {/* ── Relatórios ── */}
           {tab === "relatorios" && (
             <div>
-              <div style={{ fontSize:9, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, marginBottom:12 }}>
+              <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX3, marginBottom:12 }}>
                 Relatórios salvos ({reports.length})
               </div>
               {reports.length === 0 && (
@@ -7017,7 +7017,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                   <div style={{ display:"flex", alignItems:"flex-start", gap:8, marginBottom:8 }}>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:12, fontWeight:700, color:TX }}>{r.title}</div>
-                      <div style={{ fontSize:10, color:TX3, marginTop:2 }}>
+                      <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:2 }}>
                         {r.contextLabel} · {new Date(r.createdAt).toLocaleDateString("pt-BR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}
                       </div>
                     </div>
@@ -7029,7 +7029,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                   </div>
                   <div style={{ display:"flex", gap:6 }}>
                     <button onClick={()=>copyToClipboard(r.contentMarkdown)}
-                      style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                      style={{ padding:"4px 10px", fontSize:ds.font.size.xs, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
                       <DsIcon name="copy" size={11} color={ds.color.neutral[500]}/> Copiar
                     </button>
                     <button onClick={()=>{
@@ -7039,7 +7039,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
                       a.download = `${r.title.replace(/[^a-z0-9]/gi,"_")}.md`;
                       a.click();
                     }}
-                      style={{ padding:"4px 10px", fontSize:10, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
+                      style={{ padding:"4px 10px", fontSize:ds.font.size.xs, fontWeight:600, color:TX2, background:"none", border:`1px solid ${LN}`, borderRadius:6, cursor:"pointer", fontFamily:"inherit" }}>
                       <DsIcon name="download" size={11} color={ds.color.neutral[500]}/> .md
                     </button>
                   </div>

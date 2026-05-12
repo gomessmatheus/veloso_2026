@@ -2979,9 +2979,15 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
   };
 
   const handleDelete = async () => {
-    await saveBrands(brands.filter(b => b.id !== brand.id));
-    toast?.("Marca excluída", "success");
-    onBack();
+    try {
+      await deleteBrand(brand.id);                           // deleta o doc do Firestore
+      await saveBrands(brands.filter(b => b.id !== brand.id)); // atualiza estado local
+      toast?.("Marca excluída", "success");
+      onBack();
+    } catch(e) {
+      console.error("[Marcas] deleteBrand falhou:", e);
+      toast?.("Erro ao excluir marca. Tente novamente.", "error");
+    }
   };
 
   const TABS = [{ id:"contratos", label:"Contratos" }, { id:"performance", label:"Performance" }, { id:"briefing", label:"Briefing Recorrente" }];
@@ -4254,6 +4260,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
   triggerNewTask, setTriggerNewTask, role, userName, syncStatus,
   brands=[], saveBrands, setSelectedBrand, selectedBrand, openCopilot }) {
   const [err, setErr] = useState(null);
+  const toast = useToast(); // pass down to lazy Caixa so it can show errors
   useEffect(() => { setErr(null); }, [view]);
   const activeContracts = contracts.filter(c=>!c.archived);
 
@@ -4280,7 +4287,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot} onNewContract={(prefillBrandId)=>setModal({type:"contract",data:null,prefillBrandId})}/>;
     if (view==="caixa")          return (
       <React.Suspense fallback={<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh",color:"#6E6E6E",fontSize:13}}>Carregando...</div>}>
-        <Caixa contracts={activeContracts} openCopilot={openCopilot} role={role} syncStatus={syncStatus} onRetrySync={()=>{ /* retry via saveTx re-sync */ }}/>
+        <Caixa contracts={activeContracts} openCopilot={openCopilot} role={role} syncStatus={syncStatus} toast={toast} onRetrySync={()=>{ /* retry via saveTx re-sync */ }}/>
       </React.Suspense>
     );
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;

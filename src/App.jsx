@@ -2955,6 +2955,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
   const [editForm, setEditForm] = useState(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletingBrand, setDeletingBrand] = useState(false);
 
   if (!brand) return (
     <div style={{ padding:40, textAlign:"center", color:TX2 }}>
@@ -2979,20 +2980,28 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
   };
 
   const handleDelete = async () => {
+    setDeletingBrand(true);
     try {
-      await deleteBrand(brand.id);                           // deleta o doc do Firestore
-      await saveBrands(brands.filter(b => b.id !== brand.id)); // atualiza estado local
+      await deleteBrand(brand.id);
+      await saveBrands(brands.filter(b => b.id !== brand.id));
       toast?.("Marca excluída", "success");
       onBack();
     } catch(e) {
       console.error("[Marcas] deleteBrand falhou:", e);
-      toast?.("Erro ao excluir marca. Tente novamente.", "error");
+      const msg = e?.code === "resource-exhausted"
+        ? "Limite do banco atingido. A cota reseta à meia-noite (LA). Considere upgrade para plano Blaze."
+        : "Erro ao excluir marca. Tente novamente.";
+      toast?.(msg, "error");
+      setConfirmDelete(false);
+    } finally {
+      setDeletingBrand(false);
     }
   };
 
   const TABS = [{ id:"contratos", label:"Contratos" }, { id:"performance", label:"Performance" }, { id:"briefing", label:"Briefing Recorrente" }];
 
   return (
+    <>
     <div style={{ padding: isMobile ? "12px 12px 88px" : "24px" }}>
       {/* Back */}
       <button onClick={onBack}
@@ -3025,37 +3034,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
             </DsButton>
           </div>
 
-          {confirmDelete && (
-            <div onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(false);}}
-              style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.5)",backdropFilter:"blur(3px)",
-                       zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
-              <div style={{ background:B1,borderRadius:14,border:`1px solid ${LN}`,
-                            width:"100%",maxWidth:400,boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
-                <div style={{ padding:"16px 20px",borderBottom:`1px solid ${LN}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-                  <span style={{ fontSize:11,fontWeight:700,letterSpacing:".14em",textTransform:"uppercase",color:TX }}>Excluir marca</span>
-                  <button onClick={()=>setConfirmDelete(false)} style={{ background:"none",border:"none",color:TX2,cursor:"pointer",fontSize:18,lineHeight:1 }}>×</button>
-                </div>
-                <div style={{ padding:"20px" }}>
-                  <p style={{ fontSize:13,color:TX2,margin:0,lineHeight:1.6 }}>
-                    Tem certeza que deseja excluir <strong style={{ color:TX }}>{brand.name}</strong>?<br/>
-                    A marca será removida permanentemente. Contratos e lançamentos vinculados são mantidos.
-                  </p>
-                </div>
-                <div style={{ padding:"14px 20px",borderTop:`1px solid ${LN}`,display:"flex",justifyContent:"flex-end",gap:8,background:B2,borderRadius:"0 0 14px 14px" }}>
-                  <button onClick={()=>setConfirmDelete(false)}
-                    style={{ padding:"8px 16px",fontSize:13,cursor:"pointer",borderRadius:8,
-                             background:"none",border:`1px solid ${LN}`,color:TX2,fontFamily:"inherit" }}>
-                    Cancelar
-                  </button>
-                  <button onClick={handleDelete}
-                    style={{ padding:"8px 18px",fontSize:13,fontWeight:700,cursor:"pointer",
-                             borderRadius:8,background:RED,border:"none",color:"white",fontFamily:"inherit" }}>
-                    Excluir marca
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+
         </div>
 
         {/* 4 KPIs */}
@@ -3241,6 +3220,53 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
         </Modal>
       )}
     </div>
+
+      {/* Delete confirmation — rendered at root level to avoid z-index issues */}
+      {confirmDelete && (
+        <div style={{ position:"fixed",inset:0,zIndex:9999,display:"flex",
+                      alignItems:"center",justifyContent:"center",padding:16,
+                      background:"rgba(0,0,0,.55)" }}
+          onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(false);}}>
+          <div style={{ background:B1,borderRadius:14,border:`1px solid ${LN}`,
+                        width:"100%",maxWidth:400,boxShadow:"0 24px 64px rgba(0,0,0,.25)",
+                        overflow:"hidden" }}>
+            <div style={{ padding:"16px 20px",borderBottom:`1px solid ${LN}`,
+                          display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+              <span style={{ fontSize:11,fontWeight:700,letterSpacing:".14em",
+                             textTransform:"uppercase",color:TX }}>Excluir marca</span>
+              <button onClick={()=>setConfirmDelete(false)}
+                style={{ background:"none",border:"none",color:TX2,cursor:"pointer",
+                         fontSize:20,lineHeight:1,padding:0 }}>×</button>
+            </div>
+            <div style={{ padding:"20px" }}>
+              <p style={{ fontSize:13,color:TX2,margin:0,lineHeight:1.6 }}>
+                Tem certeza que deseja excluir{" "}
+                <strong style={{ color:TX }}>{brand.name}</strong>?<br/>
+                Esta ação é permanente. Contratos e lançamentos vinculados são mantidos.
+              </p>
+            </div>
+            <div style={{ padding:"14px 20px",borderTop:`1px solid ${LN}`,
+                          display:"flex",justifyContent:"flex-end",gap:8,
+                          background:B2 }}>
+              <button onClick={()=>setConfirmDelete(false)}
+                style={{ padding:"9px 18px",fontSize:13,cursor:"pointer",borderRadius:8,
+                         background:"none",border:`1px solid ${LN}`,color:TX2,
+                         fontFamily:"inherit" }}>
+                Cancelar
+              </button>
+              <button onClick={handleDelete} disabled={deletingBrand}
+                style={{ padding:"9px 20px",fontSize:13,fontWeight:700,
+                         cursor:deletingBrand?"not-allowed":"pointer",
+                         borderRadius:8,background:"#C8102E",border:"none",color:"#fff",
+                         fontFamily:"inherit",opacity:deletingBrand?0.7:1,
+                         transition:"opacity .15s" }}>
+                {deletingBrand ? "Excluindo..." : "Excluir marca"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -6051,16 +6077,10 @@ function AppContent() {
       } catch(err) { console.error(err); setSyncStatus("error"); setC(SEED); setP(SEED_POSTS); }
       try {
         unsub = subscribeToChanges({
-          onContracts: cs  => { setC(cs);  prevCIds.current = cs.map(c => c.id); setSyncStatus("ok"); },
-          onPosts:     ps  => { setP(ps);  prevPIds.current = ps.map(p => p.id); },
-          onDeliverables: ds => { setD(ds); prevDIds.current = ds.map(d => d.id); },
-          onSetting: (key, val) => {
-          },
-          onError: (source, _err) => {
-            setSyncStatus("error");
-            // Toast is available via context at this point
-            // (push is stable so we can call it safely from a snapshot listener)
-          },
+          onContracts:    cs => { setC(cs);  prevCIds.current = cs.map(c => c.id); setSyncStatus("ok"); },
+          onPosts:        ps => { setP(ps);  prevPIds.current = ps.map(p => p.id); },
+          onDeliverables: ds => { setD(ds);  prevDIds.current = ds.map(d => d.id); },
+          onError: (_source, _err) => { setSyncStatus("error"); },
         });
       } catch {}
     })();

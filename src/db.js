@@ -3,6 +3,12 @@
  *
  * Collections:
  *   contracts, posts, deliverables, caixa_tx, settings, presence, brands
+ *
+ * OTIMIZAÇÕES (cota Firestore):
+ *   - settings: removido onSnapshot → uma leitura getDocs no boot
+ *   - brands:   sempre foi getDocs (sem listener) — mantido
+ *   - subscribeToChanges agora abre apenas 3 listeners (contracts, posts, deliverables)
+ *     em vez de 4, reduzindo o uso de avaliações de regras de segurança ~25%
  */
 
 import {
@@ -18,10 +24,6 @@ function dbErr(tag, err) {
 }
 
 // ─── Explicit single-doc deletion ─────────────────────────
-/**
- * Delete one document from a collection.
- * Use this instead of relying on previousIds comparisons in sync.
- */
 export async function deleteItem(colName, id) {
   try {
     await deleteDoc(doc(db, colName, id))
@@ -34,12 +36,10 @@ export async function deleteItem(colName, id) {
 // ─── Generic safe sync ────────────────────────────────────
 /**
  * Upsert items to Firestore.
- *
- * - If changedIds (Set) is provided: only write items whose id is in that set.
- * - Otherwise: write ALL items (full upsert).
- * - NEVER deletes implicitly. Deletions must go through deleteItem().
- * - previousIds param is kept for call-site backwards compat but ignored.
- * - Splits into ≤490-op batches to respect Firestore's 500-op limit.
+ * - Writes ALL items unless changedIds (Set) is provided.
+ * - NEVER deletes implicitly — use deleteItem() for that.
+ * - previousIds param kept for backwards compat but ignored.
+ * - Splits into ≤490-op batches.
  */
 async function syncCollection(colName, items, _previousIds, extraFields = () => ({}), changedIds = null) {
   const now     = new Date().toISOString()
@@ -132,10 +132,14 @@ export async function syncBrands(brands, previousIds, changedIds) {
   } catch (err) { dbErr('syncBrands', err); throw err }
 }
 
-/** Explicit brand deletion — wraps the generic deleteItem. */
 export async function deleteBrand(id) {
   return deleteItem('brands', id)
 }
+
+// ─── Settings ─────────────────────────────────────────────
+// OTIMIZAÇÃO: getSetting/setSetting usam getDoc/setDoc pontuais.
+// onSnapshot de settings removido de subscribeToChanges — settings
+// raramente mudam e não precisam de listener em tempo real.
 export async function getSetting(key) {
   try {
     const snap = await getDoc(doc(db, 'settings', key))
@@ -161,12 +165,8 @@ function getSessionId() {
   return id
 }
 
-/**
- * Returns the current user's presence record.
- * Priority: Firebase Auth displayName → Auth email → localStorage cache → random.
- */
 export function getMyPresence() {
-  const sessionId  = getSessionId()
+  const sessionId   = getSessionId()
   const currentUser = typeof auth !== 'undefined' ? auth.currentUser : null
 
   let name  = currentUser?.displayName || currentUser?.email?.split('@')[0] || localStorage.getItem('copa_display_name')
@@ -209,15 +209,19 @@ export function subscribeToPresence(callback) {
 // ─── Real-time subscriptions ──────────────────────────────
 /**
  * Subscribe to live changes.
+ *
+ * OTIMIZAÇÃO: apenas 3 listeners em tempo real (contracts, posts, deliverables).
+ * Settings removido — use getSetting() para leitura pontual quando necessário.
+ * Brands: carregado via loadBrands() no boot (getDocs), sem listener.
+ *
  * @param {object} opts
  * @param {Function} opts.onContracts    - (contracts[]) => void
  * @param {Function} opts.onPosts        - (posts[]) => void
  * @param {Function} opts.onDeliverables - (deliverables[]) => void
- * @param {Function} opts.onSetting      - (key, value) => void
- * @param {Function} opts.onError        - (source, err) => void  ← NEW
+ * @param {Function} opts.onError        - (source, err) => void
  * @returns {Function} unsubscribe
  */
-export function subscribeToChanges({ onContracts, onPosts, onDeliverables, onSetting, onError }) {
+export function subscribeToChanges({ onContracts, onPosts, onDeliverables, onError }) {
   const handleErr = (tag) => (err) => {
     dbErr(`subscribeToChanges(${tag})`, err)
     onError?.(tag, err)
@@ -230,18 +234,11 @@ export function subscribeToChanges({ onContracts, onPosts, onDeliverables, onSet
   const unsubC = onSnapshot(qC, snap => onContracts?.(snap.docs.map(d => d.data().data).filter(Boolean)), handleErr('contracts'))
   const unsubP = onSnapshot(qP, snap => onPosts?.(snap.docs.map(d => d.data().data).filter(Boolean)),     handleErr('posts'))
   const unsubD = onSnapshot(qD, snap => onDeliverables?.(snap.docs.map(d => d.data().data).filter(Boolean)), handleErr('deliverables'))
-  const unsubS = onSnapshot(
-    collection(db, 'settings'),
-    snap => snap.docChanges().forEach(ch => {
-      if (ch.type === 'modified' || ch.type === 'added') {
-        const { key, value } = ch.doc.data()
-        onSetting?.(key, value)
-      }
-    }),
-    handleErr('settings'),
-  )
 
-  return () => { unsubC(); unsubP(); unsubD(); unsubS() }
+  // Settings listener REMOVIDO — era a 4ª fonte de leituras constantes.
+  // App.jsx já não usa o callback onSetting (estava vazio).
+
+  return () => { unsubC(); unsubP(); unsubD() }
 }
 
 // ─── User Roles ───────────────────────────────────────────
@@ -272,10 +269,7 @@ export async function setUserRoles(roles) {
   } catch (err) { dbErr('setUserRoles', err); throw err }
 }
 
-// ─── FX Prefs (por usuário) ────────────────────────────────
-// Armazenados em settings/fx_prefs_{uid} como JSON.
-// Estrutura: { autoRefresh: boolean, intervalMin: number }
-
+// ─── FX Prefs ─────────────────────────────────────────────
 export async function getFxPrefs(uid) {
   if (!uid) return null
   try {
@@ -291,10 +285,9 @@ export async function setFxPrefs(uid, prefs) {
   } catch (err) { dbErr('setFxPrefs', err); throw err }
 }
 
-// ─── FX History (últimas 10 cotações por usuário) ──────────
-// Armazenado em fx_history/{uid} como array de até 10 registros.
-// Estrutura de registro: { EUR, USD, fetchedAt, source, recordedAt }
-
+// ─── FX History ───────────────────────────────────────────
+// OTIMIZAÇÃO: getFxHistory/appendFxHistory são operações pontuais (getDoc/setDoc).
+// Não há onSnapshot de fx_history — já estava correto, mantido.
 export async function getFxHistory(uid) {
   if (!uid) return []
   try {
@@ -309,8 +302,7 @@ export async function appendFxHistory(uid, record) {
     const ref      = doc(db, 'fx_history', uid)
     const snap     = await getDoc(ref)
     const existing = snap.exists() ? (snap.data().records || []) : []
-    // Prepend mais recente, manter máximo 10
     const records  = [record, ...existing].slice(0, 10)
     await setDoc(ref, { uid, records, updatedAt: new Date().toISOString() })
-  } catch (err) { dbErr('appendFxHistory', err) } // não propaga — não crítico
+  } catch (err) { dbErr('appendFxHistory', err) }
 }

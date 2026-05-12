@@ -1263,33 +1263,60 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const [baseDate, setBaseDate]         = useState(() => lsLoad("caixa_base_date", ""));
   const prevTxIds = useRef([]);
 
-  // Sync from Firebase after auth is ready — retry once on empty
+  // Sync from Firebase — usa a versão mais recente entre Firebase e localStorage
   useEffect(() => {
     let cancelled = false;
     const load = async (attempt = 0) => {
       try {
-        const [txs, base, bdate] = await Promise.all([
+        const [remoteTxs, base, bdate] = await Promise.all([
           loadCaixaTx(),
           getSetting("caixa_base"),
           getSetting("caixa_base_date"),
         ]);
         if (cancelled) return;
-        // If Firebase returned empty on first try, wait for auth init and retry once
-        if (txs?.length === 0 && lsLoad("caixa_tx", []).length > 0 && attempt === 0) {
-          setTimeout(() => load(1), 1200);
+
+        const localTxs = lsLoad("caixa_tx", []);
+
+        // Se Firebase retornou vazio mas localStorage tem dados, pode ser auth ainda
+        // inicializando — espera e tenta mais uma vez
+        if ((!remoteTxs || remoteTxs.length === 0) && localTxs.length > 0 && attempt === 0) {
+          setTimeout(() => load(1), 1500);
           return;
         }
-        const list = txs?.length > 0 ? txs : lsLoad("caixa_tx", []);
+
+        // Escolhe a versão mais recente comparando o updatedAt mais novo de cada fonte
+        const newestTs = (list) => list.reduce((max, t) => {
+          const ts = t.updatedAt || t.createdAt || "";
+          return ts > max ? ts : max;
+        }, "");
+
+        const remoteTs = remoteTxs?.length > 0 ? newestTs(remoteTxs) : "";
+        const localTs  = localTxs.length  > 0 ? newestTs(localTxs)  : "";
+
+        let list;
+        if (remoteTxs?.length > 0 && remoteTs >= localTs) {
+          // Firebase tem dados e são mais recentes ou iguais → usa Firebase
+          list = remoteTxs;
+          lsSave("caixa_tx", list); // mantém localStorage em sync
+        } else if (localTxs.length > 0) {
+          // localStorage tem dados mais recentes → usa local e re-sobe para Firebase
+          list = localTxs;
+          console.warn("[Caixa] localStorage mais recente que Firebase — re-sincronizando...");
+          // Push silencioso: sobe o que está local sem bloquear UI
+          syncCaixaTx(list, []).catch(e => console.error("[Caixa] re-sync failed:", e));
+        } else {
+          list = [];
+        }
+
         setTransactions(list);
         prevTxIds.current = list.map(t => t.id);
-        // Only update base if Firebase returned a real value
+
         if (base  != null && base  !== "") setBaseBalance(Number(base) || 0);
         if (bdate && bdate !== "")         setBaseDate(bdate);
-        // Keep localStorage in sync only if we got real data
-        if (list.length > 0) lsSave("caixa_tx", list);
+
       } catch(e) {
-        if (import.meta.env.DEV) console.error("[Caixa] load:", e);
-        // localStorage already seeded — no need to overwrite
+        console.error("[Caixa] Erro ao carregar dados:", e);
+        // localStorage já foi semeado no useState inicial — UI continua funcionando
       }
     };
     load();
@@ -1319,14 +1346,18 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const toast = useToast();
 
   const saveTx = async (list) => {
-    setTransactions(list);
-    lsSave("caixa_tx", list);
+    // Garante que cada transação tem updatedAt para resolver conflitos de versão
+    const now = new Date().toISOString();
+    const stamped = list.map(t => t.updatedAt ? t : { ...t, updatedAt: now });
+    setTransactions(stamped);
+    lsSave("caixa_tx", stamped);
     try {
-      await syncCaixaTx(list, prevTxIds.current);
-      prevTxIds.current = list.map(t => t.id);
+      await syncCaixaTx(stamped, prevTxIds.current);
+      prevTxIds.current = stamped.map(t => t.id);
     } catch(e) {
-      if (import.meta.env.DEV) console.error("[Caixa] syncCaixaTx:", e);
-      toast?.("Falha ao sincronizar lançamento. Dados salvos localmente.", "error");
+      console.error("[Caixa] syncCaixaTx falhou:", e);
+      // Toast pode ser null (bypass mode), mas o dado está salvo no localStorage
+      try { toast?.("Falha ao sincronizar com o banco. Salvo localmente.", "error"); } catch {}
     }
   };
 

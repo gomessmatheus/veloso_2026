@@ -72,15 +72,7 @@ function lsSave(k, v)   { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 const uid = () => Math.random().toString(36).substr(2, 9);
 function useIsMobile()  { const [m, setM] = useState(window.innerWidth < 768); useEffect(()=>{ const h=()=>setM(window.innerWidth<768); window.addEventListener("resize",h); return()=>window.removeEventListener("resize",h); },[]); return m; }
 
-// ─── Toast ───────────────────────────────────────────────
-// ToastCtx is created in App.jsx. To reach it from a React.lazy chunk,
-// we import it from the shared module created in Fase 5.
-// TODO Fase 6: move ToastCtx to src/lib/toast.js
-// For now: hook returns a safe no-op — toasts are optional feedback.
-function useToast() {
-  // Returns null safely; all call-sites use optional chaining (toast?.()).
-  return null;
-}
+
 
 // ─── Local UI micro-components ────────────────────────────
 function Btn({ children, onClick, variant="default", size="md", icon, style:xs, disabled }) {
@@ -1250,7 +1242,7 @@ ${Object.entries(cats).map(([cat,items])=>`
 }
 
 
-export default function Caixa({ contracts, openCopilot, role = "admin", syncStatus = "synced", onRetrySync }) {
+export default function Caixa({ contracts, openCopilot, role = "admin", syncStatus = "synced", onRetrySync, toast: toastProp }) {
   // ── Step-up session ────────────────────────────────────
   const session = useCaixaSession();
   const { unlocked } = session;
@@ -1343,7 +1335,8 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   });
   const [search, setSearch] = useQueryState("caixa_q", "");
   const [filterType2, setFilterType2] = useQueryState("caixa_tipo", "all");
-  const toast = useToast();
+  // toast comes as a prop from ViewRenderer (bypasses lazy module context boundary)
+  const toast = toastProp ?? null;
 
   const saveTx = async (list) => {
     // Garante que cada transação tem updatedAt para resolver conflitos de versão

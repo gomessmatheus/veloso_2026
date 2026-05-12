@@ -2733,6 +2733,18 @@ Responda APENAS com o JSON.` }]
       )}
     </div>
     {showClientReport && <ClientReport contract={c} posts={posts} deliverables={deliverables} rates={rates} onClose={()=>setShowClientReport(false)}/>}
+    {confirmDelete && (
+      <Modal title="Excluir contrato" onClose={()=>setConfirmDelete(false)} width={400}
+        footer={<>
+          <Btn variant="ghost" onClick={()=>setConfirmDelete(false)}>Cancelar</Btn>
+          <Btn variant="danger" onClick={deleteContract}>Excluir contrato</Btn>
+        </>}>
+        <p style={{ fontSize:13, color:TX2, margin:0, lineHeight:1.6 }}>
+          Tem certeza que deseja excluir o contrato com <strong style={{ color:TX }}>{c.company}</strong>?<br/>
+          O contrato e todos os seus entregáveis serão removidos permanentemente.
+        </p>
+      </Modal>
+    )}
     </>
   );
 }
@@ -3007,34 +3019,17 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
             </DsButton>
           </div>
 
-          {/* Confirmation dialog */}
           {confirmDelete && (
-            <div onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(false);}}
-              style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:600,
-                       display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
-              <div style={{ background:B1,borderRadius:12,width:"100%",maxWidth:360,
-                            padding:"28px 24px",boxShadow:"0 24px 60px rgba(0,0,0,.18)" }}>
-                <div style={{ fontSize:22,marginBottom:8 }}>🗑️</div>
-                <div style={{ fontSize:16,fontWeight:700,color:TX,marginBottom:8 }}>
-                  Excluir {brand.name}?
-                </div>
-                <div style={{ fontSize:13,color:TX2,marginBottom:20,lineHeight:1.5 }}>
-                  Esta ação é irreversível. A marca será removida, mas os contratos e lançamentos vinculados são mantidos.
-                </div>
-                <div style={{ display:"flex",gap:10 }}>
-                  <button onClick={()=>setConfirmDelete(false)}
-                    style={{ flex:1,padding:"9px",fontSize:13,cursor:"pointer",borderRadius:8,
-                             background:"none",border:`1px solid ${LN}`,color:TX2,fontFamily:"inherit" }}>
-                    Cancelar
-                  </button>
-                  <button onClick={handleDelete}
-                    style={{ flex:1,padding:"9px",fontSize:13,fontWeight:700,cursor:"pointer",
-                             borderRadius:8,background:RED,border:"none",color:"white",fontFamily:"inherit" }}>
-                    Excluir marca
-                  </button>
-                </div>
-              </div>
-            </div>
+            <Modal title="Excluir marca" onClose={()=>setConfirmDelete(false)} width={400}
+              footer={<>
+                <Btn variant="ghost" onClick={()=>setConfirmDelete(false)}>Cancelar</Btn>
+                <Btn variant="danger" onClick={handleDelete}>Excluir marca</Btn>
+              </>}>
+              <p style={{ fontSize:13, color:TX2, margin:0, lineHeight:1.6 }}>
+                Tem certeza que deseja excluir <strong style={{ color:TX }}>{brand.name}</strong>?<br/>
+                A marca será removida permanentemente. Contratos e lançamentos vinculados são mantidos.
+              </p>
+            </Modal>
           )}
         </div>
 

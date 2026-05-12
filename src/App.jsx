@@ -2306,6 +2306,14 @@ Responda APENAS com o JSON.` }]
     setAiLoading(false);
   };
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteContract = async () => {
+    await saveC(contracts.filter(x => x.id !== c.id));
+    if (saveDeliverables) await saveDeliverables(deliverables.filter(d => d.contractId !== c.id));
+    toast?.("Contrato excluído", "success");
+    onBack();
+  };
+
   const TABS = [
     { id:"overview",    label:"Visão Geral" },
     { id:"deliveries",  label:`Entregas (${cDeliverables.length})` },
@@ -2331,6 +2339,11 @@ Responda APENAS com o JSON.` }]
             <DsButton variant="secondary" size="sm" onClick={()=>setModal({type:"contract",data:c})}
               leftIcon={<DsIcon name="edit" size={13}/>}>
               Editar
+            </DsButton>
+            <DsButton variant="secondary" size="sm" onClick={()=>setConfirmDelete(true)}
+              leftIcon={<DsIcon name="trash" size={13} color={RED}/>}
+              style={{ color:RED, borderColor:`${RED}40` }}>
+              Excluir
             </DsButton>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
@@ -2380,6 +2393,11 @@ Responda APENAS com o JSON.` }]
           <DsButton variant="secondary" size="sm" onClick={()=>setModal({type:"contract",data:c})}
             leftIcon={<DsIcon name="edit" size={13} color={ds.color.neutral[600]}/>}>
             Editar
+          </DsButton>
+          <DsButton variant="secondary" size="sm" onClick={()=>setConfirmDelete(true)}
+            leftIcon={<DsIcon name="trash" size={13} color={RED}/>}
+            style={{ color:RED, borderColor:`${RED}40` }}>
+            Excluir
           </DsButton>
           <DsButton variant="secondary" size="sm"
             onClick={()=>openCopilot?.({contractId:c.id,actionId:"generate-client-report"})}
@@ -2946,6 +2964,13 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
     toast?.("Salvo", "success");
   };
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const handleDelete = async () => {
+    await saveBrands(brands.filter(b => b.id !== brand.id));
+    toast?.("Marca excluída", "success");
+    onBack();
+  };
+
   const TABS = [{ id:"contratos", label:"Contratos" }, { id:"performance", label:"Performance" }, { id:"briefing", label:"Briefing Recorrente" }];
 
   return (
@@ -2969,10 +2994,47 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
             {brand.contact?.email && <div style={{ fontSize:11, color:TX2, marginBottom:3 }}>📧 {brand.contact.email}</div>}
             {brand.contact?.phone && <div style={{ fontSize:11, color:TX2 }}>📞 {brand.contact.phone}</div>}
           </div>
-          <DsButton variant="secondary" size="sm" onClick={() => { setEditForm({ ...brand }); setEditing(true); }}
-            leftIcon={<DsIcon name="edit" size={13} color={ds.color.neutral[600]}/>}>
-            Editar
-          </DsButton>
+          <div style={{ display:"flex", gap:8 }}>
+            <DsButton variant="secondary" size="sm" onClick={() => { setEditForm({ ...brand }); setEditing(true); }}
+              leftIcon={<DsIcon name="edit" size={13} color={ds.color.neutral[600]}/>}>
+              Editar
+            </DsButton>
+            <DsButton variant="secondary" size="sm" onClick={() => setConfirmDelete(true)}
+              leftIcon={<DsIcon name="trash" size={13} color={RED}/>}
+              style={{ color:RED, borderColor:`${RED}40` }}>
+              Excluir
+            </DsButton>
+          </div>
+
+          {/* Confirmation dialog */}
+          {confirmDelete && (
+            <div onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(false);}}
+              style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:600,
+                       display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
+              <div style={{ background:B1,borderRadius:12,width:"100%",maxWidth:360,
+                            padding:"28px 24px",boxShadow:"0 24px 60px rgba(0,0,0,.18)" }}>
+                <div style={{ fontSize:22,marginBottom:8 }}>🗑️</div>
+                <div style={{ fontSize:16,fontWeight:700,color:TX,marginBottom:8 }}>
+                  Excluir {brand.name}?
+                </div>
+                <div style={{ fontSize:13,color:TX2,marginBottom:20,lineHeight:1.5 }}>
+                  Esta ação é irreversível. A marca será removida, mas os contratos e lançamentos vinculados são mantidos.
+                </div>
+                <div style={{ display:"flex",gap:10 }}>
+                  <button onClick={()=>setConfirmDelete(false)}
+                    style={{ flex:1,padding:"9px",fontSize:13,cursor:"pointer",borderRadius:8,
+                             background:"none",border:`1px solid ${LN}`,color:TX2,fontFamily:"inherit" }}>
+                    Cancelar
+                  </button>
+                  <button onClick={handleDelete}
+                    style={{ flex:1,padding:"9px",fontSize:13,fontWeight:700,cursor:"pointer",
+                             borderRadius:8,background:RED,border:"none",color:"white",fontFamily:"inherit" }}>
+                    Excluir marca
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 4 KPIs */}

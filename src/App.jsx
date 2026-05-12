@@ -3026,16 +3026,35 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
           </div>
 
           {confirmDelete && (
-            <Modal title="Excluir marca" onClose={()=>setConfirmDelete(false)} width={400}
-              footer={<>
-                <Btn variant="ghost" onClick={()=>setConfirmDelete(false)}>Cancelar</Btn>
-                <Btn variant="danger" onClick={handleDelete}>Excluir marca</Btn>
-              </>}>
-              <p style={{ fontSize:13, color:TX2, margin:0, lineHeight:1.6 }}>
-                Tem certeza que deseja excluir <strong style={{ color:TX }}>{brand.name}</strong>?<br/>
-                A marca será removida permanentemente. Contratos e lançamentos vinculados são mantidos.
-              </p>
-            </Modal>
+            <div onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(false);}}
+              style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.5)",backdropFilter:"blur(3px)",
+                       zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
+              <div style={{ background:B1,borderRadius:14,border:`1px solid ${LN}`,
+                            width:"100%",maxWidth:400,boxShadow:"0 24px 64px rgba(0,0,0,.2)" }}>
+                <div style={{ padding:"16px 20px",borderBottom:`1px solid ${LN}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                  <span style={{ fontSize:11,fontWeight:700,letterSpacing:".14em",textTransform:"uppercase",color:TX }}>Excluir marca</span>
+                  <button onClick={()=>setConfirmDelete(false)} style={{ background:"none",border:"none",color:TX2,cursor:"pointer",fontSize:18,lineHeight:1 }}>×</button>
+                </div>
+                <div style={{ padding:"20px" }}>
+                  <p style={{ fontSize:13,color:TX2,margin:0,lineHeight:1.6 }}>
+                    Tem certeza que deseja excluir <strong style={{ color:TX }}>{brand.name}</strong>?<br/>
+                    A marca será removida permanentemente. Contratos e lançamentos vinculados são mantidos.
+                  </p>
+                </div>
+                <div style={{ padding:"14px 20px",borderTop:`1px solid ${LN}`,display:"flex",justifyContent:"flex-end",gap:8,background:B2,borderRadius:"0 0 14px 14px" }}>
+                  <button onClick={()=>setConfirmDelete(false)}
+                    style={{ padding:"8px 16px",fontSize:13,cursor:"pointer",borderRadius:8,
+                             background:"none",border:`1px solid ${LN}`,color:TX2,fontFamily:"inherit" }}>
+                    Cancelar
+                  </button>
+                  <button onClick={handleDelete}
+                    style={{ padding:"8px 18px",fontSize:13,fontWeight:700,cursor:"pointer",
+                             borderRadius:8,background:RED,border:"none",color:"white",fontFamily:"inherit" }}>
+                    Excluir marca
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 

@@ -3156,9 +3156,9 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
 
       <div className="table-scroll">
       <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)", minWidth:860 }}>
-        <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 70px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
+        <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 80px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
           {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links",""].map((h,i)=>(
-            <div key={i} style={{ padding:"0 12px", fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3 }}>{h}</div>
+            <div key={i} style={{ padding:"0 12px", fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3, textAlign:i>=6&&i<=8?"center":"left" }}>{h}</div>
           ))}
         </div>
         {displayContracts.map(c=>{
@@ -3209,9 +3209,9 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
                 </div>
                 <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>{don}/{tot}</div>
               </div>
-              <div style={{ padding:"0 12px", color:TX2 }}>{cp}/{c.numPosts}</div>
-              <div style={{ padding:"0 12px", color:TX2 }}>{cs}/{c.numStories}</div>
-              <div style={{ padding:"0 12px", color:TX2 }}>{cl}/{c.numCommunityLinks}</div>
+              <div style={{ padding:"0 12px", color:TX2, textAlign:"center", fontVariantNumeric:"tabular-nums" }}>{cp}/{c.numPosts}</div>
+              <div style={{ padding:"0 12px", color:TX2, textAlign:"center", fontVariantNumeric:"tabular-nums" }}>{cs}/{c.numStories}</div>
+              <div style={{ padding:"0 12px", color:TX2, textAlign:"center", fontVariantNumeric:"tabular-nums" }}>{cl}/{c.numCommunityLinks}</div>
               <div style={{ padding:`0 ${ds.space[2]}`, display:"flex", gap:2 }} onClick={e=>e.stopPropagation()}>
                 {!c.archived && canEdit && (
                   <DsIconButton size="sm" variant="ghost" ariaLabel="Editar contrato"

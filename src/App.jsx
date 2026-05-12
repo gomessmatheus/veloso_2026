@@ -292,6 +292,7 @@ const STAGES = [
   { id:"gravacao",    label:"Gravação",    days:-4, resp:"Lucas",           minDays:1, rule:"Gravação 1 dia após aprovação do roteiro"        },
   { id:"edicao",      label:"Edição",      days:-2, resp:"Leandro",         minDays:2, rule:"Mín. 2 dias entre gravação e envio para edição" },
   { id:"ap_final",    label:"Ap. Final",   days:-1, resp:"Marca",           minDays:1, rule:"1 dia para aprovação final"                     },
+  { id:"ajuste",      label:"Ajuste",      days:-1, resp:"Equipe",          minDays:0, rule:"Revisão solicitada pela marca"                  },
   { id:"postagem",    label:"Postagem",    days:0,  resp:"Lucas",           minDays:0, rule:"Post vai ao ar"                                 },
   { id:"done",        label:"✓ Entregue",  days:0,  resp:"",                minDays:0, rule:""                                               },
 ];
@@ -1307,6 +1308,14 @@ function DeliverableCard({ item, contracts, onEdit, stageId }) {
           </span>
         )}
         <span style={{ fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>{TYPE_LABEL[item.type] || item.type}</span>
+        {(item.revisionCount > 0) && (
+          <span title={item.revisionNote ? `Ajuste: ${item.revisionNote}` : "Ajuste solicitado"}
+            style={{ fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99,
+                     background: "#FEF3C7", color: "#B45309",
+                     fontWeight: 700, border: "1px solid #FDE68A" }}>
+            ✏️ Rev.{item.revisionCount}
+          </span>
+        )}
         {item.plannedPostDate && (
           <span style={{ fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2, marginLeft: "auto" }}>
             📅 {fmtDate(item.plannedPostDate)}
@@ -1321,6 +1330,18 @@ function DeliverableCard({ item, contracts, onEdit, stageId }) {
       )}
       {item.responsible?.[stageId] && (
         <div style={{ marginTop: 4, fontSize:ds.font.size.xs, color: TX3 }}>👤 {item.responsible[stageId]}</div>
+      )}
+      {item.stage === "ajuste" && item.revisionNote && (
+        <div style={{ marginTop:5, fontSize:ds.font.size.xs, color:"#92400E",
+                      background:"#FFFBEB", borderRadius:4, padding:"3px 7px",
+                      border:"1px solid #FDE68A", lineHeight:1.4 }}>
+          ✏️ {item.revisionNote}
+        </div>
+      )}
+      {item.stage === "ajuste" && item.ajusteBackTo && (
+        <div style={{ marginTop:3, fontSize:ds.font.size.xs, color:TX3 }}>
+          → volta para <strong style={{color:TX2}}>{item.ajusteBackTo==="ap_final"?"Ap. Final":"Edição"}</strong>
+        </div>
       )}
       {exceptions.length > 0 && (
         <div title={exceptions.map(e=>`${e.label}: ${e.got}d disponíveis (mín. ${e.need}d)`).join(" · ")}
@@ -1415,6 +1436,95 @@ function PipelineColumn({ stage, items, contracts, onEdit, onDrop, onReorder }) 
   );
 }
 
+
+// ─── AjusteModal — captura motivo do ajuste ao mover card ─────────
+function AjusteModal({ onConfirm, onCancel }) {
+  const [note, setNote]   = useState("");
+  const [backTo, setBackTo] = useState("ap_final");
+  const inputRef = useRef(null);
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 60); }, []);
+  return (
+    <div onClick={e=>{if(e.target===e.currentTarget)onCancel();}}
+      style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:600,
+               display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
+      <div style={{ background:B1,borderRadius:12,width:"100%",maxWidth:440,
+                    boxShadow:"0 24px 60px rgba(0,0,0,.16)",overflow:"hidden" }}>
+        {/* Header */}
+        <div style={{ padding:"20px 22px 14px",borderBottom:`1px solid ${LN}` }}>
+          <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+            <span style={{ width:28,height:28,borderRadius:"50%",background:"#FEF3C7",
+                           display:"inline-flex",alignItems:"center",justifyContent:"center",
+                           fontSize:14 }}>✏️</span>
+            <span style={{ fontWeight:700,fontSize:15,color:TX }}>Solicitar ajuste</span>
+          </div>
+          <p style={{ fontSize:12,color:TX2,margin:"6px 0 0" }}>
+            O conteúdo voltará para revisão. Descreva o que precisa mudar.
+          </p>
+        </div>
+        {/* Body */}
+        <div style={{ padding:"16px 22px 20px" }}>
+          {/* Revision note */}
+          <div style={{ marginBottom:14 }}>
+            <label style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,
+                            textTransform:"uppercase",letterSpacing:".08em",display:"block",marginBottom:6 }}>
+              O que precisa ser ajustado?
+            </label>
+            <textarea
+              ref={inputRef}
+              value={note}
+              onChange={e=>setNote(e.target.value)}
+              placeholder="Ex: Trocar trilha, encurtar 10s no início, ajustar legenda…"
+              rows={3}
+              style={{ width:"100%",padding:"9px 12px",fontSize:13,background:B2,
+                       border:`1px solid ${LN}`,borderRadius:8,color:TX,
+                       fontFamily:"inherit",resize:"none",outline:"none",boxSizing:"border-box" }}
+            />
+          </div>
+          {/* Back-to selection */}
+          <div>
+            <label style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,
+                            textTransform:"uppercase",letterSpacing:".08em",display:"block",marginBottom:8 }}>
+              Após o ajuste, retornar para:
+            </label>
+            <div style={{ display:"flex",gap:8 }}>
+              {[
+                { id:"ap_final", label:"Ap. Final",   sub:"Só precisa re-aprovar",  icon:"✅" },
+                { id:"edicao",   label:"Edição",       sub:"Precisa re-editar",       icon:"🎬" },
+              ].map(opt => (
+                <button key={opt.id} onClick={()=>setBackTo(opt.id)}
+                  style={{ flex:1,padding:"10px 12px",borderRadius:8,cursor:"pointer",
+                           fontFamily:"inherit",textAlign:"left",transition:"all .12s",
+                           background:backTo===opt.id?"#FEF3C7":"none",
+                           border:`1.5px solid ${backTo===opt.id?"#F59E0B":LN}`,
+                           color:TX }}>
+                  <div style={{ fontSize:16,marginBottom:2 }}>{opt.icon}</div>
+                  <div style={{ fontSize:12,fontWeight:700 }}>{opt.label}</div>
+                  <div style={{ fontSize:11,color:TX2 }}>{opt.sub}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {/* Footer */}
+        <div style={{ display:"flex",justifyContent:"flex-end",gap:8,
+                      padding:"12px 22px",borderTop:`1px solid ${LN}`,background:B2 }}>
+          <button onClick={onCancel}
+            style={{ padding:"7px 16px",fontSize:12,cursor:"pointer",borderRadius:6,
+                     background:"none",border:`1px solid ${LN}`,color:TX2,fontFamily:"inherit" }}>
+            Cancelar
+          </button>
+          <button onClick={()=>onConfirm({ note: note.trim(), backTo })}
+            style={{ padding:"7px 18px",fontSize:12,fontWeight:700,cursor:"pointer",
+                     borderRadius:6,background:"#F59E0B",border:"none",
+                     color:"white",fontFamily:"inherit" }}>
+            Enviar para Ajuste
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF, role, brands=[] }) {
   const isMobile = useIsMobile();
   const setDeliverables = saveDeliverables || (() => {});
@@ -1430,9 +1540,33 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
   const save = list => { setDeliverables(list); };
 
+  const [ajusteModal, setAjusteModal] = useState(null); // {itemId}
+
   const moveStage = (itemId, newStage) => {
-    save(deliverables.map(d => d.id === itemId ? { ...d, stage: newStage } : d));
-    toast?.(`Movido para ${STAGES.find(s=>s.id===newStage)?.label}`, "info");
+    if (newStage === "ajuste") {
+      setAjusteModal({ itemId });
+      return; // wait for AjusteModal confirmation
+    }
+    const del = deliverables.find(d => d.id === itemId);
+    // When leaving ajuste, go to the stored backTo destination
+    const resolvedStage = (del?.stage === "ajuste" && del?.ajusteBackTo && newStage === "ajuste")
+      ? del.ajusteBackTo
+      : newStage;
+    save(deliverables.map(d => d.id === itemId ? { ...d, stage: resolvedStage } : d));
+    toast?.(`Movido para ${STAGES.find(s=>s.id===resolvedStage)?.label}`, "info");
+  };
+
+  const confirmAjuste = ({ note, backTo }) => {
+    const { itemId } = ajusteModal;
+    save(deliverables.map(d => d.id === itemId ? {
+      ...d,
+      stage:          "ajuste",
+      revisionCount:  (d.revisionCount || 0) + 1,
+      revisionNote:   note,
+      ajusteBackTo:   backTo,
+    } : d));
+    toast?.("Enviado para Ajuste ✏️", "info");
+    setAjusteModal(null);
   };
 
   // Reorder cards within same column
@@ -1566,6 +1700,12 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
       )}
 
       {/* Modals */}
+      {ajusteModal && (
+        <AjusteModal
+          onConfirm={confirmAjuste}
+          onCancel={() => setAjusteModal(null)}
+        />
+      )}
       {quickDate && (
         <QuickPostModal
           date={quickDate}
@@ -1626,6 +1766,7 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
     {id:"gravacao", label:"Gravação",     color:"#BE185D"},
     {id:"edicao",   label:"Edição",       color:"#2563EB"},
     {id:"ap_final", label:"Ap. Final",    color:"#EA580C"},
+    {id:"ajuste",   label:"Ajuste",       color:"#F59E0B"},
     {id:"postagem", label:"Publicando",   color:"#0891B2"},
     {id:"done",     label:"Postado",      color:"#16A34A"},
   ];
@@ -3296,6 +3437,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
     gravacao:   ["Gravação",    "#BE185D"],
     edicao:     ["Edição",      "#2563EB"],
     ap_final:   ["Ap. Final",   "#EA580C"],
+    ajuste:     ["Ajuste",      "#F59E0B"],
     postagem:   ["Publicando",  "#0891B2"],
     done:       ["Postado",     "#16A34A"],
   };
@@ -5956,6 +6098,7 @@ function AppContent() {
       gravacao:   { label:"Gravação",    color:"#BE185D" },
       edicao:     { label:"Edição",      color:"#2563EB" },
       ap_final:   { label:"Ap. Final",   color:"#EA580C" },
+      ajuste:     { label:"Ajuste",      color:"#F59E0B" },
       postagem:   { label:"Publicando",  color:"#0891B2" },
       done:       { label:"Postado",     color:"#16A34A" },
     };

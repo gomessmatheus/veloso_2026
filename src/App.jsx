@@ -5989,7 +5989,7 @@ function AppContent() {
   const [calFilter, setCalF] = useState("all");
   const [triggerNewTask, setTriggerNewTask] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
-  const prevCIds = useRef([]); const prevPIds = useRef([]); const prevDIds = useRef([]);
+  const prevCIds = useRef([]); const prevPIds = useRef([]); const prevDIds = useRef([]); const prevBIds = useRef([]);
 
   // Auth listener
   useEffect(() => {
@@ -6011,7 +6011,7 @@ function AppContent() {
         setUserName(ROLE_NAMES[user.email] || user.email.split("@")[0]);
         const ic=cs.length>0?cs:SEED; const ip=ps.length>0?ps:SEED_POSTS; const id=ds||[]; const ib=bs||[];
         setC(ic); setP(ip); setD(id); setBrands(ib);
-        prevCIds.current=ic.map(c=>c.id); prevPIds.current=ip.map(p=>p.id); prevDIds.current=id.map(d=>d.id);
+        prevCIds.current=ic.map(c=>c.id); prevPIds.current=ip.map(p=>p.id); prevDIds.current=id.map(d=>d.id); prevBIds.current=ib.map(b=>b.id);
         if(cs.length===0) await syncContracts(ic,[]);
         if(ps.length===0&&SEED_POSTS.length>0) await syncPosts(ip,[]);
         setSyncStatus("ok");
@@ -6090,9 +6090,11 @@ function AppContent() {
 
   const saveBrands = useCallback(async b => {
     setBrands(b);
-    try { await syncBrands(b, []); }
-    catch(e) { console.error('[App] saveBrands', e); }
-  }, []);
+    try {
+      const newIds = await syncWithDeletes('brands', b, prevBIds.current, syncBrands);
+      prevBIds.current = [...newIds];
+    } catch(e) { console.error('[App] saveBrands', e); }
+  }, [syncWithDeletes]);
 
   const openCopilot = useCallback((ctx = {}) => {
     setCopilotContext(ctx);

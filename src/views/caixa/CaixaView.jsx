@@ -1255,7 +1255,11 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const [baseDate, setBaseDate]         = useState(() => lsLoad("caixa_base_date", ""));
   const prevTxIds = useRef([]);
 
-  // Sync from Firebase — usa a versão mais recente entre Firebase e localStorage
+  // Carrega e mescla dados do Firebase com localStorage
+  // Estratégia: merge por ID — Firebase + localStorage, item mais recente vence.
+  // Isso evita perda de dados quando:
+  //   - O sync falhou silenciosamente em uma sessão anterior
+  //   - Transações foram criadas em sessões diferentes (múltiplas abas/devices)
   useEffect(() => {
     let cancelled = false;
     const load = async (attempt = 0) => {
@@ -1269,39 +1273,37 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
         const localTxs = lsLoad("caixa_tx", []);
 
-        // Se Firebase retornou vazio mas localStorage tem dados, pode ser auth ainda
-        // inicializando — espera e tenta mais uma vez
+        // Se Firebase retornou vazio e localStorage tem dados → pode ser auth
+        // ainda inicializando. Tenta 1 vez após 1.5s.
         if ((!remoteTxs || remoteTxs.length === 0) && localTxs.length > 0 && attempt === 0) {
           setTimeout(() => load(1), 1500);
           return;
         }
 
-        // Escolhe a versão mais recente comparando o updatedAt mais novo de cada fonte
-        const newestTs = (list) => list.reduce((max, t) => {
-          const ts = t.updatedAt || t.createdAt || "";
-          return ts > max ? ts : max;
-        }, "");
-
-        const remoteTs = remoteTxs?.length > 0 ? newestTs(remoteTxs) : "";
-        const localTs  = localTxs.length  > 0 ? newestTs(localTxs)  : "";
-
-        let list;
-        if (remoteTxs?.length > 0 && remoteTs >= localTs) {
-          // Firebase tem dados e são mais recentes ou iguais → usa Firebase
-          list = remoteTxs;
-          lsSave("caixa_tx", list); // mantém localStorage em sync
-        } else if (localTxs.length > 0) {
-          // localStorage tem dados mais recentes → usa local e re-sobe para Firebase
-          list = localTxs;
-          console.warn("[Caixa] localStorage mais recente que Firebase — re-sincronizando...");
-          // Push silencioso: sobe o que está local sem bloquear UI
-          syncCaixaTx(list, []).catch(e => console.error("[Caixa] re-sync failed:", e));
-        } else {
-          list = [];
+        // ── Merge por ID: une as duas fontes, item mais recente vence ──────────
+        // Transações sem updatedAt são tratadas como mais antigas (ts = "")
+        const mergeTs = (t) => t.updatedAt || t.createdAt || "";
+        const map = new Map();
+        // 1. Seed com Firebase
+        for (const t of (remoteTxs || [])) map.set(t.id, t);
+        // 2. Local sobrescreve se for mais recente (ou se Firebase não tem o item)
+        for (const t of localTxs) {
+          const existing = map.get(t.id);
+          if (!existing || mergeTs(t) > mergeTs(existing)) map.set(t.id, t);
         }
+        const merged = [...map.values()];
 
-        setTransactions(list);
-        prevTxIds.current = list.map(t => t.id);
+        setTransactions(merged);
+        prevTxIds.current = merged.map(t => t.id);
+        lsSave("caixa_tx", merged);
+
+        // Se o merge adicionou itens que o Firebase não tinha → re-sincroniza
+        const remoteIds = new Set((remoteTxs || []).map(t => t.id));
+        const hasNew    = merged.some(t => !remoteIds.has(t.id));
+        if (hasNew) {
+          console.warn("[Caixa] Itens locais não encontrados no Firebase — re-sincronizando...");
+          syncCaixaTx(merged, []).catch(e => console.error("[Caixa] re-sync falhou:", e));
+        }
 
         if (base  != null && base  !== "") setBaseBalance(Number(base) || 0);
         if (bdate && bdate !== "")         setBaseDate(bdate);

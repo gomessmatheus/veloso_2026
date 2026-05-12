@@ -700,13 +700,6 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod }) {
 
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
-      {/* Saldo card */}
-      <div style={{ ...G,padding:"16px 20px",borderLeft:`3px solid ${saldoTotal>=0?GRN:RED}` }}>
-        <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo em caixa</div>
-        <div style={{ fontSize:28,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{fmtMoney(saldoTotal)}</div>
-        <div style={{ fontSize:11,color:TX2,marginTop:4 }}>Base {fmtMoney(Number(baseBalance)||0)} + lançamentos</div>
-      </div>
-
       {/* Compromissos futuros — parcelamentos */}
       {futureInstallments.length > 0 && (
         <div style={{ ...G, padding:"16px 20px", borderLeft:`3px solid ${AMB}` }}>

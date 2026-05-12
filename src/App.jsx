@@ -2942,6 +2942,8 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   if (!brand) return (
     <div style={{ padding:40, textAlign:"center", color:TX2 }}>
       <div style={{ marginBottom:8 }}>Marca não encontrada.</div>
@@ -2964,7 +2966,6 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
     toast?.("Salvo", "success");
   };
 
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const handleDelete = async () => {
     await saveBrands(brands.filter(b => b.id !== brand.id));
     toast?.("Marca excluída", "success");

@@ -69,6 +69,7 @@ const fmtDate = (s) => {
 };
 function lsLoad(k, fb) { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):fb; } catch { return fb; } }
 function lsSave(k, v)   { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+const uid = () => Math.random().toString(36).substr(2, 9);
 function useIsMobile()  { const [m, setM] = useState(window.innerWidth < 768); useEffect(()=>{ const h=()=>setM(window.innerWidth<768); window.addEventListener("resize",h); return()=>window.removeEventListener("resize",h); },[]); return m; }
 
 // ─── Toast ───────────────────────────────────────────────

@@ -1376,12 +1376,36 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   }
 
   // ── Computed saldo ──────────────────────────────────────
-  // Agregados centralizados — via finance.js (sem filter+reduce inline)
-  const _agg            = aggregate(transactions, baseBalance);
-  const totalEntradas   = _agg.totalEntradas;
-  const totalSaidas     = _agg.totalOutflows;  // saida+imposto combinados (display "Saídas totais")
-  const totalDividendos = _agg.totalDividendos;
-  const saldoTotal      = _agg.saldoTotal;
+  // Saldo REALIZADO: só conta transações com data <= hoje.
+  // Parcelas futuras são COMPROMISSOS (exibidos em "Parcelas futuras" no Dashboard),
+  // não devem desfalcar o caixa antes de vencer.
+  const _today = useMemo(() => {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+  }, []);
+
+  // Transações realizadas (passado + hoje)
+  const realizedTx = useMemo(
+    () => transactions.filter(t => t.date && t.date <= _today),
+    [transactions, _today]
+  );
+  // Transações futuras (ainda não vencidas)
+  const futureTx = useMemo(
+    () => transactions.filter(t => t.date && t.date > _today),
+    [transactions, _today]
+  );
+
+  // Saldo atual = base + fluxo realizado
+  const _aggRealized    = useMemo(() => aggregate(realizedTx, baseBalance), [realizedTx, baseBalance]);
+  const saldoTotal      = _aggRealized.saldoTotal;
+  const totalEntradas   = _aggRealized.totalEntradas;
+  const totalSaidas     = _aggRealized.totalOutflows;
+  const totalDividendos = _aggRealized.totalDividendos;
+
+  // Comprometido futuro (para exibição no Dashboard — não altera saldo)
+  const _aggFuture      = useMemo(() => aggregate(futureTx, 0), [futureTx]);
+  const futureSaidas    = _aggFuture.totalOutflows;   // quanto ainda vai sair
+  const futureEntradas  = _aggFuture.totalEntradas;   // quanto ainda vai entrar
 
   // ── Period-based filtering ───────────────────────────────
   const periodTx = useMemo(() =>
@@ -1459,23 +1483,28 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         <p style={{ fontSize:13,color:TX2 }}>Lançamentos, saldo e DRE</p>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — valores realizados (date <= hoje) */}
       <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${saldoTotal>=0?TX:RED}` }}>
           <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo Total</div>
           <div style={{ fontSize:22,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{fmtMoney(saldoTotal)}</div>
-          <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>base + lançamentos</div>
+          <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>
+            base + realizados
+            {futureSaidas>0&&<span style={{ color:AMB,marginLeft:6 }}>· −{fmtMoney(futureSaidas)} comprometido</span>}
+          </div>
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${GRN}` }}>
-          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Entradas totais</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Entradas realizadas</div>
           <div style={{ fontSize:22,fontWeight:700,color:GRN }}>{fmtMoney(totalEntradas)}</div>
+          {futureEntradas>0&&<div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>+{fmtMoney(futureEntradas)} a receber</div>}
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${RED}` }}>
-          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saídas totais</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saídas realizadas</div>
           <div style={{ fontSize:22,fontWeight:700,color:RED }}>{fmtMoney(totalSaidas)}</div>
+          {futureSaidas>0&&<div style={{ fontSize:ds.font.size.xs,color:AMB,marginTop:2 }}>{fmtMoney(futureSaidas)} agendado</div>}
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid #7C3AED` }}>
-          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Dividendos totais</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Dividendos realizados</div>
           <div style={{ fontSize:22,fontWeight:700,color:"#7C3AED" }}>{fmtMoney(totalDividendos)}</div>
         </div>
       </div>

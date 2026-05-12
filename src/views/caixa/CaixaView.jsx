@@ -14,7 +14,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useCaixaSession } from "../../lib/caixaSession.js";
 import {
-  loadCaixaTx, syncCaixaTx, getSetting, setSetting,
+  loadCaixaTx, syncCaixaTx, getSetting, setSetting, deleteItem,
 } from "../../db.js";
 import CaixaGate from "./CaixaGate.jsx";
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard, Modal as DsModal, Toggle as DsToggle, Select as DsSelect } from "../../ui/index.js";
@@ -1352,11 +1352,17 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     setTransactions(stamped);
     lsSave("caixa_tx", stamped);
     try {
+      // 1. Detectar IDs removidos e deletar do Firestore explicitamente
+      const newIds  = new Set(stamped.map(t => t.id));
+      const removed = prevTxIds.current.filter(id => !newIds.has(id));
+      if (removed.length > 0) {
+        await Promise.allSettled(removed.map(id => deleteItem("caixa_tx", id)));
+      }
+      // 2. Upsert todos os itens da lista atual
       await syncCaixaTx(stamped, prevTxIds.current);
-      prevTxIds.current = stamped.map(t => t.id);
+      prevTxIds.current = [...newIds];
     } catch(e) {
-      console.error("[Caixa] syncCaixaTx falhou:", e);
-      // Toast pode ser null (bypass mode), mas o dado está salvo no localStorage
+      console.error("[Caixa] saveTx falhou:", e);
       try { toast?.("Falha ao sincronizar com o banco. Salvo localmente.", "error"); } catch {}
     }
   };

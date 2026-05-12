@@ -1253,7 +1253,9 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const [transactions, setTransactions] = useState(() => lsLoad("caixa_tx", []));
   const [baseBalance, setBaseBalance]   = useState(() => lsLoad("caixa_base", 0));
   const [baseDate, setBaseDate]         = useState(() => lsLoad("caixa_base_date", ""));
-  const prevTxIds = useRef([]);
+  const prevTxIds  = useRef([]);
+  const syncTimer  = useRef(null);
+  const pendingSync = useRef(null); // last list awaiting debounced sync
 
   // Carrega e mescla dados do Firebase com localStorage
   // Estratégia: merge por ID — Firebase + localStorage, item mais recente vence.
@@ -1340,27 +1342,47 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   // toast comes as a prop from ViewRenderer (bypasses lazy module context boundary)
   const toast = toastProp ?? null;
 
-  const saveTx = async (list) => {
-    // Garante que cada transação tem updatedAt para resolver conflitos de versão
-    const now = new Date().toISOString();
-    const stamped = list.map(t => t.updatedAt ? t : { ...t, updatedAt: now });
-    setTransactions(stamped);
-    lsSave("caixa_tx", stamped);
+  // ── Executa o sync efetivo no Firestore (chamada por debounce) ───────────
+  const flushSync = useCallback(async (stamped) => {
     try {
-      // 1. Detectar IDs removidos e deletar do Firestore explicitamente
       const newIds  = new Set(stamped.map(t => t.id));
       const removed = prevTxIds.current.filter(id => !newIds.has(id));
       if (removed.length > 0) {
         await Promise.allSettled(removed.map(id => deleteItem("caixa_tx", id)));
       }
-      // 2. Upsert todos os itens da lista atual
       await syncCaixaTx(stamped, prevTxIds.current);
       prevTxIds.current = [...newIds];
     } catch(e) {
-      console.error("[Caixa] saveTx falhou:", e);
-      try { toast?.("Falha ao sincronizar com o banco. Salvo localmente.", "error"); } catch {}
+      console.error("[Caixa] flushSync falhou:", e);
+      const errMsg = e?.code === "resource-exhausted"
+        ? "Cota do banco atingida. Dados salvos localmente — serão sincronizados quando a cota resetar (meia-noite, horário de LA)."
+        : "Falha ao sincronizar com o banco. Dados salvos localmente.";
+      try { toast?.(errMsg, "error"); } catch {}
     }
-  };
+  }, [toast]);
+
+  // ── saveTx: atualiza estado/localStorage imediatamente, debounce o Firestore ──
+  const saveTx = useCallback((list) => {
+    const now = new Date().toISOString();
+    const stamped = list.map(t => t.updatedAt ? t : { ...t, updatedAt: now });
+    // 1. Estado local e localStorage — imediato (zero latência percebida)
+    setTransactions(stamped);
+    lsSave("caixa_tx", stamped);
+    pendingSync.current = stamped;
+    // 2. Firestore — debounce 2s (agrupa múltiplas edições em 1 escrita)
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      if (pendingSync.current) flushSync(pendingSync.current);
+    }, 2000);
+  }, [flushSync]);
+
+  // Flush pendente ao desmontar o componente
+  useEffect(() => {
+    return () => {
+      clearTimeout(syncTimer.current);
+      if (pendingSync.current) flushSync(pendingSync.current);
+    };
+  }, [flushSync]);
 
   const updateBase = async (val, date) => {
     setBaseBalance(Number(val)||0);

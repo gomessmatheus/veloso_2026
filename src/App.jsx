@@ -2514,30 +2514,7 @@ Responda APENAS com o JSON.` }]
               })}
             </div>
           </>}
-          {/* Posts */}
-          {cPosts.length>0 && <>
-            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:10 }}>Posts registrados</div>
-            <div style={{ border:`1px solid ${LN}`,borderRadius:10,overflow:"hidden" }}>
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 80px 80px 80px",padding:"8px 16px",background:B2,borderBottom:`1px solid ${LN}`,fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3 }}>
-                <div>Título</div><div>Views</div><div>Alcance</div><div>Curtidas</div><div>Coment.</div><div>Engaj.</div><div>Link</div>
-              </div>
-              {cPosts.map((p,i) => {
-                const pRch=sumNetworkMetrics(p,"reach"),pLk=sumNetworkMetrics(p,"likes"),pCm=sumNetworkMetrics(p,"comments");const eng=pRch>0?((pLk+pCm)/pRch*100):calcEngagement(p);
-                return (
-                  <div key={p.id} style={{ display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 80px 80px 80px",padding:"10px 16px",borderBottom:i<cPosts.length-1?`1px solid ${LN}`:"none",fontSize:12,alignItems:"center" }}>
-                    <div style={{ fontWeight:500,color:p.isPosted?TX:TX2 }}>{p.title}{!p.isPosted&&<span style={{fontSize:ds.font.size.xs,color:TX3,marginLeft:6}}>(planejado)</span>}</div>
-                    <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.views||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.reach||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.likes||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{ color:TX2,fontVariantNumeric:"tabular-nums" }}>{Number(p.comments||0).toLocaleString("pt-BR")||"—"}</div>
-                    <div style={{ fontWeight:700,color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX3):TX3 }}>{fmtEng(eng)}</div>
-                    <div>{p.link?<a href={p.link} target="_blank" rel="noreferrer" style={{color:RED,fontSize:11}}>↗</a>:<span style={{color:TX3}}>—</span>}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </>}
-          {cDeliverables.length===0&&cPosts.length===0&&(
+          {cDeliverables.length===0&&(
             <div style={{ textAlign:"center",padding:48,color:TX3 }}>Nenhuma entrega registrada ainda.</div>
           )}
         </div>

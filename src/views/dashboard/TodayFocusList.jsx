@@ -84,14 +84,14 @@ function FocusItem({ d, contract, today, onOpenItem, onActionClick }) {
       </div>
       {/* Action button */}
       {nextAction && (
-        <button onClick={e => { e.stopPropagation(); onActionClick(d); }}
+        <button onClick={e => { e.stopPropagation(); onOpenItem(d); }}
           title={nextAction}
           style={{ padding:`4px ${ds.space[3]}`, fontSize: ds.font.size.xs,
             fontWeight: ds.font.weight.semibold,
             color: ds.color.info[500], background:"none",
             border:`1px solid ${ds.color.info[500]}40`,
             borderRadius: ds.radius.md, cursor:"pointer",
-            flexShrink:0, fontFamily:"inherit", whiteSpace:"nowrap",
+            flexShrink:0, fontFamily:"inherit", whiteSpace:"nowrap", minWidth:"130px", textAlign:"center",
             transition:`background ${ds.motion.fast}` }}
           onMouseEnter={e => e.currentTarget.style.background = `${ds.color.info[500]}10`}
           onMouseLeave={e => e.currentTarget.style.background = "none"}>

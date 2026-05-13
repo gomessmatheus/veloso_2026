@@ -326,34 +326,66 @@ Responda APENAS com o JSON.`
       const cPosts= posts.filter(p => p.contractId === contractId && p.isPosted);
       if (!c) return { type:"report", content:"Contrato não encontrado.", title:"Relatório Cliente" };
 
-      const totalViews = [...cPosts,...cDels].reduce((s,i)=>s+(Number(i.views)||0),0);
-      const totalReach = [...cPosts,...cDels].reduce((s,i)=>s+(Number(i.reach)||0),0);
-      const totalLikes = [...cPosts,...cDels].reduce((s,i)=>s+(Number(i.likes)||0),0);
+      // Agrega métricas de posts (campos flat) e deliverables (networkMetrics por rede)
+      const sumNetM = (item, field) => {
+        const nm = item?.networkMetrics || {};
+        const t = Object.values(nm).reduce((s, n) => s + (Number(n[field])||0), 0);
+        return t > 0 ? t : (Number(item?.[field])||0);
+      };
+      const allItems = [...cPosts, ...cDels];
+      const totalViews    = allItems.reduce((s,i)=>s+sumNetM(i,"views"),0);
+      const totalReach    = allItems.reduce((s,i)=>s+sumNetM(i,"reach"),0);
+      const totalLikes    = allItems.reduce((s,i)=>s+sumNetM(i,"likes"),0);
+      const totalComments = allItems.reduce((s,i)=>s+sumNetM(i,"comments"),0);
+      const totalSaves    = allItems.reduce((s,i)=>s+sumNetM(i,"saves"),0);
+      const totalEngagements = totalLikes + totalComments + totalSaves;
       const doneDels   = cDels.filter(d=>d.stage==="done"||d.stage==="postagem").length + cPosts.length;
       const totalDels  = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
-      const avgEngRate = totalReach>0 ? (totalLikes/totalReach*100) : null;
+      const avgEngRate = totalReach>0 ? (totalEngagements/totalReach*100) : null;
       const total      = contractTotal(c);
+
+      // Detalhamento por post para contexto mais rico
+      const postsDetail = allItems
+        .filter(i => sumNetM(i,"reach") > 0)
+        .map(i => {
+          const r = sumNetM(i,"reach"), l = sumNetM(i,"likes"), cm = sumNetM(i,"comments");
+          const eng = r > 0 ? ((l+cm)/r*100).toFixed(1) : "–";
+          return `- ${i.title||i.type||"Post"}: alcance ${r.toLocaleString("pt-BR")}, eng. ${eng}%`;
+        }).join("\n") || "Sem posts com métricas registradas.";
+      const CPM = totalViews > 0 ? (total / totalViews * 1000).toFixed(2) : null;
 
       const text = await callAPI({
         max_tokens: 900,
         messages: [{ role:"user", content:
 `Você é especialista em marketing de influência. Gere um parágrafo executivo em português para um relatório de performance de campanha com a marca ${c.company}.
 
-Dados: views=${totalViews.toLocaleString("pt-BR")}, alcance=${totalReach.toLocaleString("pt-BR")}, engajamento=${avgEngRate?.toFixed(2)||"—"}%, entregas=${doneDels}/${totalDels}.
+Dados: alcance total=${totalReach.toLocaleString("pt-BR")}, views=${totalViews.toLocaleString("pt-BR")}, engajamento médio=${avgEngRate?.toFixed(2)||"–"}%, likes=${totalLikes.toLocaleString("pt-BR")}, comentários=${totalComments.toLocaleString("pt-BR")}, saves=${totalSaves.toLocaleString("pt-BR")}, entregas=${doneDels}/${totalDels}${CPM?" , CPM=R$"+CPM:""}.
+
+Posts com métricas:
+${postsDetail}
 
 Escreva em tom profissional e comercial, destacando resultados e ROI para a marca. Máx 3 frases. Sem markdown interno.`
         }]
       });
 
       let md = `> ⚠️ *Este relatório é destinado ao cliente **${c.company}**. Não inclui dados de comissão ou margens internas.*\n\n`;
-      md += `## Relatório de Performance — @veloso.lucas_\n`;
+      md += `## 📊 Relatório de Performance — @veloso.lucas_\n`;
       md += `**Parceria:** ${c.company} · ${new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}\n\n`;
       md += `### Resumo executivo\n${text}\n\n`;
-      md += `### Entregas\n`;
+      md += `### 📦 Entregas\n`;
       md += `- **Concluídas:** ${doneDels} de ${totalDels}\n`;
-      if (totalViews>0)  md += `- **Total de views:** ${totalViews.toLocaleString("pt-BR")}\n`;
-      if (totalReach>0)  md += `- **Alcance total:** ${totalReach.toLocaleString("pt-BR")}\n`;
-      if (avgEngRate)    md += `- **Engajamento médio:** ${avgEngRate.toFixed(2)}%\n`;
+      md += `\n### 📈 Métricas de Resultado\n`;
+      if (totalViews>0)    md += `- **Total de views:** ${totalViews.toLocaleString("pt-BR")}\n`;
+      if (totalReach>0)    md += `- **Alcance total:** ${totalReach.toLocaleString("pt-BR")} pessoas\n`;
+      if (totalLikes>0)    md += `- **Likes:** ${totalLikes.toLocaleString("pt-BR")}\n`;
+      if (totalComments>0) md += `- **Comentários:** ${totalComments.toLocaleString("pt-BR")}\n`;
+      if (totalSaves>0)    md += `- **Saves:** ${totalSaves.toLocaleString("pt-BR")}\n`;
+      if (totalEngagements>0) md += `- **Engajamentos totais:** ${totalEngagements.toLocaleString("pt-BR")}\n`;
+      if (avgEngRate)      md += `- **Taxa de engajamento:** ${avgEngRate.toFixed(2)}%\n`;
+      if (CPM)             md += `- **CPM (custo por mil views):** R$${CPM}\n`;
+      if (postsDetail !== "Sem posts com métricas registradas.") {
+        md += `\n### 🎬 Detalhamento por entrega\n${postsDetail}\n`;
+      }
 
       return { type:"report", content:md, title:`Relatório Cliente — ${c.company}` };
     }

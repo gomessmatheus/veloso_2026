@@ -1540,21 +1540,22 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
 
   const save = list => { setDeliverables(list); };
 
-  // Scroll para o card do entregável quando vindo do Dashboard
+  // Navega para o card do entregável vindo do Dashboard (switch para Pipeline + scroll)
   useEffect(() => {
     const f = window.__dashboardFilter;
     if (f?.type === "ids" && f.ids?.length === 1) {
       delete window.__dashboardFilter;
       const targetId = f.ids[0];
+      setView("pipeline");
       setTimeout(() => {
         const el = document.getElementById("card-" + targetId);
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
           el.style.outline = "2px solid #2563EB";
           el.style.outlineOffset = "2px";
-          setTimeout(() => { el.style.outline = ""; el.style.outlineOffset = ""; }, 2000);
+          setTimeout(() => { el.style.outline = ""; el.style.outlineOffset = ""; }, 2500);
         }
-      }, 300);
+      }, 350);
     }
   }, []);
 

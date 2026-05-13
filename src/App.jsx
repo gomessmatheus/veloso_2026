@@ -3102,7 +3102,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
             const dl    = daysLeft(c.contractDeadline);
             return (
               <div key={c.id}
-                onClick={()=>navigateTo&&navigateTo("contratos")}
+                onClick={()=>{ if(navigateTo){ window.__openContractId=c.id; navigateTo("contratos"); } }}
                 style={{ ...G, padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:12, borderLeft:`3px solid ${c.color||brand.primaryColor}` }}
                 onMouseEnter={e=>e.currentTarget.style.background=B2}
                 onMouseLeave={e=>e.currentTarget.style.background=B1}>
@@ -3293,6 +3293,15 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
 function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDeliverables, setModal, toggleComm, toggleCommPaid, toggleNF, saveNote, rates, role, brands=[], navigateTo, setSelectedBrand, openCopilot }) {
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState(null);
+  // Abrir contrato específico quando vindo de outra view (ex: marca-detalhe)
+  useEffect(() => {
+    const id = window.__openContractId;
+    if (id) {
+      delete window.__openContractId;
+      setSelectedId(id);
+    }
+  }, []);
+
   const [showArchived, setShowArchived] = useState(false);
   const selected = contracts.find(c => c.id === selectedId);
 

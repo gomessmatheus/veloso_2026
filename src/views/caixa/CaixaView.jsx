@@ -14,7 +14,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useCaixaSession } from "../../lib/caixaSession.js";
 import {
-  loadCaixaTx, syncCaixaTx, getSetting, setSetting, deleteItem,
+  loadCaixaTx, subscribeCaixaTx, syncCaixaTx, getSetting, setSetting, deleteItem,
 } from "../../db.js";
 import CaixaGate from "./CaixaGate.jsx";
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard, Modal as DsModal, Toggle as DsToggle, Select as DsSelect } from "../../ui/index.js";
@@ -1304,7 +1304,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         const hasNew    = merged.some(t => !remoteIds.has(t.id));
         if (hasNew) {
           console.warn("[Caixa] Itens locais não encontrados no Firebase — re-sincronizando...");
-          syncCaixaTx(merged, []).catch(e => console.error("[Caixa] re-sync falhou:", e));
+          /* DESATIVADO: re-sync automatico de locais 'faltantes' ressuscitava docs deletados em outras maquinas. Firestore agora e autoridade. */
         }
 
         if (base  != null && base  !== "") setBaseBalance(Number(base) || 0);

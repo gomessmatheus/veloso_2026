@@ -107,9 +107,18 @@ export async function syncDeliverables(deliverables, previousIds, changedIds) {
 // ─── Caixa Transactions ───────────────────────────────────
 export async function loadCaixaTx() {
   try {
-    const snap = await getDocs(query(collection(db, 'caixa_tx'), orderBy('updatedAt', 'desc'), limit(500)))
+    const snap = await getDocs(collection(db, 'caixa_tx'))
     return snap.docs.map(d => d.data().data).filter(Boolean)
   } catch (err) { dbErr('loadCaixaTx', err); return [] }
+}
+
+// ─── Caixa Transactions: listener em tempo real (multi-device) ─
+export function subscribeCaixaTx(onChange) {
+    return onSnapshot(
+          collection(db, 'caixa_tx'),
+          (snap) => onChange(snap.docs.map(d => d.data().data).filter(Boolean)),
+          (err) => dbErr('subscribeCaixaTx', err),
+        )
 }
 
 export async function syncCaixaTx(items, previousIds = [], changedIds) {

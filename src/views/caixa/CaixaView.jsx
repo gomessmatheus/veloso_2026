@@ -1222,7 +1222,7 @@ ${Object.entries(cats).map(([cat,items])=>`
                 <span style={{ fontSize:14 }}>{tx.nfFile?.type?.includes("image")?"ð¼":"ð"}</span>
                 <div style={{ flex:1,minWidth:0 }}>
                   <div style={{ fontSize:11,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
-                  <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>{fmtDate(tx.date)} Â· {valuesHidden ? "•••••" : fmtMoney(tx.amount)}</div>
+                  <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>{fmtDate(tx.date)} Â· {fmtMoney(tx.amount)}</div>
                 </div>
                 {tx.nfFile&&<a href={tx.nfFile.data} download={tx.nfFile.name||`NF_${tx.description}.pdf`}
                   style={{ padding:"4px 10px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>â Baixar</a>}
@@ -1562,7 +1562,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       </div>
 
       {/* Saldo base config */}
-      <SaldoBaseEditor baseBalance={baseBalance} baseDate={baseDate} onSave={updateBase}/>
+      <SaldoBaseEditor baseBalance={baseBalance} baseDate={baseDate} onSave={updateBase} valuesHidden={valuesHidden}/>
 
       {/* Tabs */}
       <div
@@ -1890,7 +1890,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 }
 
 // âââ Saldo Base Editor ââââââââââââââââââââââââââââââââââââ
-function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
+function SaldoBaseEditor({ baseBalance, baseDate, onSave, valuesHidden }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(baseBalance||"0"));
   const [date, setDate] = useState(baseDate||new Date().toISOString().substr(0,10));
@@ -1902,7 +1902,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave }) {
       <div style={{ flex:1 }}>
         <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Saldo Base (ponto de partida)</div>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:16,fontWeight:700,color:TX }}>{valuesHidden ? "••••••" : fmtMoney(Number(baseBalance)||0)}</span>
+          <span style={{ fontSize:16,fontWeight:700,color:TX }}>{fmtMoney(Number(baseBalance)||0)}</span>
           {baseDate&&<span style={{ fontSize:11,color:TX2 }}>em {formatDate(baseDate)}</span>}
           {!baseDate&&<span style={{ fontSize:11,color:TX3 }}>nÃ£o definido</span>}
         </div>

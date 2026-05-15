@@ -7,6 +7,7 @@
  *   isMobile {boolean}
  */
 
+import React, { useState } from "react";
 import { calcAdSlots } from "../../lib/adSlots.js";
 
 // ── Tokens inline ──────────────────────────────────────────

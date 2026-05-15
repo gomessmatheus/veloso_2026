@@ -170,4 +170,3 @@ export default function CaixaGate({ children }) {
           </div>
         );
 }
-</>

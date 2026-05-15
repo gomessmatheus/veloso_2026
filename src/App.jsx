@@ -11,7 +11,7 @@ import {
   getUserRole, deleteItem,
 } from "./db.js";
 import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSameDay, isSameMonth, isToday, parse, startOfToday, startOfWeek, add } from "date-fns";
-import { ptBR } from "date-fns/locale";h
+import { ptBR } from "date-fns/locale";
 import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote, Landmark, Tag, Building2 } from "lucide-react";
 
 // ─── Design System Ranked ─────────────────────────────────

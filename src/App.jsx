@@ -11,7 +11,7 @@ import {
   getUserRole, deleteItem,
 } from "./db.js";
 import { format, eachDayOfInterval, endOfMonth, endOfWeek, getDay, isEqual, isSameDay, isSameMonth, isToday, parse, startOfToday, startOfWeek, add } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { ptBR } from "date-fns/locale";h
 import { LayoutDashboard, FileText, CheckSquare, Video, Calendar, ChevronLeft, ChevronRight, Plus, X, LogOut, Search, AlertCircle, Clock, CheckCircle2, Circle, Minus, Zap, ArrowUp, ArrowDown, Filter, KanbanSquare, CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Banknote, Landmark, Tag, Building2 } from "lucide-react";
 
 // ─── Design System Ranked ─────────────────────────────────
@@ -30,6 +30,7 @@ import { WeekHeader }     from "./views/dashboard/WeekHeader.jsx";
 import { TodayFocusList } from "./views/dashboard/TodayFocusList.jsx";
 import { RiskSignals }    from "./views/dashboard/RiskSignals.jsx";
 import { WeekTimeline }   from "./views/dashboard/WeekTimeline.jsx";
+import { AdSlotsCard }    from "./views/dashboard/AdSlotsCard.jsx";
 
 // ─── Brand lib ─────────────────────────────────────────────
 import { BRAND_CATEGORIES, slugify, inferCategory, runBrandsMigration } from "./lib/brands.js";
@@ -1258,6 +1259,11 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
           isMobile={isMobile}
           onSignalClick={handleSignalClick}
         />
+                <AdSlotsCard
+                            deliverables={deliverables}
+                            contracts={contracts}
+                            isMobile={isMobile}
+                          />
       </div>
 
       {/* BLOCO 4 — Linha do tempo da semana */}

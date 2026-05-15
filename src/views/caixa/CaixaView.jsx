@@ -1,14 +1,14 @@
 /**
  * src/views/caixa/CaixaView.jsx
  *
- * View Controle Financeiro (Caixa) extraÃ­da de App.jsx.
- * MigraÃ§Ã£o incremental â Fase 5.
+ * View Controle Financeiro (Caixa) extraída de App.jsx.
+ * Migração incremental — Fase 5.
  *
  * Exporta: Caixa (default export via React.lazy em App.jsx)
  *
- * DependÃªncias externas:
- *   react Â· firebase/firestore (via db.js) Â· design system (ui/index.js)
- *   src/lib/finance.js Â· src/lib/format.js Â· src/lib/url-state.js
+ * Dependências externas:
+ *   react · firebase/firestore (via db.js) · design system (ui/index.js)
+ *   src/lib/finance.js · src/lib/format.js · src/lib/url-state.js
  */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
@@ -32,7 +32,7 @@ import {
   monthInPeriod,
 } from "../../lib/period.js";
 
-// âââ Tokens (local â mirrors App.jsx globals) âââââââââââââ
+// ─── Tokens (local — mirrors App.jsx globals) ─────────────
 // These are duplicated intentionally until a shared tokens file exists.
 // TODO Fase 6: move to src/lib/tokens.js and import from there.
 const B1  = "#FEFEFE";
@@ -51,21 +51,21 @@ const COPILOT_PURPLE = "#7C3AED";
 const G   = { background:ds.color.neutral[0], border:ds.border.thin, borderRadius:ds.radius.xl, boxShadow:ds.shadow.sm };
 const TRANS = `all ${ds.motion.base}`;
 
-// âââ Mini utility functions (local copies) ââââââââââââââââ
+// ─── Mini utility functions (local copies) ────────────────
 // TODO Fase 6: import from src/lib/utils.js
 
 function fmtMoney(v, currency = "BRL") {
-  if (v === null || v === undefined) return "â";
+  if (v === null || v === undefined) return "—";
   return new Intl.NumberFormat("pt-BR", { style:"currency", currency, minimumFractionDigits:0, maximumFractionDigits:0 }).format(v || 0);
 }
 const fmtDate = (s) => {
   try {
-    if (!s) return "â";
+    if (!s) return "—";
     const parts = String(s).split("-");
-    if (parts.length < 3) return "â";
+    if (parts.length < 3) return "—";
     const [y,m,d] = parts;
     return `${d}/${m}/${y}`;
-  } catch { return "â"; }
+  } catch { return "—"; }
 };
 function lsLoad(k, fb) { try { const v=localStorage.getItem(k); return v!=null?JSON.parse(v):fb; } catch { return fb; } }
 function lsSave(k, v)   { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -74,7 +74,7 @@ function useIsMobile()  { const [m, setM] = useState(window.innerWidth < 768); u
 
 
 
-// âââ Local UI micro-components ââââââââââââââââââââââââââââ
+// ─── Local UI micro-components ────────────────────────────
 function Btn({ children, onClick, variant="default", size="md", icon, style:xs, disabled }) {
   const v = variant==="primary"?"primary":variant==="danger"?"danger":variant==="ghost"?"ghost":"secondary";
   return <DsButton variant={v} size={size==="sm"?"sm":size==="lg"?"lg":"md"} onClick={onClick} disabled={disabled}
@@ -127,20 +127,20 @@ function Modal({ title, onClose, children, footer, width=640 }) {
 }
 
 
-// âââ Caixa: constants & helpers ââââââââââââââââââââââââââ
+// ─── Caixa: constants & helpers ──────────────────────────
 
 const TX_TYPES = [
   { id:"entrada",       label:"Entrada",        iconName:"arrowDown",  color:ds.color.success[500]  },
-  { id:"saida",         label:"SaÃ­da",           iconName:"arrowUp",    color:ds.color.brand[500]    },
+  { id:"saida",         label:"Saída",           iconName:"arrowUp",    color:ds.color.brand[500]    },
   { id:"dividendos",    label:"Dividendos",      iconName:"zap",        color:ds.color.copilot[500]  },
   { id:"imposto",       label:"Imposto",         iconName:"landmark",   color:ds.color.warning[500]  },
-  { id:"transferencia", label:"TransferÃªncia",   iconName:"arrowRight", color:ds.color.info[500]     },
+  { id:"transferencia", label:"Transferência",   iconName:"arrowRight", color:ds.color.info[500]     },
 ];
 
 const EXPENSE_CATS = {
   entrada:    ["Recebimento de Contrato","Receita Meta (Facebook/Instagram)","Receita YouTube","Receita TikTok","Receita Kwai","Rendimento Financeiro","Reembolso","Outros Ingressos"],
-  saida:      ["ProduÃ§Ã£o de ConteÃºdo","Equipamento","Passagem AÃ©rea","Hospedagem","AlimentaÃ§Ã£o","Viagem / Outros","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","MÃ³veis e EletrodomÃ©sticos","Material de EscritÃ³rio","Material de Limpeza","Aluguel / CondomÃ­nio","Obra / Reformas","Utilidades (Luz, Ãgua, Internet)","Transporte / Estacionamento","CombustÃ­vel","Uber / TÃ¡xi / App","Outros"],
-  dividendos: ["DistribuiÃ§Ã£o de Lucros","Pro-labore","Outros Dividendos"],
+  saida:      ["Produção de Conteúdo","Equipamento","Passagem Aérea","Hospedagem","Alimentação","Viagem / Outros","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Aluguel / Condomínio","Obra / Reformas","Utilidades (Luz, Água, Internet)","Transporte / Estacionamento","Combustível","Uber / Táxi / App","Outros"],
+  dividendos: ["Distribuição de Lucros","Pro-labore","Outros Dividendos"],
   imposto:    ["ISS","PIS/COFINS","IRPJ","CSLL","Simples Nacional","Outros Impostos"],
   transferencia:["Entre Contas"],
 };
@@ -155,39 +155,39 @@ const DRE_MAP = {
   "Rendimento Financeiro":            "rec_financeira",
   "Reembolso":                        "outras_receitas",
   "Outros Ingressos":                 "outras_receitas",
-  // Custo dos ServiÃ§os Prestados
-  "ProduÃ§Ã£o de ConteÃºdo":             "csp",
+  // Custo dos Serviços Prestados
+  "Produção de Conteúdo":             "csp",
   "Equipamento":                      "csp",
   // Despesas Operacionais
   "Viagem":                           "desp_op",
-  "AlimentaÃ§Ã£o":                      "desp_op",
+  "Alimentação":                      "desp_op",
   "Hospedagem":                       "desp_op",
   "Marketing":                        "desp_op",
   // Despesas Gerais e Administrativas
   "Software / SaaS":                  "desp_adm",
   "Pessoal / RH":                     "desp_adm",
   "Contabilidade":                    "desp_adm",
-  "MÃ³veis e EletrodomÃ©sticos":        "desp_adm",
-  "Material de EscritÃ³rio":           "desp_adm",
+  "Móveis e Eletrodomésticos":        "desp_adm",
+  "Material de Escritório":           "desp_adm",
   "Material de Limpeza":              "desp_adm",
   "Viagem / Outros":                  "desp_op",
-  "Passagem AÃ©rea":                   "desp_op",
+  "Passagem Aérea":                   "desp_op",
   "Obra / Reformas":                  "desp_adm",
   "Transporte / Estacionamento":       "desp_op",
-  "CombustÃ­vel":                        "desp_op",
-  "Uber / TÃ¡xi / App":                 "desp_op",
-  "Utilidades (Luz, Ãgua, Internet)": "desp_adm",
+  "Combustível":                        "desp_op",
+  "Uber / Táxi / App":                 "desp_op",
+  "Utilidades (Luz, Água, Internet)": "desp_adm",
   "Outros":                           "desp_adm",
-  // Impostos sobre receita (deduÃ§Ãµes)
+  // Impostos sobre receita (deduções)
   "ISS":                              "deducoes",
   "PIS/COFINS":                       "deducoes",
   "Simples Nacional":                 "deducoes",
   "Outros Impostos":                  "deducoes",
-  // IR e CSLL (apÃ³s resultado operacional)
+  // IR e CSLL (após resultado operacional)
   "IRPJ":                             "ir_csll",
   "CSLL":                             "ir_csll",
-  // DistribuiÃ§Ã£o
-  "DistribuiÃ§Ã£o de Lucros":           "dividendos",
+  // Distribuição
+  "Distribuição de Lucros":           "dividendos",
   "Pro-labore":                       "dividendos",
   "Outros Dividendos":                "dividendos",
 };
@@ -196,7 +196,7 @@ function txColor(type)    { return TX_TYPES.find(t=>t.id===type)?.color    || ds
 function txIconName(type) { return TX_TYPES.find(t=>t.id===type)?.iconName || "minus"; }
 function txEmoji(type)    { return TX_TYPES.find(t=>t.id===type)?.iconName || "minus"; }
 
-// âââ Balance Editor Button âââââââââââââââââââââââââââââââââ
+// ─── Balance Editor Button ─────────────────────────────────
 function EditBalanceButton({ acc, accounts, index, saveAcc }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState("editing");
@@ -236,10 +236,10 @@ function EditBalanceButton({ acc, accounts, index, saveAcc }) {
               style={{ width:"100%",padding:"7px 10px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
           </div>
         </div>
-        <input value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="ObservaÃ§Ã£o (opcional)"
+        <input value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Observação (opcional)"
           style={{ width:"100%",padding:"7px 10px",fontSize:11,background:B1,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none",marginBottom:8 }}/>
         <div style={{ display:"flex",gap:6 }}>
-          <button onClick={save} style={{ flex:1,padding:"7px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>â Salvar</button>
+          <button onClick={save} style={{ flex:1,padding:"7px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>✓ Salvar</button>
           <button onClick={()=>{setOpen(false);setStep("editing");}} style={{ padding:"7px 12px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>Cancelar</button>
         </div>
       </>}
@@ -247,7 +247,7 @@ function EditBalanceButton({ acc, accounts, index, saveAcc }) {
   );
 }
 
-// âââ Transaction Form Modal âââââââââââââââââââââââââââââââ
+// ─── Transaction Form Modal ───────────────────────────────
 function TransactionModal({ accounts, contracts, initial, onClose, onSave, defaultDate }) {
   const isEdit = !!initial?.id;
   const [f, setF] = useState(initial || {
@@ -274,7 +274,7 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
   }, [autoParc, numParc, f.date, f.amount]);
 
   const handleSave = () => {
-    if (!f.description || !f.amount) return alert("Preencha descriÃ§Ã£o e valor.");
+    if (!f.description || !f.amount) return alert("Preencha descrição e valor.");
     if (autoParc && numParc && parseInt(numParc) > 1) {
       const n = parseInt(numParc);
       const groupId = uid();
@@ -294,7 +294,7 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
   };
 
   return (
-    <Modal title={isEdit?"Editar LanÃ§amento":"Novo LanÃ§amento"} onClose={onClose} width={580}
+    <Modal title={isEdit?"Editar Lançamento":"Novo Lançamento"} onClose={onClose} width={580}
       footer={<>
         <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
         <Btn onClick={handleSave} variant="primary" size="sm">
@@ -312,12 +312,12 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
         ))}
       </div>
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-        <Field label="Data da 1Âª parcela"><Input type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
+        <Field label="Data da 1ª parcela"><Input type="date" value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
         <Field label="Valor por parcela (R$)"><Input type="number" min="0" step="0.01" value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="0,00"/></Field>
       </div>
 
       <SRule>Detalhes</SRule>
-      <Field label="DescriÃ§Ã£o" full><Input value={f.description} onChange={e=>set("description",e.target.value)} placeholder="ex: MacBook Pro - parcelado"/></Field>
+      <Field label="Descrição" full><Input value={f.description} onChange={e=>set("description",e.target.value)} placeholder="ex: MacBook Pro - parcelado"/></Field>
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
         <Field label="Categoria">
           <Select value={f.category} onChange={e=>set("category",e.target.value)}>
@@ -332,7 +332,7 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
           </Select>
         </Field>
         {f.type==="dividendos" && (
-          <Field label="BeneficiÃ¡rio">
+          <Field label="Beneficiário">
             <Select value={f.beneficiario||""} onChange={e=>set("beneficiario",e.target.value)}>
               <option value="">Selecione</option>
               <option value="Matheus">Matheus</option>
@@ -343,13 +343,13 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
         )}
       </div>
 
-      {/* ââ Parcelamento automÃ¡tico ââ */}
+      {/* ── Parcelamento automático ── */}
       <SRule>Parcelamento</SRule>
       <div style={{ background:autoParc?`${BLU}06`:B2, border:`1px solid ${autoParc?BLU+"30":LN}`, borderRadius:10, padding:"14px 16px", transition:TRANS }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:autoParc?14:0 }}>
           <div>
             <div style={{ fontSize:12, fontWeight:700, color:TX }}>Criar parcelas automaticamente</div>
-            <div style={{ fontSize:11, color:TX3, marginTop:2 }}>Gera uma entrada por mÃªs para cada parcela</div>
+            <div style={{ fontSize:11, color:TX3, marginTop:2 }}>Gera uma entrada por mês para cada parcela</div>
           </div>
           <div onClick={()=>setAutoParc(a=>!a)}
             style={{ width:44,height:24,borderRadius:99,background:autoParc?BLU:LN,cursor:"pointer",position:"relative",transition:TRANS,flexShrink:0 }}>
@@ -360,7 +360,7 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
         {autoParc && (
           <>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
-              <Field label="NÂº de parcelas">
+              <Field label="Nº de parcelas">
                 <Input type="number" min="2" max="120" value={numParc} onChange={e=>setNumParc(e.target.value)} placeholder="ex: 12"/>
               </Field>
               <div style={{ display:"flex", flexDirection:"column", justifyContent:"flex-end", paddingBottom:2 }}>
@@ -379,7 +379,7 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
             {parcPreview.length > 0 && (
               <div>
                 <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX3, marginBottom:8 }}>
-                  Preview â {parcPreview.length} lanÃ§amentos serÃ£o criados
+                  Preview — {parcPreview.length} lançamentos serão criados
                 </div>
                 <div style={{ maxHeight:160, overflowY:"auto", display:"flex", flexDirection:"column", gap:4 }}>
                   {parcPreview.map(p => (
@@ -398,19 +398,19 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
 
         {!autoParc && (
           <div style={{ fontSize:11, color:TX3, marginTop:4 }}>
-            LanÃ§amento Ãºnico Â· ative para criar todas as parcelas de uma vez
+            Lançamento único · ative para criar todas as parcelas de uma vez
           </div>
         )}
       </div>
 
       <SRule>Nota Fiscal & Obs.</SRule>
-      <Field label="NÃºmero / Link da NF"><Input value={f.nfLink||""} onChange={e=>set("nfLink",e.target.value)} placeholder="NÃºmero ou URL da nota"/></Field>
-      <Field label="Notas" full><Input value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="InformaÃ§Ãµes adicionais"/></Field>
+      <Field label="Número / Link da NF"><Input value={f.nfLink||""} onChange={e=>set("nfLink",e.target.value)} placeholder="Número ou URL da nota"/></Field>
+      <Field label="Notas" full><Input value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Informações adicionais"/></Field>
     </Modal>
   );
 }
 
-// âââ DRE Component ââââââââââââââââââââââââââââââââââââââââ
+// ─── DRE Component ────────────────────────────────────────
 function DREView({ transactions, year, valuesHidden }) {
   const txYear = transactions.filter(t => t.date?.startsWith(String(year)));
 
@@ -449,52 +449,52 @@ function DREView({ transactions, year, valuesHidden }) {
 
   return (
     <div style={{ ...G, padding:"20px 24px", maxWidth:700 }}>
-      <div style={{ fontSize:14,fontWeight:700,color:TX,marginBottom:4 }}>DRE â DemonstraÃ§Ã£o do Resultado do ExercÃ­cio</div>
-      <div style={{ fontSize:11,color:TX2,marginBottom:20 }}>ExercÃ­cio {year} Â· Conforme Lei 6.404/76</div>
+      <div style={{ fontSize:14,fontWeight:700,color:TX,marginBottom:4 }}>DRE — Demonstração do Resultado do Exercício</div>
+      <div style={{ fontSize:11,color:TX2,marginBottom:20 }}>Exercício {year} · Conforme Lei 6.404/76</div>
 
       <Section title="Receitas"/>
       <Row label="(+) Receita Operacional Bruta" value={receita_bruta} bold/>
-      <Row label="(-) DeduÃ§Ãµes e Impostos sobre Receita" value={-deducoes} indent={1}/>
-      <Row label="= Receita LÃ­quida" value={receita_liq} total bold positive={true}/>
+      <Row label="(-) Deduções e Impostos sobre Receita" value={-deducoes} indent={1}/>
+      <Row label="= Receita Líquida" value={receita_liq} total bold positive={true}/>
 
       <Section title="Custos"/>
-      <Row label="(-) Custo dos ServiÃ§os Prestados (CSP)" value={-csp} indent={1}/>
+      <Row label="(-) Custo dos Serviços Prestados (CSP)" value={-csp} indent={1}/>
       <Row label="= Lucro Bruto" value={lucro_bruto} total bold positive={true}/>
 
       <Section title="Despesas Operacionais"/>
-      <Row label="(-) Despesas com OperaÃ§Ãµes" value={-desp_op} indent={1}/>
+      <Row label="(-) Despesas com Operações" value={-desp_op} indent={1}/>
       <Row label="(-) Despesas Gerais e Administrativas" value={-desp_adm} indent={1}/>
       <Row label="(+) Receitas Financeiras" value={rec_financeira} indent={1}/>
       <Row label="(+) Outras Receitas" value={outras_receitas} indent={1}/>
       <Row label="= Resultado Operacional (EBIT)" value={result_op} total bold positive={true}/>
 
-      <Section title="TributaÃ§Ã£o"/>
+      <Section title="Tributação"/>
       <Row label="(-) IRPJ e CSLL" value={-ir_csll} indent={1}/>
-      <Row label="= Lucro LÃ­quido do ExercÃ­cio" value={lucro_liq} total bold positive={true}/>
+      <Row label="= Lucro Líquido do Exercício" value={lucro_liq} total bold positive={true}/>
 
-      <Section title="DistribuiÃ§Ã£o"/>
-      <Row label="(-) Dividendos DistribuÃ­dos" value={-dividendos} indent={1}/>
-      <Row label="= Lucro Retido / PrejuÃ­zo Acumulado" value={lucro_retido} total bold positive={true}/>
+      <Section title="Distribuição"/>
+      <Row label="(-) Dividendos Distribuídos" value={-dividendos} indent={1}/>
+      <Row label="= Lucro Retido / Prejuízo Acumulado" value={lucro_retido} total bold positive={true}/>
 
       <div style={{ marginTop:16,padding:"12px 14px",background:`${BLU}08`,border:`1px solid ${BLU}20`,borderRadius:8 }}>
-        <div style={{ fontSize:ds.font.size.xs,color:TX2,marginBottom:4 }}>â ï¸ Esta DRE Ã© gerada automaticamente com base nos lanÃ§amentos cadastrados. Consulte seu contador para fins legais.</div>
+        <div style={{ fontSize:ds.font.size.xs,color:TX2,marginBottom:4 }}>⚠️ Esta DRE é gerada automaticamente com base nos lançamentos cadastrados. Consulte seu contador para fins legais.</div>
       </div>
     </div>
   );
 }
 
-// âââ Caixa Dashboard âââââââââââââââââââââââââââââââââââââ
+// ─── Caixa Dashboard ─────────────────────────────────────
 
-// âââ PeriodPicker popover / bottom-sheet âââââââââââââââââ
+// ─── PeriodPicker popover / bottom-sheet ─────────────────
 const PRESETS_LIST = [
-  { id:"month",       label:"Este mÃªs" },
-  { id:"prev_month",  label:"MÃªs anterior" },
-  { id:"last_30d",    label:"Ãltimos 30 dias" },
-  { id:"last_90d",    label:"Ãltimos 90 dias" },
+  { id:"month",       label:"Este mês" },
+  { id:"prev_month",  label:"Mês anterior" },
+  { id:"last_30d",    label:"Últimos 30 dias" },
+  { id:"last_90d",    label:"Últimos 90 dias" },
   { id:"quarter",     label:"Trimestre atual" },
-  { id:"ytd",         label:"Ano atÃ© hoje (YTD)" },
+  { id:"ytd",         label:"Ano até hoje (YTD)" },
   { id:"fiscal_year", label:`Ano fiscal ${new Date().getFullYear()}` },
-  { id:"custom",      label:"Personalizadoâ¦" },
+  { id:"custom",      label:"Personalizado…" },
 ];
 
 function PeriodPicker({ period: initial, transactions, onApply, onClose, isMobile, colors }) {
@@ -538,10 +538,10 @@ function PeriodPicker({ period: initial, transactions, onApply, onClose, isMobil
   const apply = () => {
     if (draft.presetId === "custom") {
       if (!customFrom || !customTo) { setError("Preencha as duas datas."); return; }
-      if (customFrom > customTo)    { setError("Data inicial deve ser anterior ou igual Ã  final."); return; }
+      if (customFrom > customTo)    { setError("Data inicial deve ser anterior ou igual à final."); return; }
       const days = Math.round((new Date(customTo+"T00:00:00") - new Date(customFrom+"T00:00:00")) / 86400000) + 1;
       if (days > 5 * 365) {
-        if (!window.confirm("PerÃ­odo maior que 5 anos pode deixar a lista lenta. Continuar?")) return;
+        if (!window.confirm("Período maior que 5 anos pode deixar a lista lenta. Continuar?")) return;
       }
       onApply({ presetId:"custom", from:customFrom, to:customTo });
     } else {
@@ -574,12 +574,12 @@ function PeriodPicker({ period: initial, transactions, onApply, onClose, isMobil
         <div onClick={onClose}
           style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.38)",zIndex:499 }}/>
       )}
-      <div role="dialog" aria-modal="false" aria-label="Selecionar perÃ­odo" style={popStyle}>
+      <div role="dialog" aria-modal="false" aria-label="Selecionar período" style={popStyle}>
         {/* Mobile handle */}
         {isMobile && (
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
-            <span style={{ fontWeight:700,fontSize:15,color:TX }}>PerÃ­odo</span>
-            <button onClick={onClose} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:TX2 }}>Ã</button>
+            <span style={{ fontWeight:700,fontSize:15,color:TX }}>Período</span>
+            <button onClick={onClose} style={{ background:"none",border:"none",fontSize:20,cursor:"pointer",color:TX2 }}>×</button>
           </div>
         )}
 
@@ -627,7 +627,7 @@ function PeriodPicker({ period: initial, transactions, onApply, onClose, isMobil
             />
           </div>
           <div>
-            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>AtÃ©</div>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>Até</div>
             <input type="date"
               value={draft.presetId==="custom" ? customTo : draft.to}
               readOnly={draft.presetId!=="custom"}
@@ -667,7 +667,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
   const MONTHS_SH2 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   const today = new Date();
 
-  // ââ Compromissos futuros (parcelamentos) â via finance.js ââ
+  // ── Compromissos futuros (parcelamentos) — via finance.js ──
   const futureInstallments = useMemo(
     () => calcFutureInstallments(transactions),
     [transactions]
@@ -675,7 +675,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
 
   const totalFutureDebt = futureInstallments.reduce((s,[,v])=>s+v.total,0);
 
-  // Quebra mensal do ano â via finance.js (sem filter+reduce inline)
+  // Quebra mensal do ano — via finance.js (sem filter+reduce inline)
   const _breakdown = useMemo(
     () => monthlyBreakdown(transactions, currentYear),
     [transactions, currentYear]
@@ -683,7 +683,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
   const monthData = _breakdown.map((m) => ({
     month:     MONTHS_SH2[m.monthIndex],
     entradas:  m.ent,
-    saidas:    m.sai + m.imp,  // combinado para o grÃ¡fico de barras
+    saidas:    m.sai + m.imp,  // combinado para o gráfico de barras
     dividendos: m.div,
     net:       m.net,
   }));
@@ -692,12 +692,12 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
 
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
-      {/* Compromissos futuros â parcelamentos */}
+      {/* Compromissos futuros — parcelamentos */}
       {futureInstallments.length > 0 && (
         <div style={{ ...G, padding:"16px 20px", borderLeft:`3px solid ${AMB}` }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:12 }}>
             <div>
-              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Compromissos futuros Â· Parcelamentos</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Compromissos futuros · Parcelamentos</div>
               <div style={{ fontSize:22,fontWeight:800,color:RED }}>{valuesHidden ? "••••••" : (fmtMoney(totalFutureDebt))}</div>
               <div style={{ fontSize:11,color:TX3,marginTop:2 }}>total comprometido em parcelas futuras</div>
             </div>
@@ -724,7 +724,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
                       </div>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      {isHeavy && <span style={{ fontSize:ds.font.size.xs, color:RED, fontWeight:700 }}>â  Alto</span>}
+                      {isHeavy && <span style={{ fontSize:ds.font.size.xs, color:RED, fontWeight:700 }}>⚠ Alto</span>}
                       <span style={{ fontSize:12, fontWeight:800, color:RED }}>{valuesHidden ? "••••••" : (fmtMoney(val.total))}</span>
                     </div>
                   </div>
@@ -738,7 +738,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
           {saldoTotal > 0 && (
             <div style={{ marginTop:12, padding:"8px 12px", background:totalFutureDebt/saldoTotal>0.5?`${RED}08`:`${GRN}08`, borderRadius:8, fontSize:11 }}>
               <span style={{ fontWeight:700, color:totalFutureDebt/saldoTotal>0.5?RED:GRN }}>
-                {totalFutureDebt/saldoTotal>0.5?"â  Parcelas comprometem":"â Parcelas representam"}
+                {totalFutureDebt/saldoTotal>0.5?"⚠ Parcelas comprometem":"✓ Parcelas representam"}
               </span>
               <span style={{ color:TX2 }}> {(totalFutureDebt/saldoTotal*100).toFixed(0)}% do saldo atual</span>
             </div>
@@ -748,7 +748,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
 
       {/* Decision KPIs */}
       {(() => {
-        // KPIs via finance.js â sem filter+reduce inline
+        // KPIs via finance.js — sem filter+reduce inline
         const _kpiAgg   = aggregate(transactions, 0); // base 0: queremos % sobre receita pura
         const totalEnt  = _kpiAgg.totalEntradas;
         const totalSai  = _kpiAgg.totalOutflows;
@@ -769,46 +769,46 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
         return (
           <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
             {/* Liquidez */}
-            <div title="Liquidez = Saldo atual Ã· Despesa mensal mÃ©dia. AtenÃ§Ã£o < 3x Â· Regular 3â6x Â· Excelente > 6x." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${liquidez===null?LN:kpiColor(liquidez,3,1.5)}` }}>
+            <div title="Liquidez = Saldo atual ÷ Despesa mensal média. Atenção < 3x · Regular 3–6x · Excelente > 6x." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${liquidez===null?LN:kpiColor(liquidez,3,1.5)}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Liquidez</div>
               <div style={{ fontSize:22,fontWeight:700,color:liquidez===null?TX3:kpiColor(liquidez,3,1.5) }}>
-                {liquidez===null?"â":`${fmt1(liquidez)}x`}
+                {liquidez===null?"—":`${fmt1(liquidez)}x`}
               </div>
               <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>meses de runway</div>
               <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>
-                {liquidez===null?"sem dados":liquidez>=3?"â SaudÃ¡vel":liquidez>=1.5?"â  AtenÃ§Ã£o":"ð´ CrÃ­tico"}
+                {liquidez===null?"sem dados":liquidez>=3?"✓ Saudável":liquidez>=1.5?"⚠ Atenção":"🔴 Crítico"}
               </div>
             </div>
 
             {/* Margem de Lucro */}
-            <div title="Margem LÃ­quida = Lucro LÃ­quido Ã· Receita. AtenÃ§Ã£o < 10% Â· Regular 10â20% Â· Excelente > 20%." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${margemLucro===null?LN:kpiColor(margemLucro,30,10)}` }}>
-              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Margem LÃ­quida</div>
+            <div title="Margem Líquida = Lucro Líquido ÷ Receita. Atenção < 10% · Regular 10–20% · Excelente > 20%." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${margemLucro===null?LN:kpiColor(margemLucro,30,10)}` }}>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Margem Líquida</div>
               <div style={{ fontSize:22,fontWeight:700,color:margemLucro===null?TX3:kpiColor(margemLucro,30,10) }}>
-                {margemLucro===null?"â":`${fmt1(margemLucro)}%`}
+                {margemLucro===null?"—":`${fmt1(margemLucro)}%`}
               </div>
-              <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>lucro Ã· receita</div>
+              <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>lucro ÷ receita</div>
               <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>
-                {margemLucro===null?"sem dados":margemLucro>=30?"â Excelente":margemLucro>=10?"â  Regular":"ð´ Baixa"}
+                {margemLucro===null?"sem dados":margemLucro>=30?"✓ Excelente":margemLucro>=10?"⚠ Regular":"🔴 Baixa"}
               </div>
             </div>
 
             {/* ROI Operacional */}
-            <div title="ROI Operacional = (Receita â Custos) Ã· Custos. AtenÃ§Ã£o < 50% Â· Regular 50â100% Â· Excelente > 100%." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${roi===null?LN:kpiColor(roi,50,20)}` }}>
+            <div title="ROI Operacional = (Receita − Custos) ÷ Custos. Atenção < 50% · Regular 50–100% · Excelente > 100%." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${roi===null?LN:kpiColor(roi,50,20)}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>ROI Operacional</div>
               <div style={{ fontSize:22,fontWeight:700,color:roi===null?TX3:kpiColor(roi,50,20) }}>
-                {roi===null?"â":`${fmt1(roi)}%`}
+                {roi===null?"—":`${fmt1(roi)}%`}
               </div>
               <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>retorno sobre custos</div>
               <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>
-                {roi===null?"sem dados":roi>=50?"â Excelente":roi>=20?"â  Regular":"ð´ Baixo"}
+                {roi===null?"sem dados":roi>=50?"✓ Excelente":roi>=20?"⚠ Regular":"🔴 Baixo"}
               </div>
             </div>
 
             {/* Burn Rate */}
-            <div title="Burn Rate = mÃ©dia de saÃ­das mensais (meses com movimento). Quanto menor, melhor para runway." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${BLU}` }}>
+            <div title="Burn Rate = média de saídas mensais (meses com movimento). Quanto menor, melhor para runway." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${BLU}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Burn Rate</div>
               <div style={{ fontSize:22,fontWeight:700,color:TX }}>{valuesHidden ? "••••••" : (fmtMoney(burnRate))}</div>
-              <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>saÃ­das/mÃªs (mÃ©dia)</div>
+              <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>saídas/mês (média)</div>
               <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>base {monthlyData.length} meses</div>
             </div>
           </div>
@@ -817,16 +817,16 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
 
       {/* Bar chart with projection (Task 4) */}
       <div style={{ ...G,padding:"18px 20px" }}>
-        <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs SaÃ­das {currentYear}</div>
+        <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs Saídas {currentYear}</div>
         <div style={{ display:"flex",gap:12,fontSize:ds.font.size.xs,color:TX2,marginBottom:16,flexWrap:"wrap" }}>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:GRN,display:"inline-block" }}/>Entradas</span>
-          <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:RED,display:"inline-block" }}/>SaÃ­das</span>
+          <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:RED,display:"inline-block" }}/>Saídas</span>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:"#7C3AED",display:"inline-block" }}/>Dividendos</span>
           {currentYear===new Date().getFullYear()&&(
             <span style={{ display:"flex",alignItems:"center",gap:4 }}>
               <span style={{ width:10,height:10,borderRadius:2,border:`1px solid ${LN2}`,display:"inline-block",
                 backgroundImage:"repeating-linear-gradient(45deg,transparent 0 3px,rgba(0,0,0,.12) 3px 6px)" }}/>
-              ProjeÃ§Ã£o (parcelas futuras)
+              Projeção (parcelas futuras)
             </span>
           )}
         </div>
@@ -860,7 +860,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
       {/* Dividend per person */}
       {transactions.filter(t=>t.type==="dividendos").length>0&&(
         <div style={{ ...G,padding:"18px 20px" }}>
-          <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:12 }}>Dividendos por SÃ³cio</div>
+          <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:12 }}>Dividendos por Sócio</div>
           {[["Matheus","#C8102E"],["Lucas","#7C3AED"],["Ambos","#2563EB"]].map(([name,color])=>{
             const total = transactions.filter(t=>t.type==="dividendos"&&t.beneficiario===name).reduce((s,t)=>s+(Number(t.amount)||0),0);
             const totalAmbos = transactions.filter(t=>t.type==="dividendos"&&t.beneficiario==="Ambos").reduce((s,t)=>s+(Number(t.amount)||0),0);
@@ -882,7 +882,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
             );
           })}
           <div style={{ display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:`1px solid ${LN2}`,marginTop:4 }}>
-            <span style={{ fontSize:11,color:TX2 }}>Total distribuÃ­do</span>
+            <span style={{ fontSize:11,color:TX2 }}>Total distribuído</span>
             <span style={{ fontWeight:700,fontSize:13,color:"#7C3AED" }}>{valuesHidden ? "••••••" : (fmtMoney(transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0)))}</span>
           </div>
         </div>
@@ -891,7 +891,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
       {/* Category breakdown */}
       {transactions.length>0&&(
         <div style={{ ...G,padding:"18px 20px" }}>
-          <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:12 }}>SaÃ­das por Categoria</div>
+          <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:12 }}>Saídas por Categoria</div>
           {(() => {
             const cats = Object.entries(
               transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})
@@ -909,7 +909,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
                     <span style={{ fontWeight:700,color:TX }}>{valuesHidden ? "••••••" : (fmtMoney(val))}</span>
                   </div>
                   <div style={{ height:4,background:LN,borderRadius:2 }}>
-                    <div title={`${pct}% do total de saÃ­das`}
+                    <div title={`${pct}% do total de saídas`}
                       style={{ height:4,borderRadius:2,background:barColor,width:`${val/maxCat*100}%`,transition:"width .3s" }}/>
                   </div>
                 </div>
@@ -922,7 +922,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
   );
 }
 
-// âââ Caixa (Controle Financeiro Administrativo) âââââââââââ
+// ─── Caixa (Controle Financeiro Administrativo) ───────────
 
 function NewAccountModal({ onClose, onSave }) {
   const [f, setF] = useState({ name:"", bank:"", type:"corrente", balance:"" });
@@ -932,15 +932,15 @@ function NewAccountModal({ onClose, onSave }) {
       footer={<><Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn><Btn onClick={()=>{if(!f.name)return alert("Informe o nome.");onSave(f);}} variant="primary" size="sm">Criar</Btn></>}>
       <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
         <Field label="Nome da conta"><Input value={f.name} onChange={e=>set("name",e.target.value)} placeholder="ex: Conta PJ Matheus"/></Field>
-        <Field label="Banco"><Input value={f.bank} onChange={e=>set("bank",e.target.value)} placeholder="ex: ItaÃº, Bradesco, Inter"/></Field>
-        <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="corrente">Conta Corrente</option><option value="poupanca">PoupanÃ§a</option><option value="investimento">Investimento</option></Select></Field>
+        <Field label="Banco"><Input value={f.bank} onChange={e=>set("bank",e.target.value)} placeholder="ex: Itaú, Bradesco, Inter"/></Field>
+        <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="corrente">Conta Corrente</option><option value="poupanca">Poupança</option><option value="investimento">Investimento</option></Select></Field>
         <Field label="Saldo inicial (R$)"><Input type="number" value={f.balance} onChange={e=>set("balance",e.target.value)} placeholder="0,00"/></Field>
       </div>
     </Modal>
   );
 }
 
-// âââ Indicadores Financeiros ââââââââââââââââââââââââââââââ
+// ─── Indicadores Financeiros ──────────────────────────────
 function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contracts, year: yearProp, setYear: setYearProp }) {
   const [yearLocal, setYearLocal] = useState(new Date().getFullYear());
   const year = yearProp ?? yearLocal;
@@ -948,7 +948,7 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
   const txYear = transactions.filter(t => t.date?.startsWith(String(year)));
   const _breakdown_ind = useMemo(() => monthlyBreakdown(txYear, year), [txYear, year]);
 
-  // Agregados via finance.js â sem filter+reduce inline
+  // Agregados via finance.js — sem filter+reduce inline
   const _indAgg    = aggregate(txYear, 0);
   const receita    = _indAgg.totalEntradas;
   const despesas   = _indAgg.totalOutflows;  // saida+imposto (compat. legado)
@@ -956,8 +956,8 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
   const lucroLiq   = _indAgg.lucroLiquido;
   const ebitda     = _indAgg.ebitda;         // CORRIGIDO: receitaLiquida - CSP - despOp
 
-  // Custos fixos (para ponto de equilÃ­brio) â mantÃ©m lÃ³gica existente
-  const fixedCats = ["Pessoal / RH","Aluguel / CondomÃ­nio","Utilidades (Luz, Ãgua, Internet)","Software / SaaS","Contabilidade","Material de EscritÃ³rio","Material de Limpeza","MÃ³veis e EletrodomÃ©sticos"];
+  // Custos fixos (para ponto de equilíbrio) — mantém lógica existente
+  const fixedCats = ["Pessoal / RH","Aluguel / Condomínio","Utilidades (Luz, Água, Internet)","Software / SaaS","Contabilidade","Material de Escritório","Material de Limpeza","Móveis e Eletrodomésticos"];
   const custoFixo = txYear.filter(t=>(t.type==="saida"||t.type==="imposto")&&fixedCats.includes(t.category)).reduce((s,t)=>s+(Number(t.amount)||0),0);
   const custoVar  = despesas - custoFixo;
 
@@ -974,7 +974,7 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
   const ticketMedio    = contracts.length > 0 ? (contracts.reduce((s,c)=>s+(Number(c.contractValue)||Number(c.monthlyValue)||0),0) / contracts.length) : null;
   const pontoEquil     = receita > 0 && (1 - custoVar/receita) > 0 ? custoFixo / (1 - custoVar/receita) : null;
 
-  // Prazo mÃ©dio de recebimento (from contracts with payment dates)
+  // Prazo médio de recebimento (from contracts with payment dates)
   const pmr = (() => {
     const diffs = contracts.filter(c=>c.contractDeadline&&c.contractStart).map(c=>{
       const s = new Date(c.contractStart), e = new Date(c.contractDeadline);
@@ -983,43 +983,43 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
     return diffs.length ? Math.round(diffs.reduce((s,d)=>s+d,0)/diffs.length) : null;
   })();
 
-  const fmt2 = v => v != null ? v.toFixed(1) : "â";
-  const fmtDias = v => v != null ? `${Math.round(v)} dias` : "â";
+  const fmt2 = v => v != null ? v.toFixed(1) : "—";
+  const fmtDias = v => v != null ? `${Math.round(v)} dias` : "—";
 
   const indicators = [
     {
       group: "Rentabilidade",
       items: [
-        { label:"Margem de Lucro LÃ­quida", tooltip:"Lucro lÃ­quido Ã· Receita LÃ­quida.", value:margemLucro!=null?`${fmt2(margemLucro)}%`:"â", desc:"Lucro lÃ­quido / Receita", color:margemLucro!=null?(margemLucro>20?GRN:margemLucro>5?AMB:RED):TX2, good:margemLucro!=null&&margemLucro>20 },
-        { label:"Margem Bruta", tooltip:"(Receita â Custos) Ã· Receita LÃ­quida.", value:margemBruta!=null?`${fmt2(margemBruta)}%`:"â", desc:"(Receita â Despesas) / Receita", color:margemBruta!=null?(margemBruta>30?GRN:margemBruta>10?AMB:RED):TX2, good:margemBruta!=null&&margemBruta>30 },
-        { label:"EBITDA", tooltip:"Receita LÃ­quida â Custos â Despesas Operacionais (D&A=0).", value:fmtMoney(ebitda), desc:"Resultado antes de impostos e dividendos", color:ebitda>=0?GRN:RED, good:ebitda>0 },
-        { label:"Margem EBITDA", tooltip:"EBITDA Ã· Receita LÃ­quida.", value:margemEBITDA!=null?`${fmt2(margemEBITDA)}%`:"â", desc:"EBITDA / Receita", color:margemEBITDA!=null?(margemEBITDA>25?GRN:margemEBITDA>10?AMB:RED):TX2, good:margemEBITDA!=null&&margemEBITDA>25 },
-        { label:"ROI", tooltip:"Lucro LÃ­quido Ã· Total Investido.", value:roi!=null?`${fmt2(roi)}%`:"â", desc:"Lucro LÃ­quido / Total Investido", color:roi!=null?(roi>0?GRN:RED):TX2, good:roi!=null&&roi>0 },
+        { label:"Margem de Lucro Líquida", tooltip:"Lucro líquido ÷ Receita Líquida.", value:margemLucro!=null?`${fmt2(margemLucro)}%`:"—", desc:"Lucro líquido / Receita", color:margemLucro!=null?(margemLucro>20?GRN:margemLucro>5?AMB:RED):TX2, good:margemLucro!=null&&margemLucro>20 },
+        { label:"Margem Bruta", tooltip:"(Receita − Custos) ÷ Receita Líquida.", value:margemBruta!=null?`${fmt2(margemBruta)}%`:"—", desc:"(Receita − Despesas) / Receita", color:margemBruta!=null?(margemBruta>30?GRN:margemBruta>10?AMB:RED):TX2, good:margemBruta!=null&&margemBruta>30 },
+        { label:"EBITDA", tooltip:"Receita Líquida − Custos − Despesas Operacionais (D&A=0).", value:fmtMoney(ebitda), desc:"Resultado antes de impostos e dividendos", color:ebitda>=0?GRN:RED, good:ebitda>0 },
+        { label:"Margem EBITDA", tooltip:"EBITDA ÷ Receita Líquida.", value:margemEBITDA!=null?`${fmt2(margemEBITDA)}%`:"—", desc:"EBITDA / Receita", color:margemEBITDA!=null?(margemEBITDA>25?GRN:margemEBITDA>10?AMB:RED):TX2, good:margemEBITDA!=null&&margemEBITDA>25 },
+        { label:"ROI", tooltip:"Lucro Líquido ÷ Total Investido.", value:roi!=null?`${fmt2(roi)}%`:"—", desc:"Lucro Líquido / Total Investido", color:roi!=null?(roi>0?GRN:RED):TX2, good:roi!=null&&roi>0 },
       ]
     },
     {
       group: "Liquidez & Caixa",
       items: [
-        { label:"Liquidez (meses)", tooltip:"Saldo atual Ã· Despesa mensal mÃ©dia.", value:liquidez!=null?`${liquidez.toFixed(1)}x`:"â", desc:"Saldo atual cobre quantos meses de despesas", color:liquidez!=null?(liquidez>3?GRN:liquidez>1?AMB:RED):TX2, good:liquidez!=null&&liquidez>3 },
-        { label:"Saldo em Caixa", tooltip:"Saldo base + lanÃ§amentos acumulados.", value:fmtMoney(saldoTotal), desc:"Base inicial + lanÃ§amentos acumulados", color:saldoTotal>=0?TX:RED, good:saldoTotal>0 },
-        { label:"Despesa Mensal MÃ©dia", tooltip:"MÃ©dia das saÃ­das dos meses com movimento.", value: valuesHidden ? "••••••" : fmtMoney(despesaMensal), desc:`MÃ©dia de ${monthsWithData} meses com dados`, color:TX2, good:null },
+        { label:"Liquidez (meses)", tooltip:"Saldo atual ÷ Despesa mensal média.", value:liquidez!=null?`${liquidez.toFixed(1)}x`:"—", desc:"Saldo atual cobre quantos meses de despesas", color:liquidez!=null?(liquidez>3?GRN:liquidez>1?AMB:RED):TX2, good:liquidez!=null&&liquidez>3 },
+        { label:"Saldo em Caixa", tooltip:"Saldo base + lançamentos acumulados.", value:fmtMoney(saldoTotal), desc:"Base inicial + lançamentos acumulados", color:saldoTotal>=0?TX:RED, good:saldoTotal>0 },
+        { label:"Despesa Mensal Média", tooltip:"Média das saídas dos meses com movimento.", value: valuesHidden ? "••••••" : fmtMoney(despesaMensal), desc:`Média de ${monthsWithData} meses com dados`, color:TX2, good:null },
       ]
     },
     {
       group: "Operacional",
       items: [
-        { label:"Ticket MÃ©dio Contratos", tooltip:"Soma dos contratos ativos Ã· nÂº de contratos.", value:ticketMedio!=null?fmtMoney(ticketMedio):"â", desc:"Valor mÃ©dio por contrato ativo", color:TX, good:null },
-        { label:"Ponto de EquilÃ­brio", tooltip:"Receita mÃ­nima necessÃ¡ria para cobrir custos fixos + variÃ¡veis.", value:pontoEquil!=null?fmtMoney(pontoEquil):"â", desc:"Receita mÃ­nima para cobrir todos os custos", color:receita>0&&pontoEquil!=null?(receita>=pontoEquil?GRN:RED):TX2, good:receita>0&&pontoEquil!=null&&receita>=pontoEquil },
-        { label:"Prazo MÃ©dio Recebimento", tooltip:"MÃ©dia dos prazos de pagamento dos contratos.", value:fmtDias(pmr), desc:"MÃ©dia dos prazos de contratos", color:pmr!=null?(pmr<60?GRN:pmr<90?AMB:RED):TX2, good:pmr!=null&&pmr<60 },
-        { label:"Prazo MÃ©dio Estoque", tooltip:"N/A â empresa de serviÃ§os.", value:"N/A", desc:"NÃ£o aplicÃ¡vel â empresa de serviÃ§os", color:TX3, good:null },
+        { label:"Ticket Médio Contratos", tooltip:"Soma dos contratos ativos ÷ nº de contratos.", value:ticketMedio!=null?fmtMoney(ticketMedio):"—", desc:"Valor médio por contrato ativo", color:TX, good:null },
+        { label:"Ponto de Equilíbrio", tooltip:"Receita mínima necessária para cobrir custos fixos + variáveis.", value:pontoEquil!=null?fmtMoney(pontoEquil):"—", desc:"Receita mínima para cobrir todos os custos", color:receita>0&&pontoEquil!=null?(receita>=pontoEquil?GRN:RED):TX2, good:receita>0&&pontoEquil!=null&&receita>=pontoEquil },
+        { label:"Prazo Médio Recebimento", tooltip:"Média dos prazos de pagamento dos contratos.", value:fmtDias(pmr), desc:"Média dos prazos de contratos", color:pmr!=null?(pmr<60?GRN:pmr<90?AMB:RED):TX2, good:pmr!=null&&pmr<60 },
+        { label:"Prazo Médio Estoque", tooltip:"N/A — empresa de serviços.", value:"N/A", desc:"Não aplicável — empresa de serviços", color:TX3, good:null },
       ]
     },
     {
       group: "Receita",
       items: [
         { label:"Receita Total", tooltip:"Soma das entradas do ano fiscal.", value: valuesHidden ? "••••••" : fmtMoney(receita), desc:`Todas as entradas de ${year}`, color:GRN, good:null },
-        { label:"Despesas Totais", tooltip:"SaÃ­das + impostos do ano fiscal.", value: valuesHidden ? "••••••" : fmtMoney(despesas), desc:`SaÃ­das + impostos de ${year}`, color:RED, good:null },
-        { label:"Dividendos DistribuÃ­dos", tooltip:"Soma dos lanÃ§amentos do tipo dividendos.", value: valuesHidden ? "••••••" : fmtMoney(dividendos), desc:`DistribuiÃ§Ã£o de lucros de ${year}`, color:"#7C3AED", good:null },
+        { label:"Despesas Totais", tooltip:"Saídas + impostos do ano fiscal.", value: valuesHidden ? "••••••" : fmtMoney(despesas), desc:`Saídas + impostos de ${year}`, color:RED, good:null },
+        { label:"Dividendos Distribuídos", tooltip:"Soma dos lançamentos do tipo dividendos.", value: valuesHidden ? "••••••" : fmtMoney(dividendos), desc:`Distribuição de lucros de ${year}`, color:"#7C3AED", good:null },
         { label:"Custo Fixo Total", tooltip:"RH + aluguel + utilidades + administrativo.", value:fmtMoney(custoFixo), desc:"RH, aluguel, utilidades, adm", color:TX2, good:null },
       ]
     }
@@ -1028,7 +1028,7 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
   return (
     <div>
       <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:24 }}>
-        <span style={{ fontSize:12,color:TX2 }}>ExercÃ­cio:</span>
+        <span style={{ fontSize:12,color:TX2 }}>Exercício:</span>
         {[new Date().getFullYear()-1, new Date().getFullYear()].map(y=>(
           <div key={y} onClick={()=>setYear(y)}
             style={{ padding:"5px 14px",fontSize:12,fontWeight:year===y?700:400,cursor:"pointer",borderRadius:99,background:year===y?TX:B2,color:year===y?"white":TX2,border:`1px solid ${year===y?TX:LN}`,transition:TRANS }}>
@@ -1045,8 +1045,8 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
               <div key={i} title={ind.tooltip||""} style={{ ...G,padding:"14px 16px",borderLeft:`3px solid ${ind.color}` }}>
                 <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:4 }}>
                   <div style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,lineHeight:1.3,flex:1 }}>{ind.label}</div>
-                  {ind.good===true&&<span style={{ fontSize:ds.font.size.xs,color:GRN,flexShrink:0,marginLeft:6 }}>â</span>}
-                  {ind.good===false&&<span style={{ fontSize:ds.font.size.xs,color:RED,flexShrink:0,marginLeft:6 }}>â </span>}
+                  {ind.good===true&&<span style={{ fontSize:ds.font.size.xs,color:GRN,flexShrink:0,marginLeft:6 }}>✓</span>}
+                  {ind.good===false&&<span style={{ fontSize:ds.font.size.xs,color:RED,flexShrink:0,marginLeft:6 }}>⚠</span>}
                 </div>
                 <div style={{ fontSize:20,fontWeight:700,color:ind.color,lineHeight:1,marginBottom:4 }}>{ind.value}</div>
                 <div style={{ fontSize:ds.font.size.xs,color:TX3,lineHeight:1.4 }}>{ind.desc}</div>
@@ -1057,14 +1057,14 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
       ))}
 
       <div style={{ padding:"12px 16px",background:`${BLU}06`,border:`1px solid ${BLU}18`,borderRadius:8,fontSize:11,color:TX2 }}>
-        â ï¸ Indicadores calculados com base nos lanÃ§amentos cadastrados no sistema. Para ROE e Endividamento, que requerem dados de balanÃ§o patrimonial, consulte seu contador.
+        ⚠️ Indicadores calculados com base nos lançamentos cadastrados no sistema. Para ROE e Endividamento, que requerem dados de balanço patrimonial, consulte seu contador.
       </div>
     </div>
   );
 }
 
 
-// âââ Contador Export Modal ââââââââââââââââââââââââââââââââ
+// ─── Contador Export Modal ────────────────────────────────
 function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose, initialFrom, initialTo }) {
   const [period, setPeriod] = useState("month");
   const _defMonth = initialFrom ? initialFrom.slice(0,7) : new Date().toISOString().substr(0,7);
@@ -1084,7 +1084,7 @@ function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose, i
   const totalDiv = _expAgg.totalDividendos;
 
   const periodLabel = period==="month" ? new Date(selMonth+"-15").toLocaleDateString("pt-BR",{month:"long",year:"numeric"})
-    : period==="year" ? selYear : "Todos os perÃ­odos";
+    : period==="year" ? selYear : "Todos os períodos";
 
   const generateReport = () => {
     const cats = {};
@@ -1098,7 +1098,7 @@ function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose, i
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
-<title>RelatÃ³rio ContÃ¡bil â ${periodLabel}</title>
+<title>Relatório Contábil — ${periodLabel}</title>
 <style>
   body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:40px;line-height:1.5}
   h1{font-size:18px;margin-bottom:4px}
@@ -1121,8 +1121,8 @@ function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose, i
 </style>
 </head>
 <body>
-<h1>RelatÃ³rio ContÃ¡bil Â· Stand ProduÃ§Ãµes / Veloso ProduÃ§Ãµes</h1>
-<p style="color:#666;margin-bottom:24px">PerÃ­odo: <strong>${periodLabel}</strong> Â· Gerado em ${new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"})}</p>
+<h1>Relatório Contábil · Stand Produções / Veloso Produções</h1>
+<p style="color:#666;margin-bottom:24px">Período: <strong>${periodLabel}</strong> · Gerado em ${new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"long",year:"numeric"})}</p>
 
 <div class="resumo">
   <div class="resumo-card">
@@ -1130,7 +1130,7 @@ function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose, i
     <div class="resumo-valor" style="color:#16a34a">R$ ${totalEnt.toLocaleString("pt-BR",{minimumFractionDigits:2})}</div>
   </div>
   <div class="resumo-card">
-    <div class="resumo-label">SaÃ­das + Impostos</div>
+    <div class="resumo-label">Saídas + Impostos</div>
     <div class="resumo-valor" style="color:#c8102e">R$ ${totalSai.toLocaleString("pt-BR",{minimumFractionDigits:2})}</div>
   </div>
   <div class="resumo-card">
@@ -1139,20 +1139,20 @@ function ContadorExportModal({ transactions, baseBalance, saldoTotal, onClose, i
   </div>
 </div>
 
-<h2>LanÃ§amentos por Categoria</h2>
+<h2>Lançamentos por Categoria</h2>
 ${Object.entries(cats).map(([cat,items])=>`
   <h3>${cat}</h3>
   <table>
-    <tr><th>Data</th><th>DescriÃ§Ã£o</th><th>Tipo</th><th>Parcela</th><th>NF</th><th class="valor">Valor</th></tr>
+    <tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Parcela</th><th>NF</th><th class="valor">Valor</th></tr>
     ${items.map(t=>`
       <tr>
         <td>${new Date(t.date+"T12:00:00").toLocaleDateString("pt-BR")}</td>
-        <td>${t.description||"â"}${t.beneficiario?` (${t.beneficiario})`:""}</td>
-        <td>${t.type==="entrada"?"Entrada":t.type==="saida"?"SaÃ­da":t.type==="dividendos"?"Dividendos":t.type==="imposto"?"Imposto":"Transfer."}</td>
-        <td>${t.parcelaAtual&&t.parcelaTotal?`${t.parcelaAtual}/${t.parcelaTotal}x`:"â"}</td>
-        <td>${t.nfFile?"ð Anexada":t.nfLink?`<a href="${t.nfLink}" target="_blank">Ver NF</a>`:"â"}</td>
+        <td>${t.description||"—"}${t.beneficiario?` (${t.beneficiario})`:""}</td>
+        <td>${t.type==="entrada"?"Entrada":t.type==="saida"?"Saída":t.type==="dividendos"?"Dividendos":t.type==="imposto"?"Imposto":"Transfer."}</td>
+        <td>${t.parcelaAtual&&t.parcelaTotal?`${t.parcelaAtual}/${t.parcelaTotal}x`:"—"}</td>
+        <td>${t.nfFile?"📄 Anexada":t.nfLink?`<a href="${t.nfLink}" target="_blank">Ver NF</a>`:"—"}</td>
         <td class="valor ${t.type==="entrada"?"entrada":t.type==="dividendos"?"dividendo":"saida"}">
-          ${t.type==="entrada"?"+":"â"} R$ ${Number(t.amount).toLocaleString("pt-BR",{minimumFractionDigits:2})}
+          ${t.type==="entrada"?"+":"−"} R$ ${Number(t.amount).toLocaleString("pt-BR",{minimumFractionDigits:2})}
         </td>
       </tr>
     `).join("")}
@@ -1167,13 +1167,13 @@ ${Object.entries(cats).map(([cat,items])=>`
 <table>
   <tr><th>Item</th><th class="valor">Valor</th></tr>
   <tr><td>Receitas</td><td class="valor entrada">+ R$ ${totalEnt.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
-  <tr><td>Despesas e Impostos</td><td class="valor saida">â R$ ${totalSai.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
-  <tr><td>Dividendos DistribuÃ­dos</td><td class="valor dividendo">â R$ ${totalDiv.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
-  <tr class="total-row"><td>Resultado do perÃ­odo</td><td class="valor">R$ ${(totalEnt-totalSai-totalDiv).toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
+  <tr><td>Despesas e Impostos</td><td class="valor saida">− R$ ${totalSai.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
+  <tr><td>Dividendos Distribuídos</td><td class="valor dividendo">− R$ ${totalDiv.toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
+  <tr class="total-row"><td>Resultado do período</td><td class="valor">R$ ${(totalEnt-totalSai-totalDiv).toLocaleString("pt-BR",{minimumFractionDigits:2})}</td></tr>
 </table>
 
 <div class="footer">
-  ENTREGAS Â· Stand / Veloso ProduÃ§Ãµes Â· Gerado automaticamente Â· ${new Date().toLocaleString("pt-BR")}
+  ENTREGAS · Stand / Veloso Produções · Gerado automaticamente · ${new Date().toLocaleString("pt-BR")}
 </div>
 </body></html>`;
 
@@ -1187,31 +1187,31 @@ ${Object.entries(cats).map(([cat,items])=>`
     <Modal title="Exportar para Contador" onClose={onClose} width={560}
       footer={<>
         <Btn onClick={onClose} variant="ghost" size="sm">Fechar</Btn>
-        <DsButton variant="secondary" size="sm" onClick={generateReport} leftIcon={<DsIcon name="printer" size={13} color={ds.color.neutral[600]}/>}>Gerar relatÃ³rio PDF</DsButton>
+        <DsButton variant="secondary" size="sm" onClick={generateReport} leftIcon={<DsIcon name="printer" size={13} color={ds.color.neutral[600]}/>}>Gerar relatório PDF</DsButton>
       </>}>
 
-      <SRule>PerÃ­odo</SRule>
+      <SRule>Período</SRule>
       <div style={{ display:"flex",gap:8,marginBottom:16 }}>
-        {[{id:"month",label:"MÃªs"},{id:"year",label:"Ano"},{id:"all",label:"Todos"}].map(p=>(
+        {[{id:"month",label:"Mês"},{id:"year",label:"Ano"},{id:"all",label:"Todos"}].map(p=>(
           <div key={p.id} onClick={()=>setPeriod(p.id)}
             style={{ padding:"6px 14px",fontSize:12,fontWeight:period===p.id?700:400,cursor:"pointer",borderRadius:99,border:`1px solid ${period===p.id?TX:LN}`,background:period===p.id?TX:"none",color:period===p.id?"white":TX2,transition:TRANS }}>
             {p.label}
           </div>
         ))}
       </div>
-      {period==="month"&&<Field label="MÃªs"><Input type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)}/></Field>}
+      {period==="month"&&<Field label="Mês"><Input type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)}/></Field>}
       {period==="year"&&<Field label="Ano"><Select value={selYear} onChange={e=>setSelYear(e.target.value)}>{[2024,2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}</Select></Field>}
 
-      <SRule>Resumo do perÃ­odo</SRule>
+      <SRule>Resumo do período</SRule>
       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16 }}>
-        {[["Entradas",totalEnt,GRN],["SaÃ­das",totalSai,RED],["Dividendos",totalDiv,"#7C3AED"]].map(([l,v,c])=>(
+        {[["Entradas",totalEnt,GRN],["Saídas",totalSai,RED],["Dividendos",totalDiv,"#7C3AED"]].map(([l,v,c])=>(
           <div key={l} style={{ ...G,padding:"10px 12px",borderLeft:`3px solid ${c}` }}>
             <div style={{ fontSize:ds.font.size.xs,color:TX2,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4 }}>{l}</div>
             <div style={{ fontSize:15,fontWeight:700,color:c }}>{fmtMoney(v)}</div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize:11,color:TX2,marginBottom:8 }}>{filtered.length} lanÃ§amentos no perÃ­odo</div>
+      <div style={{ fontSize:11,color:TX2,marginBottom:8 }}>{filtered.length} lançamentos no período</div>
 
       {nfItems.length>0&&(
         <>
@@ -1219,23 +1219,23 @@ ${Object.entries(cats).map(([cat,items])=>`
           <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
             {nfItems.map((tx,i)=>(
               <div key={i} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:B2,borderRadius:7 }}>
-                <span style={{ fontSize:14 }}>{tx.nfFile?.type?.includes("image")?"ð¼":"ð"}</span>
+                <span style={{ fontSize:14 }}>{tx.nfFile?.type?.includes("image")?"🖼":"📄"}</span>
                 <div style={{ flex:1,minWidth:0 }}>
                   <div style={{ fontSize:11,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
-                  <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>{fmtDate(tx.date)} Â· {fmtMoney(tx.amount)}</div>
+                  <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>{fmtDate(tx.date)} · {fmtMoney(tx.amount)}</div>
                 </div>
                 {tx.nfFile&&<a href={tx.nfFile.data} download={tx.nfFile.name||`NF_${tx.description}.pdf`}
-                  style={{ padding:"4px 10px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>â Baixar</a>}
+                  style={{ padding:"4px 10px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>↓ Baixar</a>}
                 {tx.nfLink&&!tx.nfFile&&<a href={tx.nfLink} target="_blank" rel="noreferrer"
-                  style={{ padding:"4px 10px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>â Ver</a>}
+                  style={{ padding:"4px 10px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",flexShrink:0 }}>↗ Ver</a>}
               </div>
             ))}
           </div>
-          <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:8 }}>ð¡ Baixe cada NF individualmente e envie junto com o relatÃ³rio PDF para o contador.</div>
+          <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:8 }}>💡 Baixe cada NF individualmente e envie junto com o relatório PDF para o contador.</div>
         </>
       )}
       {nfItems.length===0&&filtered.length>0&&(
-        <div style={{ fontSize:11,color:TX3,fontStyle:"italic" }}>Nenhuma NF anexada nos lanÃ§amentos deste perÃ­odo.</div>
+        <div style={{ fontSize:11,color:TX3,fontStyle:"italic" }}>Nenhuma NF anexada nos lançamentos deste período.</div>
       )}
     </Modal>
   );
@@ -1243,13 +1243,13 @@ ${Object.entries(cats).map(([cat,items])=>`
 
 
 export default function Caixa({ contracts, openCopilot, role = "admin", syncStatus = "synced", onRetrySync, toast: toastProp }) {
-  // ââ Step-up session ââââââââââââââââââââââââââââââââââââ
+  // ── Step-up session ────────────────────────────────────
   const session = useCaixaSession();
   const { unlocked } = session;
   const isMobile = useIsMobile();
 
   // tab state moved to useQueryState above
-  // ââ Seed from localStorage immediately so UI never flashes empty ââ
+  // ── Seed from localStorage immediately so UI never flashes empty ──
   const [transactions, setTransactions] = useState(() => lsLoad("caixa_tx", []));
   const [baseBalance, setBaseBalance]   = useState(() => lsLoad("caixa_base", 0));
   const [baseDate, setBaseDate]         = useState(() => lsLoad("caixa_base_date", ""));
@@ -1259,10 +1259,10 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const pendingSync = useRef(null); // last list awaiting debounced sync
 
   // Carrega e mescla dados do Firebase com localStorage
-  // EstratÃ©gia: merge por ID â Firebase + localStorage, item mais recente vence.
+  // Estratégia: merge por ID — Firebase + localStorage, item mais recente vence.
   // Isso evita perda de dados quando:
-  //   - O sync falhou silenciosamente em uma sessÃ£o anterior
-  //   - TransaÃ§Ãµes foram criadas em sessÃµes diferentes (mÃºltiplas abas/devices)
+  //   - O sync falhou silenciosamente em uma sessão anterior
+  //   - Transações foram criadas em sessões diferentes (múltiplas abas/devices)
   useEffect(() => {
     let cancelled = false;
     const load = async (attempt = 0) => {
@@ -1276,20 +1276,20 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
         const localTxs = lsLoad("caixa_tx", []);
 
-        // Se Firebase retornou vazio e localStorage tem dados â pode ser auth
-        // ainda inicializando. Tenta 1 vez apÃ³s 1.5s.
+        // Se Firebase retornou vazio e localStorage tem dados → pode ser auth
+        // ainda inicializando. Tenta 1 vez após 1.5s.
         if ((!remoteTxs || remoteTxs.length === 0) && localTxs.length > 0 && attempt === 0) {
           setTimeout(() => load(1), 1500);
           return;
         }
 
-        // ââ Merge por ID: une as duas fontes, item mais recente vence ââââââââââ
-        // TransaÃ§Ãµes sem updatedAt sÃ£o tratadas como mais antigas (ts = "")
+        // ── Merge por ID: une as duas fontes, item mais recente vence ──────────
+        // Transações sem updatedAt são tratadas como mais antigas (ts = "")
         const mergeTs = (t) => t.updatedAt || t.createdAt || "";
         const map = new Map();
         // 1. Seed com Firebase
         for (const t of (remoteTxs || [])) map.set(t.id, t);
-        // 2. Local sobrescreve se for mais recente (ou se Firebase nÃ£o tem o item)
+        // 2. Local sobrescreve se for mais recente (ou se Firebase não tem o item)
         for (const t of localTxs) {
           const existing = map.get(t.id);
           if (!existing || mergeTs(t) > mergeTs(existing)) map.set(t.id, t);
@@ -1300,11 +1300,11 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         prevTxIds.current = merged.map(t => t.id);
         lsSave("caixa_tx", merged);
 
-        // Se o merge adicionou itens que o Firebase nÃ£o tinha â re-sincroniza
+        // Se o merge adicionou itens que o Firebase não tinha → re-sincroniza
         const remoteIds = new Set((remoteTxs || []).map(t => t.id));
         const hasNew    = merged.some(t => !remoteIds.has(t.id));
         if (hasNew) {
-          console.warn("[Caixa] Itens locais nÃ£o encontrados no Firebase â re-sincronizando...");
+          console.warn("[Caixa] Itens locais não encontrados no Firebase — re-sincronizando...");
           /* DESATIVADO: re-sync automatico de locais 'faltantes' ressuscitava docs deletados em outras maquinas. Firestore agora e autoridade. */
         }
 
@@ -1313,7 +1313,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
       } catch(e) {
         console.error("[Caixa] Erro ao carregar dados:", e);
-        // localStorage jÃ¡ foi semeado no useState inicial â UI continua funcionando
+        // localStorage já foi semeado no useState inicial — UI continua funcionando
       }
     };
     load();
@@ -1324,7 +1324,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const [aiMessages, setAiMessages] = useState([]);
   const [aiInput, setAiInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  // ââ URL-persisted state (Task 3) âââââââââââââââââââââââââââââââââââââ
+  // ── URL-persisted state (Task 3) ─────────────────────────────────────
   // dreYear lives in IndicadoresFinanceiros but is lifted here for URL sync
   const [dreYear, setDreYear] = useQueryState("caixa_dre_ano", new Date().getFullYear(), {
     serialize: (v) => String(v),
@@ -1343,7 +1343,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   // toast comes as a prop from ViewRenderer (bypasses lazy module context boundary)
   const toast = toastProp ?? null;
 
-  // ââ Executa o sync efetivo no Firestore (chamada por debounce) âââââââââââ
+  // ── Executa o sync efetivo no Firestore (chamada por debounce) ───────────
   const flushSync = useCallback(async (stamped) => {
     try {
       const newIds  = new Set(stamped.map(t => t.id));
@@ -1356,21 +1356,21 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     } catch(e) {
       console.error("[Caixa] flushSync falhou:", e);
       const errMsg = e?.code === "resource-exhausted"
-        ? "Cota do banco atingida. Dados salvos localmente â serÃ£o sincronizados quando a cota resetar (meia-noite, horÃ¡rio de LA)."
+        ? "Cota do banco atingida. Dados salvos localmente — serão sincronizados quando a cota resetar (meia-noite, horário de LA)."
         : "Falha ao sincronizar com o banco. Dados salvos localmente.";
       try { toast?.(errMsg, "error"); } catch {}
     }
   }, [toast]);
 
-  // ââ saveTx: atualiza estado/localStorage imediatamente, debounce o Firestore ââ
+  // ── saveTx: atualiza estado/localStorage imediatamente, debounce o Firestore ──
   const saveTx = useCallback((list) => {
     const now = new Date().toISOString();
     const stamped = list.map(t => t.updatedAt ? t : { ...t, updatedAt: now });
-    // 1. Estado local e localStorage â imediato (zero latÃªncia percebida)
+    // 1. Estado local e localStorage — imediato (zero latência percebida)
     setTransactions(stamped);
     lsSave("caixa_tx", stamped);
     pendingSync.current = stamped;
-    // 2. Firestore â debounce 2s (agrupa mÃºltiplas ediÃ§Ãµes em 1 escrita)
+    // 2. Firestore — debounce 2s (agrupa múltiplas edições em 1 escrita)
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
       if (pendingSync.current) flushSync(pendingSync.current);
@@ -1395,7 +1395,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       await setSetting("caixa_base_date", date);
     } catch(e) {
       if (import.meta.env.DEV) console.error("[Caixa] updateBase:", e);
-      toast?.("Falha ao salvar saldo base remoto. CÃ³pia local OK.", "warning");
+      toast?.("Falha ao salvar saldo base remoto. Cópia local OK.", "warning");
     }
   };
 
@@ -1404,7 +1404,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   // Period picker state
   const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
 
-  // ââ Role gate (Task 2) âââââââââââââââââââââââââââââââââ
+  // ── Role gate (Task 2) ─────────────────────────────────
   if (role !== "admin") {
     return (
       <div style={{ padding:ds.space[12], textAlign:"center", color:TX2 }}>
@@ -1412,32 +1412,32 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
           <DsIcon name="lock" size={22} color={ds.color.neutral[500]}/>
         </div>
         <h2 style={{ fontSize:ds.font.size.lg,fontWeight:ds.font.weight.semibold,color:TX,marginBottom:ds.space[1],letterSpacing:"-.01em" }}>Acesso restrito</h2>
-        <p style={{ fontSize:ds.font.size.sm,color:TX2,maxWidth:320,margin:"0 auto" }}>O Controle Financeiro estÃ¡ disponÃ­vel apenas para administradores.</p>
+        <p style={{ fontSize:ds.font.size.sm,color:TX2,maxWidth:320,margin:"0 auto" }}>O Controle Financeiro está disponível apenas para administradores.</p>
       </div>
     );
   }
 
-  // ââ Step-up gate: if session is locked, show CaixaGate ââ
-  // (hook is always called above â gate wraps the JSX output, not the hooks)
+  // ── Step-up gate: if session is locked, show CaixaGate ──
+  // (hook is always called above — gate wraps the JSX output, not the hooks)
   if (!unlocked) {
     return <CaixaGate session={session}><div/></CaixaGate>;
   }
 
-  // ââ Computed saldo ââââââââââââââââââââââââââââââââââââââ
-  // Saldo REALIZADO: sÃ³ conta transaÃ§Ãµes com data <= hoje.
-  // Parcelas futuras sÃ£o COMPROMISSOS (exibidos em "Parcelas futuras" no Dashboard),
-  // nÃ£o devem desfalcar o caixa antes de vencer.
+  // ── Computed saldo ──────────────────────────────────────
+  // Saldo REALIZADO: só conta transações com data <= hoje.
+  // Parcelas futuras são COMPROMISSOS (exibidos em "Parcelas futuras" no Dashboard),
+  // não devem desfalcar o caixa antes de vencer.
   const _today = useMemo(() => {
     const t = new Date();
     return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
   }, []);
 
-  // TransaÃ§Ãµes realizadas (passado + hoje)
+  // Transações realizadas (passado + hoje)
   const realizedTx = useMemo(
     () => transactions.filter(t => t.date && t.date <= _today),
     [transactions, _today]
   );
-  // TransaÃ§Ãµes futuras (ainda nÃ£o vencidas)
+  // Transações futuras (ainda não vencidas)
   const futureTx = useMemo(
     () => transactions.filter(t => t.date && t.date > _today),
     [transactions, _today]
@@ -1450,12 +1450,12 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const totalSaidas     = _aggRealized.totalOutflows;
   const totalDividendos = _aggRealized.totalDividendos;
 
-  // Comprometido futuro (para exibiÃ§Ã£o no Dashboard â nÃ£o altera saldo)
+  // Comprometido futuro (para exibição no Dashboard — não altera saldo)
   const _aggFuture      = useMemo(() => aggregate(futureTx, 0), [futureTx]);
   const futureSaidas    = _aggFuture.totalOutflows;   // quanto ainda vai sair
   const futureEntradas  = _aggFuture.totalEntradas;   // quanto ainda vai entrar
 
-  // ââ Period-based filtering âââââââââââââââââââââââââââââââ
+  // ── Period-based filtering ───────────────────────────────
   const periodTx = useMemo(() =>
     transactions.filter(t => t.date >= period.from && t.date <= period.to),
     [transactions, period.from, period.to]
@@ -1485,7 +1485,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
   const TABS = [
     { id:"dash",        label:"Dashboard" },
-    { id:"lancamentos", label:"LanÃ§amentos" },
+    { id:"lancamentos", label:"Lançamentos" },
     { id:"dre",         label:"DRE" },
     { id:"indicadores", label:"Indicadores" },
     { id:"ia",          label:"Consulta IA", hidden:true },
@@ -1498,7 +1498,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:4 }}>
           <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
           <span style={{ fontSize:ds.font.size.xs,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
-          {/* Sync status chip â Task 4 */}
+          {/* Sync status chip — Task 4 */}
           {(() => {
             const map = {
               synced:  { label:"Sincronizado",   color:GRN,  icon:"checkCircle",  spin:false },
@@ -1532,17 +1532,17 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
             Exportar para contador
           </button>
         </div>
-        <p style={{ fontSize:13,color:TX2 }}>LanÃ§amentos, saldo e DRE</p>
+        <p style={{ fontSize:13,color:TX2 }}>Lançamentos, saldo e DRE</p>
       </div>
 
-      {/* KPIs â valores realizados (date <= hoje) */}
+      {/* KPIs — valores realizados (date <= hoje) */}
       <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${saldoTotal>=0?TX:RED}` }}>
           <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo Total</div>
           <div style={{ fontSize:22,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{valuesHidden ? "••••••" : fmtMoney(saldoTotal)}</div>
           <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>
             base + realizados
-            {futureSaidas>0&&<span style={{ color:AMB,marginLeft:6 }}>Â· â{valuesHidden ? "••••••" : fmtMoney(futureSaidas)} comprometido</span>}
+            {futureSaidas>0&&<span style={{ color:AMB,marginLeft:6 }}>· −{valuesHidden ? "••••••" : fmtMoney(futureSaidas)} comprometido</span>}
           </div>
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${GRN}` }}>
@@ -1551,7 +1551,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
           {futureEntradas>0&&<div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>+{valuesHidden ? "••••••" : fmtMoney(futureEntradas)} a receber</div>}
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${RED}` }}>
-          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>SaÃ­das realizadas</div>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saídas realizadas</div>
           <div style={{ fontSize:22,fontWeight:700,color:RED }}>{valuesHidden ? "••••••" : fmtMoney(totalSaidas)}</div>
           {futureSaidas>0&&<div style={{ fontSize:ds.font.size.xs,color:AMB,marginTop:2 }}>{valuesHidden ? "••••••" : fmtMoney(futureSaidas)} agendado</div>}
         </div>
@@ -1567,7 +1567,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       {/* Tabs */}
       <div
         role="tablist"
-        aria-label="SeÃ§Ãµes do Controle Financeiro"
+        aria-label="Seções do Controle Financeiro"
         style={{ display:"flex",gap:0,borderBottom:`1px solid ${LN}`,marginBottom:20,marginTop:16,alignItems:"center" }}
         onKeyDown={(e)=>{
           const visible = TABS.filter(t=>!t.hidden);
@@ -1611,29 +1611,29 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} activePeriod={period} valuesHidden={valuesHidden}/>}
       </div>
 
-      {/* LanÃ§amentos por mÃªs */}
+      {/* Lançamentos por mês */}
       <div id="tabpanel-lancamentos" role="tabpanel" aria-labelledby="tab-lancamentos" tabIndex={0} hidden={tab!=="lancamentos"}>
       {tab==="lancamentos" && (
         <div>
           {/* Filters */}
           <div style={{ display:"flex",gap:8,marginBottom:12,flexWrap:"wrap" }}>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar descriÃ§Ã£o, categoria..."
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar descrição, categoria..."
               style={{ flex:1,minWidth:180,padding:"7px 12px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontFamily:"inherit",outline:"none" }}/>
             {/* Value range filter */}
             <div style={{ display:"flex",alignItems:"center",gap:4,background:B1,border:`1px solid ${LN}`,borderRadius:8,padding:"0 10px" }}>
               <span style={{ fontSize:ds.font.size.xs,color:TX3,flexShrink:0 }}>R$</span>
               <input type="number" value={minVal} onChange={e=>setMinVal(e.target.value)} placeholder="Min"
                 style={{ width:64,padding:"7px 0",fontSize:12,background:"transparent",border:"none",color:TX,fontFamily:"inherit",outline:"none" }}/>
-              <span style={{ fontSize:ds.font.size.xs,color:TX3 }}>â</span>
+              <span style={{ fontSize:ds.font.size.xs,color:TX3 }}>–</span>
               <input type="number" value={maxVal} onChange={e=>setMaxVal(e.target.value)} placeholder="Max"
                 style={{ width:64,padding:"7px 0",fontSize:12,background:"transparent",border:"none",color:TX,fontFamily:"inherit",outline:"none" }}/>
               {(minVal||maxVal) && (
                 <button onClick={()=>{setMinVal("");setMaxVal("");}}
-                  style={{ background:"none",border:"none",color:TX3,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1 }}>Ã</button>
+                  style={{ background:"none",border:"none",color:TX3,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1 }}>×</button>
               )}
             </div>
             <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
-              {[{id:"all",label:"Todos"},{id:"entrada",label:"â Entradas"},{id:"saida",label:"â SaÃ­das"},{id:"dividendos",label:"Dividendos"},{id:"imposto",label:"Impostos"},{id:"transferencia",label:"Trans."}].map(f=>(
+              {[{id:"all",label:"Todos"},{id:"entrada",label:"↓ Entradas"},{id:"saida",label:"↑ Saídas"},{id:"dividendos",label:"Dividendos"},{id:"imposto",label:"Impostos"},{id:"transferencia",label:"Trans."}].map(f=>(
                 <div key={f.id} onClick={()=>setFilterType2(f.id)}
                   style={{ padding:"6px 12px",fontSize:11,fontWeight:filterType2===f.id?700:400,cursor:"pointer",borderRadius:99,border:`1px solid ${filterType2===f.id?TX:LN}`,background:filterType2===f.id?TX:"none",color:filterType2===f.id?"white":TX2,transition:TRANS,whiteSpace:"nowrap" }}>
                   {f.label}
@@ -1641,15 +1641,15 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
               ))}
             </div>
           </div>
-          {/* ââ Period nav ââââââââââââââââââââââââââââââââââ */}
+          {/* ── Period nav ────────────────────────────────── */}
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-            {/* â¹ prev */}
+            {/* ‹ prev */}
             <button
               onClick={()=>setPeriod(p=>shiftPeriod(p,-1))}
               disabled={!pCanNav}
-              title={pCanNav?"PerÃ­odo anterior":"PerÃ­odo relativo â nÃ£o navegÃ¡vel"}
+              title={pCanNav?"Período anterior":"Período relativo — não navegável"}
               style={{ background:"none",border:`1px solid ${pCanNav?LN:LN+"80"}`,borderRadius:6,width:32,height:32,cursor:pCanNav?"pointer":"not-allowed",color:pCanNav?TX2:TX3,fontSize:16,flexShrink:0 }}>
-              â¹
+              ‹
             </button>
 
             {/* Period label + subtotals + picker */}
@@ -1660,19 +1660,19 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
                 style={{ background:"none",border:`1px solid transparent`,fontWeight:700,fontSize:15,color:TX,cursor:"pointer",fontFamily:"inherit",padding:"2px 8px",borderRadius:4,transition:"border-color .15s" }}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=LN}
                 onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
-                {pLabel} â¾
+                {pLabel} ▾
               </button>
               <div style={{ fontSize:11,color:TX2,marginTop:1 }}>
                 <span style={{ color:GRN }}>+{valuesHidden ? "••••••" : fmtMoney(monthEntradas)}</span>
-                {" Â· "}
-                <span style={{ color:RED }}>â{valuesHidden ? "••••••" : fmtMoney(monthSaidas)}</span>
-                {monthDividendos>0&&<><span style={{ color:TX2 }}> Â· </span><span style={{ color:"#7C3AED" }}>div {valuesHidden ? "••••••" : fmtMoney(monthDividendos)}</span></>}
-                {" Â· "}
+                {" · "}
+                <span style={{ color:RED }}>−{valuesHidden ? "••••••" : fmtMoney(monthSaidas)}</span>
+                {monthDividendos>0&&<><span style={{ color:TX2 }}> · </span><span style={{ color:"#7C3AED" }}>div {valuesHidden ? "••••••" : fmtMoney(monthDividendos)}</span></>}
+                {" · "}
                 <span style={{ fontWeight:700,color:monthNet>=0?GRN:RED }}>{monthNet>=0?"+":""}{valuesHidden ? "••••••" : fmtMoney(monthNet)}</span>
                 {pDays>31&&<span style={{ marginLeft:6,fontSize:10,color:TX3,background:B2,border:`1px solid ${LN}`,borderRadius:99,padding:"1px 6px" }}>({pDays} dias)</span>}
               </div>
 
-              {/* ââ Period picker popover âââ */}
+              {/* ── Period picker popover ─── */}
               {periodPickerOpen&&(
                 <PeriodPicker
                   period={period}
@@ -1685,42 +1685,42 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
               )}
             </div>
 
-            {/* âº next */}
+            {/* › next */}
             <button
               onClick={()=>setPeriod(p=>shiftPeriod(p,+1))}
               disabled={!pCanNav}
-              title={pCanNav?"PrÃ³ximo perÃ­odo":"PerÃ­odo relativo â nÃ£o navegÃ¡vel"}
+              title={pCanNav?"Próximo período":"Período relativo — não navegável"}
               style={{ background:"none",border:`1px solid ${pCanNav?LN:LN+"80"}`,borderRadius:6,width:32,height:32,cursor:pCanNav?"pointer":"not-allowed",color:pCanNav?TX2:TX3,fontSize:16,flexShrink:0 }}>
-              âº
+              ›
             </button>
 
             {/* Reset to current month */}
             <button onClick={()=>setPeriod(defaultPeriod())}
               style={{ background:"none",border:`1px solid ${LN}`,borderRadius:6,padding:"0 10px",height:32,cursor:"pointer",color:TX2,fontSize:11,fontWeight:600,flexShrink:0 }}>
-              PadrÃ£o
+              Padrão
             </button>
 
-            <DsButton variant="primary" size="sm" onClick={()=>setTxModal({})} leftIcon={<DsIcon name="plus" size={13} color={ds.color.neutral[0]}/>}>LanÃ§amento</DsButton>
+            <DsButton variant="primary" size="sm" onClick={()=>setTxModal({})} leftIcon={<DsIcon name="plus" size={13} color={ds.color.neutral[0]}/>}>Lançamento</DsButton>
           </div>
 
           {/* Results counter + clear button (Task 1) */}
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:12,fontSize:12,color:TX2 }}>
             <div role="status" aria-live="polite">
-              Mostrando <strong style={{ color:TX }}>{monthTx.length}</strong> de {totalDoMes.length} lanÃ§amentos
+              Mostrando <strong style={{ color:TX }}>{monthTx.length}</strong> de {totalDoMes.length} lançamentos
             </div>
             {(search!==""||minVal!==""||maxVal!==""||filterType2!=="all") && (
               <button onClick={()=>{ setSearch(""); setMinVal(""); setMaxVal(""); setFilterType2("all"); }}
                 style={{ background:"none",border:`1px solid ${LN}`,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",color:TX2,transition:"all .15s" }}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=TX2}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>
-                Ã Limpar filtros
+                × Limpar filtros
               </button>
             )}
           </div>
 
           {monthTx.length===0 ? (
             <div style={{ textAlign:"center",padding:"48px 0",color:TX3 }}>
-              Nenhum lanÃ§amento neste perÃ­odo.
+              Nenhum lançamento neste período.
               <br/><DsButton variant="primary" size="sm" style={{marginTop:12}} onClick={()=>setTxModal({})}>+ Adicionar</DsButton>
             </div>
           ) : (
@@ -1736,24 +1736,24 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
                       <div style={{ fontWeight:600,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
                       <div style={{ fontSize:11,color:TX2,display:"flex",gap:8,marginTop:2,flexWrap:"wrap" }}>
                         <span>{fmtDate(tx.date)}</span>
-                        {tx.category&&<span>Â· {tx.category}</span>}
-                        {tx.beneficiario&&<span style={{fontWeight:600,color:"#7C3AED"}}>Â· {tx.beneficiario}</span>}
-                        {tx.contractId&&<span style={{color:TX3}}>Â· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
+                        {tx.category&&<span>· {tx.category}</span>}
+                        {tx.beneficiario&&<span style={{fontWeight:600,color:"#7C3AED"}}>· {tx.beneficiario}</span>}
+                        {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
                         {tx.installmentNum&&tx.installmentTotal&&<span style={{color:BLU,fontWeight:700,fontSize:ds.font.size.xs,padding:"1px 6px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}20`}}>{tx.installmentNum}/{tx.installmentTotal}x</span>}
-                        {tx.parcelaAtual&&tx.parcelaTotal&&<span style={{color:AMB,fontWeight:700}}>Â· {tx.parcelaAtual}/{tx.parcelaTotal}x</span>}
-                        {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>Â· NF</span>}
+                        {tx.parcelaAtual&&tx.parcelaTotal&&<span style={{color:AMB,fontWeight:700}}>· {tx.parcelaAtual}/{tx.parcelaTotal}x</span>}
+                        {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· NF</span>}
                       </div>
                       {tx.notes&&<div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>{tx.notes}</div>}
                     </div>
                     <div style={{ textAlign:"right",flexShrink:0 }}>
                       <div style={{ fontSize:15,fontWeight:700,color:tc }}>
-                        {tx.type==="entrada"?"+":tx.type==="transferencia"?"":"â"}{valuesHidden ? "•••••" : fmtMoney(tx.amount)}
+                        {tx.type==="entrada"?"+":tx.type==="transferencia"?"":"−"}{valuesHidden ? "•••••" : fmtMoney(tx.amount)}
                       </div>
                     </div>
                     <div style={{ display:"flex",gap:4,flexShrink:0 }}>
-                      <DsIconButton size="sm" variant="ghost" ariaLabel="Editar lanÃ§amento" onClick={()=>setTxModal(tx)}
+                      <DsIconButton size="sm" variant="ghost" ariaLabel="Editar lançamento" onClick={()=>setTxModal(tx)}
                         icon={<DsIcon name="edit" size={13} color={ds.color.neutral[500]}/>}/>
-                      <DsIconButton size="sm" variant="ghost" ariaLabel="Excluir lanÃ§amento" onClick={()=>{if(confirm("Excluir?")) saveTx(transactions.filter(t=>t.id!==tx.id));}}
+                      <DsIconButton size="sm" variant="ghost" ariaLabel="Excluir lançamento" onClick={()=>{if(confirm("Excluir?")) saveTx(transactions.filter(t=>t.id!==tx.id));}}
                         icon={<DsIcon name="x" size={13} color={ds.color.danger[500]}/>}/>
                     </div>
                   </div>
@@ -1776,7 +1776,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         const totalDiv2 = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
         const lucro2 = totalEnt2 - totalSai2 - totalDiv2;
         const catBreakdown = Object.entries(transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>`${k}: R$${v.toLocaleString("pt-BR")}`).join(", ");
-        const ctx = `Empresa: Stand/Veloso ProduÃ§Ãµes. Saldo: R$${saldoTotal.toLocaleString("pt-BR")}. Entradas: R$${totalEnt2.toLocaleString("pt-BR")}. SaÃ­das: R$${totalSai2.toLocaleString("pt-BR")}. Dividendos: R$${totalDiv2.toLocaleString("pt-BR")}. Lucro lÃ­quido: R$${lucro2.toLocaleString("pt-BR")}. Contratos ativos: ${contracts.length}. Top despesas: ${catBreakdown||"nenhuma"}. LanÃ§amentos: ${transactions.length}.`;
+        const ctx = `Empresa: Stand/Veloso Produções. Saldo: R$${saldoTotal.toLocaleString("pt-BR")}. Entradas: R$${totalEnt2.toLocaleString("pt-BR")}. Saídas: R$${totalSai2.toLocaleString("pt-BR")}. Dividendos: R$${totalDiv2.toLocaleString("pt-BR")}. Lucro líquido: R$${lucro2.toLocaleString("pt-BR")}. Contratos ativos: ${contracts.length}. Top despesas: ${catBreakdown||"nenhuma"}. Lançamentos: ${transactions.length}.`;
 
         const sendMsg = async () => {
           if (!aiInput.trim()) return;
@@ -1788,11 +1788,11 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
             const history = aiMessages.slice(-6).map(m=>({ role:m.role==="user"?"user":"assistant", content:m.text }));
             const res = await fetch("/api/ai",{ method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
               max_tokens: 1000,
-              system: `VocÃª Ã© o consultor financeiro do criador de conteÃºdo @veloso.lucas_ (canal de futebol, 2M seguidores). A empresa Ã© Stand/Veloso ProduÃ§Ãµes. Responda em portuguÃªs, de forma direta e prÃ¡tica. Contexto financeiro: ${ctx}`,
+              system: `Você é o consultor financeiro do criador de conteúdo @veloso.lucas_ (canal de futebol, 2M seguidores). A empresa é Stand/Veloso Produções. Responda em português, de forma direta e prática. Contexto financeiro: ${ctx}`,
               messages: [...history, { role:"user", content:userMsg }]
             })});
             const data = await res.json();
-            setAiMessages(m => [...m, { role:"assistant", text:data.text||"NÃ£o consegui processar." }]);
+            setAiMessages(m => [...m, { role:"assistant", text:data.text||"Não consegui processar." }]);
           } catch(e) { setAiMessages(m => [...m, { role:"assistant", text:"Erro: "+String(e) }]); }
           setAiLoading(false);
         };
@@ -1800,13 +1800,13 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         return (
           <div style={{ display:"flex",flexDirection:"column",height:"60vh",maxHeight:600 }}>
             <div style={{ ...G,padding:"10px 16px",marginBottom:16,fontSize:11,color:TX2 }}>
-              ð¡ Pergunte sobre seus nÃºmeros, estratÃ©gias financeiras, como reduzir custos, melhorar margens, planejamento tributÃ¡rio, etc.
+              💡 Pergunte sobre seus números, estratégias financeiras, como reduzir custos, melhorar margens, planejamento tributário, etc.
             </div>
             {/* Messages */}
             <div style={{ flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12,marginBottom:16,padding:"4px 0" }}>
               {aiMessages.length===0&&(
                 <div style={{ textAlign:"center",padding:"40px 20px",color:TX3 }}>
-                  <div style={{ fontSize:32,marginBottom:12 }}>â¡</div>
+                  <div style={{ fontSize:32,marginBottom:12 }}>⚡</div>
                   <div style={{ fontSize:13,fontWeight:600,color:TX2,marginBottom:8 }}>Consultor Financeiro IA</div>
                   <div style={{ fontSize:12,color:TX3 }}>Exemplos de perguntas:</div>
                   <div style={{ display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginTop:12 }}>
@@ -1819,7 +1819,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
               {aiMessages.map((msg,i)=>(
                 <div key={i} style={{ display:"flex",gap:10,flexDirection:msg.role==="user"?"row-reverse":"row",alignItems:"flex-start" }}>
                   <div style={{ width:28,height:28,borderRadius:"50%",background:msg.role==="user"?RED:`${BLU}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0,color:msg.role==="user"?"white":BLU,fontWeight:700 }}>
-                    {msg.role==="user"?"M":"â¡"}
+                    {msg.role==="user"?"M":"⚡"}
                   </div>
                   <div style={{ maxWidth:"80%",padding:"10px 14px",borderRadius:msg.role==="user"?"12px 12px 0 12px":"12px 12px 12px 0",background:msg.role==="user"?RED:B2,color:msg.role==="user"?"white":TX,fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap" }}>
                     {msg.text}
@@ -1828,7 +1828,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
               ))}
               {aiLoading&&(
                 <div style={{ display:"flex",gap:10,alignItems:"center" }}>
-                  <div style={{ width:28,height:28,borderRadius:"50%",background:`${BLU}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:BLU,fontWeight:700 }}>â¡</div>
+                  <div style={{ width:28,height:28,borderRadius:"50%",background:`${BLU}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:BLU,fontWeight:700 }}>⚡</div>
                   <div style={{ padding:"10px 14px",borderRadius:"12px 12px 12px 0",background:B2,fontSize:12,color:TX2 }}>Analisando seus dados...</div>
                 </div>
               )}
@@ -1836,7 +1836,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
             {/* Input */}
             <div style={{ display:"flex",gap:8 }}>
               <input value={aiInput} onChange={e=>setAiInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendMsg()}
-                placeholder="Pergunte algo sobre suas finanÃ§as..."
+                placeholder="Pergunte algo sobre suas finanças..."
                 style={{ flex:1,padding:"10px 14px",fontSize:13,background:B2,border:`1px solid ${LN}`,borderRadius:10,color:TX,fontFamily:"inherit",outline:"none",transition:TRANS }}
                 onFocus={e=>e.currentTarget.style.borderColor=RED} onBlur={e=>e.currentTarget.style.borderColor=LN}/>
               <button onClick={sendMsg} disabled={aiLoading||!aiInput.trim()}
@@ -1854,7 +1854,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       {tab==="dre" && (
         <div>
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:20 }}>
-            <span style={{ fontSize:12,color:TX2 }}>ExercÃ­cio:</span>
+            <span style={{ fontSize:12,color:TX2 }}>Exercício:</span>
             {[new Date().getFullYear()-1, new Date().getFullYear()].map(y=>(
               <div key={y} onClick={()=>setDreYear(y)}
                 style={{ padding:"5px 14px",fontSize:12,fontWeight:dreYear===y?700:400,cursor:"pointer",borderRadius:99,background:dreYear===y?TX:B2,color:dreYear===y?"white":TX2,border:`1px solid ${dreYear===y?TX:LN}`,transition:TRANS }}>
@@ -1876,7 +1876,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
           onSave={(tx)=>{
             if (Array.isArray(tx)) {
               saveTx([...transactions, ...tx]);
-              toast?.(`${tx.length} parcelas criadas ð`, "success");
+              toast?.(`${tx.length} parcelas criadas 🎉`, "success");
             } else {
               saveTx(txModal.id ? transactions.map(t=>t.id===tx.id?tx:t) : [...transactions,tx]);
               toast?.(`${txModal.id?"Atualizado":"Salvo"}`, "success");
@@ -1889,7 +1889,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   );
 }
 
-// âââ Saldo Base Editor ââââââââââââââââââââââââââââââââââââ
+// ─── Saldo Base Editor ────────────────────────────────────
 function SaldoBaseEditor({ baseBalance, baseDate, onSave, valuesHidden }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(baseBalance||"0"));
@@ -1904,7 +1904,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave, valuesHidden }) {
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
           <span style={{ fontSize:16,fontWeight:700,color:TX }}>{fmtMoney(Number(baseBalance)||0)}</span>
           {baseDate&&<span style={{ fontSize:11,color:TX2 }}>em {formatDate(baseDate)}</span>}
-          {!baseDate&&<span style={{ fontSize:11,color:TX3 }}>nÃ£o definido</span>}
+          {!baseDate&&<span style={{ fontSize:11,color:TX3 }}>não definido</span>}
         </div>
       </div>
       {!editing ? (
@@ -1916,7 +1916,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave, valuesHidden }) {
           <input type="date" value={date} onChange={e=>setDate(e.target.value)}
             style={{ padding:"6px 10px",fontSize:12,background:B2,border:`1px solid ${LN}`,borderRadius:6,color:TX,fontFamily:"inherit",outline:"none" }}/>
           <button onClick={save} style={{ padding:"6px 14px",background:GRN,border:"none",borderRadius:6,color:"white",fontSize:11,fontWeight:700,cursor:"pointer" }}>Salvar</button>
-          <button onClick={()=>{setEditing(false);}} style={{ padding:"6px 8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>Ã</button>
+          <button onClick={()=>{setEditing(false);}} style={{ padding:"6px 8px",background:"none",border:`1px solid ${LN}`,borderRadius:6,color:TX2,fontSize:11,cursor:"pointer" }}>×</button>
         </div>
       )}
     </div>

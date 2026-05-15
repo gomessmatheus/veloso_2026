@@ -1020,7 +1020,7 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
         { label:"Receita Total", tooltip:"Soma das entradas do ano fiscal.", value: valuesHidden ? "••••••" : fmtMoney(receita), desc:`Todas as entradas de ${year}`, color:GRN, good:null },
         { label:"Despesas Totais", tooltip:"SaÃ­das + impostos do ano fiscal.", value: valuesHidden ? "••••••" : fmtMoney(despesas), desc:`SaÃ­das + impostos de ${year}`, color:RED, good:null },
         { label:"Dividendos DistribuÃ­dos", tooltip:"Soma dos lanÃ§amentos do tipo dividendos.", value: valuesHidden ? "••••••" : fmtMoney(dividendos), desc:`DistribuiÃ§Ã£o de lucros de ${year}`, color:"#7C3AED", good:null },
-        {valuesHidden ? "••••••" : ( label:"Custo Fixo Total", tooltip:"RH + aluguel + utilidades + administrativo.", value:fmtMoney(custoFixo), desc:"RH, aluguel, utilidades, adm", color:TX2, good:null )},
+        { label:"Custo Fixo Total", tooltip:"RH + aluguel + utilidades + administrativo.", value:fmtMoney(custoFixo), desc:"RH, aluguel, utilidades, adm", color:TX2, good:null },
       ]
     }
   ];

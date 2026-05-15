@@ -992,7 +992,7 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
       items: [
         { label:"Margem de Lucro LÃ­quida", tooltip:"Lucro lÃ­quido Ã· Receita LÃ­quida.", value:margemLucro!=null?`${fmt2(margemLucro)}%`:"â", desc:"Lucro lÃ­quido / Receita", color:margemLucro!=null?(margemLucro>20?GRN:margemLucro>5?AMB:RED):TX2, good:margemLucro!=null&&margemLucro>20 },
         { label:"Margem Bruta", tooltip:"(Receita â Custos) Ã· Receita LÃ­quida.", value:margemBruta!=null?`${fmt2(margemBruta)}%`:"â", desc:"(Receita â Despesas) / Receita", color:margemBruta!=null?(margemBruta>30?GRN:margemBruta>10?AMB:RED):TX2, good:margemBruta!=null&&margemBruta>30 },
-        {valuesHidden ? "••••••" : ( label:"EBITDA", tooltip:"Receita LÃ­quida â Custos â Despesas Operacionais (D&A=0).", value:fmtMoney(ebitda), desc:"Resultado antes de impostos e dividendos", color:ebitda>=0?GRN:RED, good:ebitda>0 )},
+        { label:"EBITDA", tooltip:"Receita LÃ­quida â Custos â Despesas Operacionais (D&A=0).", value:fmtMoney(ebitda), desc:"Resultado antes de impostos e dividendos", color:ebitda>=0?GRN:RED, good:ebitda>0 },
         { label:"Margem EBITDA", tooltip:"EBITDA Ã· Receita LÃ­quida.", value:margemEBITDA!=null?`${fmt2(margemEBITDA)}%`:"â", desc:"EBITDA / Receita", color:margemEBITDA!=null?(margemEBITDA>25?GRN:margemEBITDA>10?AMB:RED):TX2, good:margemEBITDA!=null&&margemEBITDA>25 },
         { label:"ROI", tooltip:"Lucro LÃ­quido Ã· Total Investido.", value:roi!=null?`${fmt2(roi)}%`:"â", desc:"Lucro LÃ­quido / Total Investido", color:roi!=null?(roi>0?GRN:RED):TX2, good:roi!=null&&roi>0 },
       ]
@@ -1001,15 +1001,15 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
       group: "Liquidez & Caixa",
       items: [
         { label:"Liquidez (meses)", tooltip:"Saldo atual Ã· Despesa mensal mÃ©dia.", value:liquidez!=null?`${liquidez.toFixed(1)}x`:"â", desc:"Saldo atual cobre quantos meses de despesas", color:liquidez!=null?(liquidez>3?GRN:liquidez>1?AMB:RED):TX2, good:liquidez!=null&&liquidez>3 },
-        {valuesHidden ? "••••••" : ( label:"Saldo em Caixa", tooltip:"Saldo base + lanÃ§amentos acumulados.", value:fmtMoney(saldoTotal), desc:"Base inicial + lanÃ§amentos acumulados", color:saldoTotal>=0?TX:RED, good:saldoTotal>0 )},
+        { label:"Saldo em Caixa", tooltip:"Saldo base + lanÃ§amentos acumulados.", value:fmtMoney(saldoTotal), desc:"Base inicial + lanÃ§amentos acumulados", color:saldoTotal>=0?TX:RED, good:saldoTotal>0 },
         { label:"Despesa Mensal MÃ©dia", tooltip:"MÃ©dia das saÃ­das dos meses com movimento.", value: valuesHidden ? "••••••" : fmtMoney(despesaMensal), desc:`MÃ©dia de ${monthsWithData} meses com dados`, color:TX2, good:null },
       ]
     },
     {
       group: "Operacional",
       items: [
-        {valuesHidden ? "••••••" : ( label:"Ticket MÃ©dio Contratos", tooltip:"Soma dos contratos ativos Ã· nÂº de contratos.", value:ticketMedio!=null?fmtMoney(ticketMedio):"â", desc:"Valor mÃ©dio por contrato ativo", color:TX, good:null )},
-        {valuesHidden ? "••••••" : ( label:"Ponto de EquilÃ­brio", tooltip:"Receita mÃ­nima necessÃ¡ria para cobrir custos fixos + variÃ¡veis.", value:pontoEquil!=null?fmtMoney(pontoEquil):"â", desc:"Receita mÃ­nima para cobrir todos os custos", color:receita>0&&pontoEquil!=null?(receita>=pontoEquil?GRN:RED):TX2, good:receita>0&&pontoEquil!=null&&receita>=pontoEquil )},
+        { label:"Ticket MÃ©dio Contratos", tooltip:"Soma dos contratos ativos Ã· nÂº de contratos.", value:ticketMedio!=null?fmtMoney(ticketMedio):"â", desc:"Valor mÃ©dio por contrato ativo", color:TX, good:null },
+        { label:"Ponto de EquilÃ­brio", tooltip:"Receita mÃ­nima necessÃ¡ria para cobrir custos fixos + variÃ¡veis.", value:pontoEquil!=null?fmtMoney(pontoEquil):"â", desc:"Receita mÃ­nima para cobrir todos os custos", color:receita>0&&pontoEquil!=null?(receita>=pontoEquil?GRN:RED):TX2, good:receita>0&&pontoEquil!=null&&receita>=pontoEquil },
         { label:"Prazo MÃ©dio Recebimento", tooltip:"MÃ©dia dos prazos de pagamento dos contratos.", value:fmtDias(pmr), desc:"MÃ©dia dos prazos de contratos", color:pmr!=null?(pmr<60?GRN:pmr<90?AMB:RED):TX2, good:pmr!=null&&pmr<60 },
         { label:"Prazo MÃ©dio Estoque", tooltip:"N/A â empresa de serviÃ§os.", value:"N/A", desc:"NÃ£o aplicÃ¡vel â empresa de serviÃ§os", color:TX3, good:null },
       ]

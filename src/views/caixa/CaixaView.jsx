@@ -11,7 +11,7 @@
  *   src/lib/finance.js · src/lib/format.js · src/lib/url-state.js
  */
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";h
 import { useCaixaSession } from "../../lib/caixaSession.js";
 import {
   loadCaixaTx, subscribeCaixaTx, syncCaixaTx, getSetting, setSetting, deleteItem,
@@ -941,7 +941,7 @@ function NewAccountModal({ onClose, onSave }) {
 }
 
 // ─── Indicadores Financeiros ──────────────────────────────
-function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contracts, year: yearProp, setYear: setYearProp }) {
+function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contracts, year: yearProp, setYear: setYearProp, valuesHidden }) {
   const [yearLocal, setYearLocal] = useState(new Date().getFullYear());
   const year = yearProp ?? yearLocal;
   const setYear = setYearProp ?? setYearLocal;

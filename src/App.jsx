@@ -49,6 +49,8 @@ import { getSuggestions }         from "./lib/copilot/suggestions.js";
 import { runAction, ACTIONS }     from "./lib/copilot/actions.js";
 import { detectIntent }           from "./lib/copilot/intents.js";
 import { loadHistory, saveHistory, appendMessage, clearHistory } from "./lib/copilot/history.js";
+import { rolloverMonthlyContracts }   from "./lib/monthlyRollover.js";
+
 
 // ─── Design tokens ────────────────────────────────────────
 const B0  = "#FEFEFE";           // background (oklch 0.9940 0 0)
@@ -6097,6 +6099,21 @@ function AppContent() {
     })();
     return ()=>unsub?.();
   }, [user]);
+
+
+  // ── Rollover mensal automático ──────────────────────────
+  // Toda vez que contratos ou deliverables mudam, verifica se há meses
+  // sem entregáveis para contratos mensais e os cria automaticamente.
+  useEffect(() => {
+    if (!contracts.length) return;
+    const toCreate = rolloverMonthlyContracts({ contracts, deliverables });
+    if (toCreate.length === 0) return;
+    // Persiste os novos entregáveis
+    const updated = [...deliverables, ...toCreate];
+    syncDeliverables(updated, prevDIds.current, new Set(toCreate.map(d => d.id)));
+    setD(updated);
+    prevDIds.current = updated.map(d => d.id);
+  }, [contracts, deliverables]);
 
   // Presence
   useEffect(() => {

@@ -1256,16 +1256,18 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
           onNavigate={navigateTo}
           onActionClick={handleActionClick}
         />
+        <div style={{display:"flex",flexDirection:"column",gap:ds.space[4]}}>
         <RiskSignals
           signals={signals}
           isMobile={isMobile}
           onSignalClick={handleSignalClick}
         />
                 <AdSlotsCard
-                            deliverables={dashDeliverables}
-                            contracts={contracts}
-                            isMobile={isMobile}
-                          />
+            deliverables={dashDeliverables}
+            contracts={contracts}
+            isMobile={isMobile}
+          />
+        </div>
       </div>
 
       {/* BLOCO 4 — Linha do tempo da semana */}

@@ -121,7 +121,7 @@ function MonthCard({ data, expanded, onToggle }) {
           )}
           {/* Legenda capacidade */}
           <p style={{ margin: "8px 0 0", fontSize: 11, color: TX3 }}>
-            Capacidade: {capacity} posts/mês (média histórica)
+            Capacidade: {capacity} reels/mês
           </p>
         </div>
       )}
@@ -138,7 +138,7 @@ export function AdSlotsCard({ deliverables = [], contracts = [], isMobile = fals
   const [expanded, setExpanded] = React.useState(null);
 
   const slots = React.useMemo(
-    () => calcAdSlots({ deliverables, contracts }, 6),
+    () => calcAdSlots({ deliverables, contracts }, 3),
     [deliverables, contracts]
   );
 

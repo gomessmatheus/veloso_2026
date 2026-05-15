@@ -3675,28 +3675,28 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"1px",background:LN}}>
           {cells.map((d,i)=>{
             if(!d) return <div key={`e${i}`} style={{minHeight:isMobile?48:110,background:"#FAFAFA"}}/>;
-            const ds = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-            const isT = ds===todayStr;
-            const isDragTarget = dragOver===ds;
-            const dayDels  = visibleDels.filter(del=>del.plannedPostDate===ds);
-            const cEvents  = contractEventsFor(ds);
-            const travels  = travelFor(ds);
-            const cellHov  = hoveredDate===ds;
-            const conflictSev = conflictDateMap[ds]; // 'BLOCK' | 'WARN' | 'INFO' | undefined
+            const dStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+            const isT = dStr===todayStr;
+            const isDragTarget = dragOver===dStr;
+            const dayDels  = visibleDels.filter(del=>del.plannedPostDate===dStr);
+            const cEvents  = contractEventsFor(dStr);
+            const travels  = travelFor(dStr);
+            const cellHov  = hoveredDate===dStr;
+            const conflictSev = conflictDateMap[dStr]; // 'BLOCK' | 'WARN' | 'INFO' | undefined
             const conflictBorderColor = conflictSev === "BLOCK" ? RED : conflictSev === "WARN" ? AMB : conflictSev === "INFO" ? BLU : null;
 
             return (
               <div key={d}
-                onMouseEnter={()=>setHoveredDate(ds)}
+                onMouseEnter={()=>setHoveredDate(dStr)}
                 onMouseLeave={()=>setHoveredDate(null)}
-                onDragOver={e=>{e.preventDefault();setDragOver(ds);}}
+                onDragOver={e=>{e.preventDefault();setDragOver(dStr);}}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
-                onDrop={e=>handleDrop(e,ds)}
-                onClick={isMobile&&(dayDels.length>0||onNewDeliverable)?()=>setHoveredDate(hoveredDate===ds?null:ds):undefined}
+                onDrop={e=>handleDrop(e,dStr)}
+                onClick={isMobile&&(dayDels.length>0||onNewDeliverable)?()=>setHoveredDate(hoveredDate===dStr?null:dStr):undefined}
                 style={{
                   minHeight: isMobile?52:110,
                   padding: isMobile?"5px 4px":"6px 7px",
-                  background: isDragTarget?`${RED}06`:isT?`${RED}04`:(isMobile&&hoveredDate===ds)?`${RED}04`:cellHov&&!isMobile?B2:B1,
+                  background: isDragTarget?`${RED}06`:isT?`${RED}04`:(isMobile&&hoveredDate===dStr)?`${RED}04`:cellHov&&!isMobile?B2:B1,
                   border: isDragTarget ? `1px solid ${RED}40`
                         : conflictBorderColor ? `1.5px dashed ${conflictBorderColor}50`
                         : "none",
@@ -3710,14 +3710,14 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                 <div style={{marginBottom:isMobile?3:4,display:"flex",alignItems:"center",justifyContent:isMobile?"center":"space-between"}}>
                   {isT
                     ? <span style={{width:22,height:22,borderRadius:"50%",background:RED,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{d}</span>
-                    : <span style={{fontSize:11,fontWeight:400,color:hoveredDate===ds&&isMobile?RED:TX2}}>{d}</span>
+                    : <span style={{fontSize:11,fontWeight:400,color:hoveredDate===dStr&&isMobile?RED:TX2}}>{d}</span>
                   }
                   <div style={{display:"flex",alignItems:"center",gap:4}}>
                     {!isMobile && travels.length>0 && <span title={travels[0].label} style={{fontSize:11}}>✈️</span>}
                     {!isMobile && cellHov && onNewDeliverable && (
                       <button
-                        onClick={e=>{e.stopPropagation();onNewDeliverable(ds);}}
-                        title={`Novo entregável em ${fmtDate(ds)}`}
+                        onClick={e=>{e.stopPropagation();onNewDeliverable(dStr);}}
+                        title={`Novo entregável em ${fmtDate(dStr)}`}
                         style={{width:18,height:18,borderRadius:4,background:RED,border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,flexShrink:0,boxShadow:"0 1px 4px rgba(200,16,46,.3)"}}>
                         +
                       </button>

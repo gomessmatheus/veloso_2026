@@ -1099,7 +1099,7 @@ function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobil
           onClick={onNewContract}>
           Contrato
         </DsButton>
-      )}
+       )}
     </div>
   );
 }
@@ -1260,7 +1260,7 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
           onSignalClick={handleSignalClick}
         />
                 <AdSlotsCard
-                            deliverables={deliverables}
+                            deliverables={dashDeliverables}
                             contracts={contracts}
                             isMobile={isMobile}
                           />

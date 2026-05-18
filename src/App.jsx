@@ -2248,7 +2248,9 @@ function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, sa
   const [aiLoading, setAiLoading] = useState(false);
   const [showClientReport, setShowClientReport] = useState(false);
   const [briefingNote, setBriefingNote] = useState(c.briefingNote || "");
-  const [briefingFile, setBriefingFile] = useState(c.briefingFile || null);
+  const [briefingFiles, setBriefingFiles] = useState(c.briefingFiles || []);
+  const [briefingAiSummary, setBriefingAiSummary] = useState(c.briefingAiSummary || "");
+  const [loadingBriefingAI, setLoadingBriefingAI] = useState(false);
   const toast = useToast();
 
   const cPosts = posts.filter(p => p.contractId === c.id);
@@ -2284,17 +2286,46 @@ function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, sa
   };
 
   const handleBriefingFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  files.forEach(file => {
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const fileData = { name: file.name, size: file.size, type: file.type, data: ev.target.result, uploadedAt: new Date().toISOString() };
-      setBriefingFile(fileData);
-      await saveC(contracts.map(x => x.id === c.id ? {...x, briefingFile: fileData} : x));
+      const fileData = { id: uid(), name: file.name, size: file.size, type: file.type, data: ev.target.result, uploadedAt: new Date().toISOString() };
+      const updated = [...(briefingFiles || []), fileData];
+      setBriefingFiles(updated);
+      await saveC(contracts.map(x => x.id === c.id ? {...x, briefingFiles: updated} : x));
       toast?.("📎 Briefing salvo", "success");
     };
     reader.readAsDataURL(file);
-  };
+  });
+};
+
+const removeBriefingFile = async (fileId) => {
+  const updated = (briefingFiles || []).filter(f => f.id !== fileId);
+  setBriefingFiles(updated);
+  await saveC(contracts.map(x => x.id === c.id ? {...x, briefingFiles: updated} : x));
+};
+
+const generateBriefingSummary = async () => {
+  if (!briefingFiles?.length) return;
+  setLoadingBriefingAI(true);
+  try {
+    const fileNames = briefingFiles.map(f => f.name).join(', ');
+    const result = await runAction("generate-briefing-structure", {
+      data: { contracts, deliverables, contractId: c.id },
+      extraContext: { briefingNote, fileNames, numFiles: briefingFiles.length }
+    });
+    const summary = result?.content || result?.result || '';
+    setBriefingAiSummary(summary);
+    await saveC(contracts.map(x => x.id === c.id ? {...x, briefingAiSummary: summary} : x));
+    toast?.("✨ Resumo gerado", "success");
+  } catch(err) {
+    toast?.("Erro ao gerar resumo", "error");
+  } finally {
+    setLoadingBriefingAI(false);
+  }
+};
 
   const generateReport = async () => {
     setAiLoading(true); setAiReport(null);
@@ -2623,6 +2654,30 @@ Responda APENAS com o JSON.` }]
       {/* ── Tab: Briefing ── */}
       {tab==="briefing" && (
         <div style={{ display:"flex",flexDirection:"column",gap:16 }}>
+
+          {/* ── Resumo IA dos Arquivos ── */}
+          <div style={{ ...G, padding:"18px 20px" }}>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Resumo IA</div>
+              <DsButton variant="primary" size="sm"
+                onClick={generateBriefingSummary}
+                disabled={loadingBriefingAI || !briefingFiles?.length}
+                leftIcon={<DsIcon name="sparkles" size={13} color={ds.color.neutral[0]}/>}>
+                {loadingBriefingAI ? "Gerando…" : "Gerar resumo"}
+              </DsButton>
+            </div>
+            {briefingAiSummary ? (
+              <div style={{ fontSize:13,color:TX,lineHeight:1.6,whiteSpace:"pre-wrap",background:B2,borderRadius:8,padding:"12px",border:`1px solid ${LN}` }}>
+                {briefingAiSummary}
+              </div>
+            ) : (
+              <div style={{ fontSize:12,color:TX3,textAlign:"center",padding:"20px 0" }}>
+                {briefingFiles?.length ? "Clique em "Gerar resumo" para que a IA analise os arquivos de briefing." : "Adicione arquivos de briefing abaixo para habilitar o resumo automático por IA."}
+              </div>
+            )}
+          </div>
+
+          {/* ── Notas do Briefing ── */}
           <div style={{ ...G, padding:"18px 20px" }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12 }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2 }}>Notas do Briefing</div>
@@ -2633,36 +2688,52 @@ Responda APENAS com o JSON.` }]
               </DsButton>
             </div>
             <textarea value={briefingNote} onChange={e=>setBriefingNote(e.target.value)} onBlur={()=>saveNote(briefingNote)}
-              rows={12} placeholder="Cole aqui o briefing da marca, ou use o Copiloto para criar automaticamente com os principais pontos, dos & don'ts e tom de voz…"
+              rows={8} placeholder="Cole aqui o briefing da marca, ou use o Copiloto para criar automaticamente com os principais pontos, dos & don'ts e tom de voz…"
               style={{ width:"100%",padding:"12px",background:B2,border:`1px solid ${LN}`,borderRadius:8,color:TX,fontSize:13,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none" }}/>
             <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:6 }}>Auto-salvo ao sair do campo · Copiloto gera estrutura baseada no contrato</div>
           </div>
+
+          {/* ── Arquivos do Briefing ── */}
           <div style={{ ...G, padding:"18px 20px" }}>
-            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Arquivo do Briefing</div>
-            {briefingFile ? (
-              <div style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:B2,borderRadius:8,border:`1px solid ${LN}` }}>
-                <span style={{ fontSize:20 }}>📄</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12,fontWeight:600,color:TX }}>{briefingFile.name}</div>
-                  <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>Enviado {new Date(briefingFile.uploadedAt).toLocaleDateString("pt-BR")}</div>
-                </div>
-                <a href={briefingFile.data} download={briefingFile.name}
-                  style={{ padding:"5px 12px",fontSize:11,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none" }}>
-                  ↓ Baixar
-                </a>
-                <button onClick={()=>{setBriefingFile(null);saveC(contracts.map(x=>x.id===c.id?{...x,briefingFile:null}:x));}}
-                  style={{ background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"5px 8px",cursor:"pointer",color:TX2,fontSize:11 }}>×</button>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Arquivos do Briefing</div>
+
+            {/* Lista de arquivos salvos */}
+            {briefingFiles?.length > 0 && (
+              <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:16 }}>
+                {briefingFiles.map(f => (
+                  <div key={f.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:B2,borderRadius:8,border:`1px solid ${LN}` }}>
+                    <span style={{ fontSize:20 }}>
+                      {f.type?.includes('pdf') ? '📄' : f.type?.includes('image') ? '🖼️' : f.type?.includes('word') || f.name?.endsWith('.docx') ? '📝' : '📎'}
+                    </span>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontSize:12,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{f.name}</div>
+                      <div style={{ fontSize:ds.font.size.xs,color:TX2 }}>
+                        {(f.size/1024).toFixed(0)} KB · Enviado {new Date(f.uploadedAt).toLocaleDateString("pt-BR")}
+                      </div>
+                    </div>
+                    <a href={f.data} download={f.name}
+                      style={{ padding:"4px 10px",fontSize:11,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:5,textDecoration:"none",whiteSpace:"nowrap" }}>
+                      ↓ Baixar
+                    </a>
+                    <button onClick={()=>removeBriefingFile(f.id)}
+                      style={{ background:"none",border:`1px solid ${LN}`,borderRadius:5,padding:"4px 8px",cursor:"pointer",color:TX2,fontSize:11 }}>×</button>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <label style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"32px",border:`2px dashed ${LN2}`,borderRadius:10,cursor:"pointer",transition:TRANS }}
-                onMouseEnter={e=>e.currentTarget.style.borderColor=RED} onMouseLeave={e=>e.currentTarget.style.borderColor=LN2}>
-                <span style={{ fontSize:32 }}>📎</span>
-                <span style={{ fontSize:12,fontWeight:600,color:TX }}>Clique para anexar o briefing</span>
-                <span style={{ fontSize:11,color:TX3 }}>PDF, DOCX, imagens ou qualquer arquivo</span>
-                <input type="file" style={{ display:"none" }} onChange={handleBriefingFile}/>
-              </label>
             )}
+
+            {/* Upload de novos arquivos */}
+            <label style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:"24px",border:`2px dashed ${LN2}`,borderRadius:10,cursor:"pointer",transition:TRANS }}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=RED} onMouseLeave={e=>e.currentTarget.style.borderColor=LN2}>
+              <span style={{ fontSize:28 }}>📎</span>
+              <span style={{ fontSize:12,fontWeight:600,color:TX }}>
+                {briefingFiles?.length ? "Adicionar mais arquivos" : "Clique para anexar o briefing"}
+              </span>
+              <span style={{ fontSize:11,color:TX3 }}>PDF, DOCX, imagens ou qualquer arquivo</span>
+              <input type="file" multiple style={{ display:"none" }} onChange={handleBriefingFile}/>
+            </label>
           </div>
+
         </div>
       )}
 

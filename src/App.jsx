@@ -2672,7 +2672,7 @@ Responda APENAS com o JSON.` }]
               </div>
             ) : (
               <div style={{ fontSize:12,color:TX3,textAlign:"center",padding:"20px 0" }}>
-                {briefingFiles?.length ? "Clique em "Gerar resumo" para que a IA analise os arquivos de briefing." : "Adicione arquivos de briefing abaixo para habilitar o resumo automático por IA."}
+                {briefingFiles?.length ? "Clique em Gerar resumo para que a IA analise os arquivos de briefing." : "Adicione arquivos de briefing abaixo para habilitar o resumo automático por IA."}
               </div>
             )}
           </div>

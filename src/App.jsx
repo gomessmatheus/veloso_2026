@@ -3216,7 +3216,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
               })()}
               <div style={{ fontSize:11, color:TX3 }}>
                 {/* TODO: gráfico de evolução de engajamento por contrato quando módulo de métricas existir */}
-                {bPosts.filter(p=>p.isPosted).length} posts · {bDels.filter(d=>d.stage==="done").length} entregáveis concluídos
+                {bPosts.filter(p=>p.isPosted).length + bDels.filter(d=>d.stage==="done").length} itens com métricas
               </div>
             </div>
           )}

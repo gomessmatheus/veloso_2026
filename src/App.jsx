@@ -2839,9 +2839,9 @@ function BrandInitial({ brand, size = 44 }) {
   );
 }
 
-function brandLTV(brand, contracts, posts, deliverables) {
+function brandLTV(brand, contracts, posts, deliverables, rates) {
   const bContracts = contracts.filter(c => c.brandId === brand.id);
-  return bContracts.reduce((s, c) => s + contractTotal(c), 0);
+  return bContracts.reduce((s, c) => s + toBRL(contractTotal(c), c.currency, rates), 0);
 }
 
 function brandAvgEng(brand, contracts, posts, deliverables) {
@@ -2865,7 +2865,7 @@ function brandAvgEng(brand, contracts, posts, deliverables) {
   return engs.length ? engs.reduce((s, v) => s + v, 0) / engs.length : null;
 }
 
-function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo, setSelectedBrand, role }) {
+function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo, setSelectedBrand, role, rates = { EUR: 0, USD: 0, eur: 0, usd: 0 } }) {
   const isMobile = useIsMobile();
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
@@ -2948,7 +2948,7 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
           {filtered.map(brand => {
             const bContracts = contracts.filter(c=>c.brandId===brand.id);
             const active = bContracts.filter(c=>!c.archived).length;
-            const ltv = brandLTV(brand, contracts, posts, deliverables);
+            const ltv = brandLTV(brand, contracts, posts, deliverables, rates || { EUR: 0, USD: 0, eur: 0, usd: 0 });
             const eng = brandAvgEng(brand, contracts, posts, deliverables);
             const lastC = bContracts.map(c=>c.contractDeadline).filter(Boolean).sort().reverse()[0];
             const catLabel = BRAND_CATEGORIES[brand.category] || brand.category;
@@ -3020,7 +3020,7 @@ function NewBrandModal({ onClose, onSave }) {
   );
 }
 
-function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBrands, onBack, navigateTo, setSelectedBrand, onNewContract }) {
+function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBrands, onBack, navigateTo, setSelectedBrand, onNewContract, rates = { EUR: 0, USD: 0, eur: 0, usd: 0 } }) {
   const brand = brands.find(b => b.id === brandId);
   const isMobile = useIsMobile();
   const toast = useToast();
@@ -3042,7 +3042,7 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
   const activeC    = bContracts.filter(c => !c.archived);
   const bPosts     = posts.filter(p => bContracts.some(c => c.id === p.contractId));
   const bDels      = deliverables.filter(d => bContracts.some(c => c.id === d.contractId));
-  const ltv        = bContracts.reduce((s,c)=>s+contractTotal(c),0);
+  const ltv        = bContracts.reduce((s,c)=>s+toBRL(contractTotal(c), c.currency, rates),0);
   const doneDels   = bDels.filter(d=>d.stage==="done"||d.stage==="postagem").length + bPosts.filter(p=>p.isPosted).length;
   const eng        = brandAvgEng(brand, contracts, posts, deliverables);
   const catLabel   = BRAND_CATEGORIES[brand.category] || brand.category;
@@ -4411,8 +4411,8 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     if (view==="dashboard")      return <Dashboard contracts={activeContracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView} role={role} userName={userName}/>;
     if (view==="acompanhamento") return <Acompanhamento contracts={activeContracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} role={role} brands={brands}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role} brands={brands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
-    if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role} openCopilot={openCopilot}/>;
-    if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot} onNewContract={(prefillBrandId)=>setModal({type:"contract",data:null,prefillBrandId})}/>;
+    if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role} rates={rates} openCopilot={openCopilot}/>;
+    if (view==="marca-detalhe")  return <MarcaDetalhe brandId={selectedBrand} brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} onBack={()=>setView("marcas")} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot} rates={rates} onNewContract={(prefillBrandId)=>setModal({type:"contract",data:null,prefillBrandId})}/>;
     if (view==="caixa")          return (
       <React.Suspense fallback={<div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh",color:"#6E6E6E",fontSize:13}}>Carregando...</div>}>
         <Caixa contracts={activeContracts} openCopilot={openCopilot} role={role} syncStatus={syncStatus} toast={toast} onRetrySync={()=>{ /* retry via saveTx re-sync */ }}/>

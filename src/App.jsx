@@ -114,7 +114,7 @@ const ROLE_CAN = {
   influencer:  { editContracts:false, seeValues:false, seeCaixa:false,  editDeliverables:true, seeRoteiros:true,  seeFullFinanceiro:false },
 };
 const MONTHS_SH  = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-const VIEW_TYPES = new Set(["post","tiktok","repost"]);
+const VIEW_TYPES = new Set(["post","tiktok","repost","youtube","short"]);
 const TASK_STATUSES = [
   { id:"backlog",     label:"Backlog",       icon:Circle,        color:"#475569" },
   { id:"todo",        label:"A fazer",       icon:Circle,        color:"#94A3B8" },
@@ -377,7 +377,7 @@ function calcAvailableSlots(deliverables, contracts, weeksAhead = 8) {
     });
 
     // All deliverables linked to contracts = publis (reels + TikToks that are feed posts)
-    const publiDels = weekDels.filter(d => d.contractId && (d.type==="reel"||d.type==="tiktok"||d.type==="post"));
+    const publiDels = weekDels.filter(d => d.contractId && (d.type==="reel"||d.type==="tiktok"||d.type==="post"||d.type==="youtube"||d.type==="short"));
     const publiCount = publiDels.length;
 
     // Travel days
@@ -1690,6 +1690,8 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
           <option value="story">Story</option>
           <option value="tiktok">TikTok</option>
           <option value="link">Link Comunidade</option>
+          <option value="youtube">YouTube</option>
+          <option value="short">Shorts</option>
         </select>
         <select value={filter} onChange={e => setFilter(e.target.value)}
           style={{ padding: "5px 10px", background: B1, border: `1px solid ${LN}`, borderRadius: 6, color: TX2, fontSize: 11, fontFamily: "inherit", outline: "none" }}>
@@ -1801,6 +1803,8 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
     {id:"tiktok",label:"TikTok", emoji:"🎵"},
     {id:"story", label:"Story",  emoji:"📸"},
     {id:"link",  label:"Link",   emoji:"🔗"},
+    {id:"youtube", label:"YouTube", emoji:"📺"},
+    {id:"short",   label:"Shorts",  emoji:"🎬"},
   ];
 
   const curStage = STAGE_OPTS.find(s=>s.id===stage);
@@ -2007,7 +2011,7 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
         <SRule>Identificação</SRule>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <Field label="Contrato"><Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>{contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}</Select></Field>
-          <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="reel">Reel / Post Feed</option><option value="story">Story</option><option value="tiktok">TikTok</option><option value="link">Link Comunidade</option></Select></Field>
+          <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="reel">Reel / Post Feed</option><option value="story">Story</option><option value="tiktok">TikTok</option><option value="link">Link Comunidade</option><option value="youtube">YouTube</option><option value="short">Shorts</option></Select></Field>
           <Field label="Título" full><Input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="ex: Reel Amazon Copa #1"/></Field>
           <Field label="Etapa"><Select value={f.stage||"briefing"} onChange={e=>set("stage",e.target.value)}>{STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</Select></Field>
           <Field label="Data Postagem (D)"><Input type="date" value={f.plannedPostDate} onChange={e=>set("plannedPostDate",e.target.value)}/></Field>
@@ -2260,7 +2264,7 @@ function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, sa
   const doneDelsFromPipeline = cDeliverables.filter(d => d.stage==="done"||d.stage==="postagem").length;
   const doneDelsFromPosts    = cPosts.filter(p => p.isPosted).length;
   const doneDels   = doneDelsFromPipeline + doneDelsFromPosts;
-  const totalDels  = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
+  const totalDels  = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts + (c.numYoutube||0) + (c.numShorts||0);
   const commPaid    = commEntries.filter(e => e.isPaid).reduce((s,e) => s + e.amount, 0);
   const commPending = commEntries.filter(e => !e.isPaid).reduce((s,e) => s + e.amount, 0);
 
@@ -3413,8 +3417,10 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
           const cp = posts.filter(p=>p.contractId===c.id&&(p.type==="post"||p.type==="reel")&&p.isPosted).length + dd("reel") + dd("post");
           const cs = posts.filter(p=>p.contractId===c.id&&p.type==="story"&&p.isPosted).length + dd("story");
           const cr = posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")&&p.isPosted).length + dd("tiktok") + dd("repost");
-          const tot = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
-          const don = cp + cs + cr;
+          const cy = posts.filter(p=>p.contractId===c.id&&p.type==="youtube"&&p.isPosted).length + dd("youtube");
+          const csh = posts.filter(p=>p.contractId===c.id&&p.type==="short"&&p.isPosted).length + dd("short");
+          const tot = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts + (c.numYoutube||0) + (c.numShorts||0);
+          const don = cp + cs + cr + cy + csh;
           const pct = tot > 0 ? Math.round(don/tot*100) : 0;
 
           return (
@@ -3501,9 +3507,11 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
           const cl=posts.filter(p=>p.contractId===c.id&&p.type==="link"&&p.isPosted).length + dd2("link");
           const cr2=deliverables.filter(d=>d.contractId===c.id&&d.stage==="done"&&(d.type==="tiktok"||d.type==="repost")).length;
           const cr=posts.filter(p=>p.contractId===c.id&&(p.type==="tiktok"||p.type==="repost")&&p.isPosted).length + cr2;
+          const cy=posts.filter(p=>p.contractId===c.id&&p.type==="youtube"&&p.isPosted).length + dd2("youtube");
+          const csh=posts.filter(p=>p.contractId===c.id&&p.type==="short"&&p.isPosted).length + dd2("short");
           const total=contractTotal(c); const dl=daysLeft(c.contractDeadline);
-          const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts;
-          const don=cp+cs+cl+cr;
+          const tot=c.numPosts+c.numStories+c.numCommunityLinks+c.numReposts+(c.numYoutube||0)+(c.numShorts||0);
+          const don=cp+cs+cl+cr+cy+csh;
           return (
             <div key={c.id}
               onClick={()=>setSelectedId(c.id)}
@@ -3930,7 +3938,7 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
     installments:[{value:"",date:""},{value:"",date:""}],
     parc1Value:"",parc1Deadline:"",parc2Value:"",parc2Deadline:"",
     hasCommission:true,commPaid:{},nfEmitted:{},paymentDaysAfterNF:0,
-    numPosts:0,numStories:0,numCommunityLinks:0,numReposts:0,
+    numPosts:0,numStories:0,numCommunityLinks:0,numReposts:0,numYoutube:0,numShorts:0,
     exclusivityOverride:"DEFAULT",
     brandId: modal.prefillBrandId || "",
     color:CONTRACT_COLORS[contracts.length%CONTRACT_COLORS.length],notes:""
@@ -3970,7 +3978,7 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
   const handleSave=async()=>{
     if(hardErrors.length>0) return; // blocked by hard errors shown inline
     const entry={...f,id:f.id||uid(),contractValue:f.paymentType==="monthly"?0:Number(f.contractValue)||0,monthlyValue:Number(f.monthlyValue)||0,
-      numPosts:Number(f.numPosts)||0,numStories:Number(f.numStories)||0,numCommunityLinks:Number(f.numCommunityLinks)||0,numReposts:Number(f.numReposts)||0,
+      numPosts:Number(f.numPosts)||0,numStories:Number(f.numStories)||0,numCommunityLinks:Number(f.numCommunityLinks)||0,numReposts:Number(f.numReposts)||0,numYoutube:Number(f.numYoutube)||0,numShorts:Number(f.numShorts)||0,
       installments:f.paymentType==="split"?(f.installments||[]).map(i=>({value:Number(i.value)||0,date:i.date||""})):[],
       parc1Value:0,parc2Value:0,parc1Deadline:"",parc2Deadline:"",
       commPaid:f.commPaid||{},nfEmitted:f.nfEmitted||{},paymentDaysAfterNF:Number(f.paymentDaysAfterNF)||0};
@@ -3983,6 +3991,8 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
         {key:"numStories",  type:"story",   label:"Story"},
         {key:"numReposts",  type:"tiktok",  label:"TikTok"},
         {key:"numCommunityLinks", type:"link", label:"Link"},
+        {key:"numYoutube",     type:"youtube", label:"YouTube"},
+        {key:"numShorts",      type:"short",   label:"Shorts"},
       ];
       const newDeliverables = [];
       TYPE_MAP.forEach(({key,type,label}) => {
@@ -4137,8 +4147,8 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
       </div>
 
       <SRule>Entregas Contratadas</SRule>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12}}>
-        {[["numPosts","Posts/Reels"],["numStories","Stories"],["numCommunityLinks","Links"],["numReposts","Reposts/TT"]].map(([k,l])=>(
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+        {[["numPosts","Posts/Reels"],["numStories","Stories"],["numCommunityLinks","Links"],["numReposts","Reposts/TT"],["numYoutube","YouTube"],["numShorts","Shorts"]].map(([k,l])=>(
           <Field key={k} label={l}><Input type="number" min="0" value={f[k]} onChange={e=>set(k,e.target.value)}/></Field>
         ))}
       </div>
@@ -4251,7 +4261,7 @@ function PostModal({ modal, setModal, contracts, posts, saveP, toast }) {
       <SRule>Identificação</SRule>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <Field label="Contrato"><Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>{contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}</Select></Field>
-        <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="post">Reel / Post</option><option value="story">Story</option><option value="link">Link Comunidade</option><option value="repost">Repost</option><option value="tiktok">TikTok</option></Select></Field>
+        <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="post">Reel / Post</option><option value="story">Story</option><option value="link">Link Comunidade</option><option value="repost">Repost</option><option value="tiktok">TikTok</option><option value="youtube">YouTube</option><option value="short">Shorts</option></Select></Field>
         <Field label="Título" full><Input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="ex: Reel Copa 2026 — Abertura"/></Field>
         <Field label="Data Planejada"><Input type="date" value={f.plannedDate} onChange={e=>set("plannedDate",e.target.value)}/></Field>
         <Field label="Status">
@@ -4473,7 +4483,7 @@ function ClientReport({ contract: c, posts, deliverables, rates, onClose }) {
   const doneDelsFromPipeline = cDels.filter(d => d.stage === "done" || d.stage === "postagem").length;
   const doneDelsFromPosts    = cPosts.filter(p => p.isPosted).length;
   const doneDels   = doneDelsFromPipeline + doneDelsFromPosts;
-  const totalDels  = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts;
+  const totalDels  = c.numPosts + c.numStories + c.numCommunityLinks + c.numReposts + (c.numYoutube||0) + (c.numShorts||0);
   const completionRate = totalDels > 0 ? Math.round(Math.min(100, doneDels / totalDels * 100)) : (doneDels > 0 ? 100 : 0);
 
   const today = new Date().toLocaleDateString("pt-BR", {day:"numeric",month:"long",year:"numeric"});
@@ -4576,7 +4586,7 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
           <div style={{height:6,background:LN,borderRadius:3}}>
             <div style={{height:6,borderRadius:3,background:completionRate===100?GRN:c.color,width:`${completionRate}%`,transition:"width .5s"}}/>
           </div>
-          {[["Posts/Reels",c.numPosts,cPosts.filter(p=>p.type==="post"||p.type==="reel").length],["Stories",c.numStories,cPosts.filter(p=>p.type==="story").length],["Links",c.numCommunityLinks,cPosts.filter(p=>p.type==="link").length],["TikTok/Reposts",c.numReposts,cPosts.filter(p=>p.type==="tiktok"||p.type==="repost").length]].filter(([,tot])=>tot>0).map(([lbl,tot,don],i)=>(
+          {[["Posts/Reels",c.numPosts,cPosts.filter(p=>p.type==="post"||p.type==="reel").length],["Stories",c.numStories,cPosts.filter(p=>p.type==="story").length],["Links",c.numCommunityLinks,cPosts.filter(p=>p.type==="link").length],["TikTok/Reposts",c.numReposts,cPosts.filter(p=>p.type==="tiktok"||p.type==="repost").length],["YouTube",c.numYoutube||0,cPosts.filter(p=>p.type==="youtube").length],["Shorts",c.numShorts||0,cPosts.filter(p=>p.type==="short").length]].filter(([,tot])=>tot>0).map(([lbl,tot,don],i)=>(
             <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderTop:`1px solid ${LN}`,marginTop:6}}>
               <span style={{fontSize:12,color:TX2}}>{lbl}</span>
               <span style={{fontSize:12,fontWeight:600,color:don>=tot?GRN:TX}}>{don}/{tot}</span>
@@ -6280,7 +6290,7 @@ function AppContent() {
     const engs=posts.map(calcEngagement).filter(e=>e!==null);
     const nfPending=activeC.reduce((s,c)=>s+getNFEntries(c).filter(e=>!e.isEmitted).length,0);
     const nfPendingValue=activeC.reduce((s,c)=>s+getNFEntries(c).filter(e=>!e.isEmitted).reduce((sv,e)=>sv+toBRL(e.amount,c.currency,rates),0),0);
-    return {totalBRL,commBRL,commPaidBRL:commPaid,commPendBRL:commPend,totEur,totUsd,tp:tot("numPosts"),ts:tot("numStories"),tl:tot("numCommunityLinks"),tr:tot("numReposts"),dp:del("post"),ds:del("story"),dl:del("link"),dr:0,avgEng:engs.length?engs.reduce((s,v)=>s+v,0)/engs.length:null,nfPending,nfPendingValue};
+    return {totalBRL,commBRL,commPaidBRL:commPaid,commPendBRL:commPend,totEur,totUsd,tp:tot("numPosts"),ts:tot("numStories"),tl:tot("numCommunityLinks"),tr:tot("numReposts"),ty:tot("numYoutube"),tsh:tot("numShorts"),dp:del("post"),ds:del("story"),dl:del("link"),dr:0,dy:del("youtube"),dsh:del("short"),avgEng:engs.length?engs.reduce((s,v)=>s+v,0)/engs.length:null,nfPending,nfPendingValue};
   },[contracts,posts,rates]);
 
   const calEvents=useMemo(()=>{

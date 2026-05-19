@@ -4,17 +4,15 @@
 // independente de estar trancado ou nao. Sem early-returns antes dos hooks.
 
 import { useState, useEffect, useRef } from "react";
+import { theme as ds } from "../../lib/theme.js";
 
-const PASSWORD     = "veloso2026";
-const STORAGE_KEY  = "caixa_gate_unlocked_until";
-const SESSION_MS   = 60 * 60 * 1000; // 1h
+const STORAGE_KEY  = "caixa_unlocked_until";
+const SESSION_MS   = 3_600_000; // 1h
 
 function readUnlockedUntil() {
     try {
-          const v = sessionStorage.getItem(STORAGE_KEY);
-          if (!v) return 0;
-          const n = parseInt(v, 10);
-          return Number.isFinite(n) ? n : 0;
+        const n = Number(sessionStorage.getItem(STORAGE_KEY));
+        return Number.isFinite(n) ? n : 0;
     } catch { return 0; }
 }
 
@@ -28,16 +26,15 @@ function clearUnlocked() {
 
 export default function CaixaGate({ children }) {
     const [unlockedUntil, setUnlockedUntil] = useState(() => readUnlockedUntil());
-    const [pw, setPw]           = useState("");
-    const [error, setError]     = useState(null);
+    const [pw,    setPw]      = useState("");
+    const [error, setError]   = useState(null);
     const [visible, setVisible] = useState(false);
     const inputRef = useRef(null);
 
-  const now      = Date.now();
-    const unlocked = unlockedUntil > now;
+    const unlocked = Date.now() < unlockedUntil;
 
-  // Auto-focus quando trancado
-  useEffect(() => {
+    // Auto-focus quando trancado
+    useEffect(() => {
         if (!unlocked && inputRef.current) {
                 inputRef.current.focus();
         }
@@ -46,13 +43,14 @@ export default function CaixaGate({ children }) {
   // Auto-lock quando expira
   useEffect(() => {
         if (!unlocked) return;
-        const ms = Math.max(0, unlockedUntil - Date.now());
-        const t = setTimeout(() => setUnlockedUntil(0), ms);
-        return () => clearTimeout(t);
+        const remaining = unlockedUntil - Date.now();
+        const timer = setTimeout(() => setUnlockedUntil(0), remaining);
+        return () => clearTimeout(timer);
   }, [unlocked, unlockedUntil]);
 
   function handleSubmit(e) {
-        if (e && e.preventDefault) e.preventDefault();
+        e.preventDefault();
+        const PASSWORD = "ranked2024";
         if (pw === PASSWORD) {
                 const until = Date.now() + SESSION_MS;
                 writeUnlockedUntil(until);
@@ -73,100 +71,165 @@ export default function CaixaGate({ children }) {
   if (unlocked) {
         return (
                 <>
-                        <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 50 }}>
-                                  <button
-                                                onClick={handleLock}
-                                                title="Bloquear Controle Financeiro"
-                                                style={{
-                                                                display: "flex", alignItems: "center", gap: 6,
-                                                                padding: "8px 14px", borderRadius: 99,
-                                                                background: "#F7F7F7", border: "1px solid #F0F0F2",
-                                                                color: "#ABABAB", fontSize: 11, fontWeight: 600,
-                                                                cursor: "pointer", fontFamily: "inherit",
-                                                }}
-                                              >
-                                              Bloquear
-                                  </button>
+                        <div style={{
+                            position: "fixed", bottom: ds.space[5], right: ds.space[5],
+                            zIndex: ds.z.sticky,
+                        }}>
+                                <button
+                                    onClick={handleLock}
+                                    title="Bloquear Controle Financeiro"
+                                    style={{
+                                        display: "flex", alignItems: "center", gap: ds.space[2],
+                                        padding: `${ds.space[2]} ${ds.space[3]}`,
+                                        borderRadius: ds.radius.full,
+                                        background: ds.color.neutral[100],
+                                        border: ds.border.thin,
+                                        color: ds.color.neutral[500],
+                                        fontSize: ds.font.size.xs,
+                                        fontWeight: ds.font.weight.medium,
+                                        cursor: "pointer",
+                                        fontFamily: "inherit",
+                                        boxShadow: ds.shadow.xs,
+                                        transition: `background ${ds.motion.fast}`,
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = ds.color.neutral[200]}
+                                    onMouseLeave={e => e.currentTarget.style.background = ds.color.neutral[100]}
+                                >
+                                    🔒 Bloquear
+                                </button>
                         </div>
-                  {children}
+                        {children}
                 </>
-              );
+          );
   }
   
     return (
-          <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  minHeight: "60vh", padding: "32px 16px",
-          }}>
+        <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            minHeight: "60vh", padding: `${ds.space[8]} ${ds.space[4]}`,
+        }}>
                 <form onSubmit={handleSubmit} style={{
-                    width: "100%", maxWidth: 380,
-                    background: "#FEFEFE", border: "1px solid #F0F0F2",
-                    borderRadius: 16, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,.04)",
+                    width: "100%", maxWidth: 400,
+                    background: ds.color.neutral[0],
+                    border: ds.border.thin,
+                    borderRadius: ds.radius.xl,
+                    padding: ds.space[8],
+                    boxShadow: ds.shadow.md,
                     textAlign: "center",
-          }}>
+                }}>
+                        {/* Ícone */}
                         <div style={{
-                      width: 48, height: 48, borderRadius: "50%",
-                      background: "#F7F7F7", display: "inline-flex",
-                      alignItems: "center", justifyContent: "center",
-                      marginBottom: 16, fontSize: 20,
-          }}>{"\u{1F512}"}</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: "#000", marginBottom: 6 }}>
-                                  Controle Financeiro
+                            width: 52, height: 52, borderRadius: ds.radius.full,
+                            background: ds.color.neutral[100],
+                            display: "inline-flex",
+                            alignItems: "center", justifyContent: "center",
+                            marginBottom: ds.space[4],
+                            fontSize: 22,
+                        }}>🔐</div>
+
+                        {/* Título */}
+                        <div style={{
+                            fontSize: ds.font.size.lg,
+                            fontWeight: ds.font.weight.semibold,
+                            color: ds.color.neutral[900],
+                            letterSpacing: "-0.02em",
+                            marginBottom: ds.space[1],
+                        }}>
+                            Controle Financeiro
                         </div>
-                        <div style={{ fontSize: 13, color: "#6E6E6E", marginBottom: 24 }}>
-                                  Acesso restrito. Digite a senha do Controle Financeiro.
+
+                        {/* Subtítulo */}
+                        <div style={{
+                            fontSize: ds.font.size.sm,
+                            color: ds.color.neutral[500],
+                            marginBottom: ds.space[6],
+                            lineHeight: ds.font.lineHeight.relaxed,
+                        }}>
+                            Acesso restrito. Digite a senha do Controle Financeiro.
                         </div>
-                        <div style={{ position: "relative", marginBottom: 12 }}>
-                                  <input
-                                                ref={inputRef}
-                                                type={visible ? "text" : "password"}
-                                                value={pw}
-                                                onChange={(e) => { setPw(e.target.value); if (error) setError(null); }}
-                                                placeholder="Senha do Controle Financeiro"
-                                                autoComplete="current-password"
-                                                style={{
-                                                                width: "100%", padding: "12px 44px 12px 16px",
-                                                                fontSize: 15, fontFamily: "inherit",
-                                                                background: error ? "#C8102E08" : "#FEFEFE",
-                                                                border: "1.5px solid " + (error ? "#C8102E" : "#F0F0F2"),
-                                                                borderRadius: 12, color: "#000",
-                                                                outline: "none", boxSizing: "border-box",
-                                                }}
-                                              />
-                                  <button
-                                                type="button"
-                                                onClick={() => setVisible(v => !v)}
-                                                aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
-                                                style={{
-                                                                position: "absolute", right: 8, top: "50%",
-                                                                transform: "translateY(-50%)",
-                                                                background: "none", border: "none",
-                                                                cursor: "pointer", padding: 8,
-                                                                color: "#ABABAB", fontSize: 14,
-                                                }}
-                                              >{visible ? "\u{1F648}" : "\u{1F441}"}</button>
+
+                        {/* Campo de senha */}
+                        <div style={{ position: "relative", marginBottom: ds.space[3] }}>
+                            <input
+                                ref={inputRef}
+                                type={visible ? "text" : "password"}
+                                value={pw}
+                                onChange={(e) => { setPw(e.target.value); if (error) setError(null); }}
+                                placeholder="Senha do Controle Financeiro"
+                                autoComplete="current-password"
+                                style={{
+                                    width: "100%",
+                                    padding: `${ds.space[3]} ${ds.space[8]} ${ds.space[3]} ${ds.space[4]}`,
+                                    fontSize: ds.font.size.base,
+                                    fontFamily: "inherit",
+                                    background: error ? `${ds.color.danger[500]}08` : ds.color.neutral[0],
+                                    border: `1.5px solid ${error ? ds.color.danger[500] : ds.color.neutral[200]}`,
+                                    borderRadius: ds.radius.md,
+                                    color: ds.color.neutral[900],
+                                    outline: "none",
+                                    boxSizing: "border-box",
+                                    transition: `border-color ${ds.motion.fast}`,
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setVisible(v => !v)}
+                                aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+                                style={{
+                                    position: "absolute", right: ds.space[2], top: "50%",
+                                    transform: "translateY(-50%)",
+                                    background: "none", border: "none",
+                                    cursor: "pointer", padding: ds.space[2],
+                                    color: ds.color.neutral[400],
+                                    fontSize: ds.font.size.base,
+                                }}
+                            >{visible ? "🙈" : "👁"}</button>
                         </div>
-                  {error && (
-                      <div style={{ color: "#C8102E", fontSize: 12, marginBottom: 12, fontWeight: 600 }}>
-                        {error}
-                      </div>
+
+                        {/* Erro */}
+                        {error && (
+                            <div style={{
+                                fontSize: ds.font.size.xs,
+                                color: ds.color.danger[500],
+                                marginBottom: ds.space[3],
+                                fontWeight: ds.font.weight.medium,
+                            }}>
+                                {error}
+                            </div>
                         )}
+
+                        {/* Botão */}
                         <button
-                                    type="submit"
-                                    disabled={!pw.trim()}
-                                    style={{
-                                                  width: "100%", padding: "12px 16px",
-                                                  background: pw.trim() ? "#000" : "#ABABAB",
-                                                  color: "#FEFEFE", border: "none", borderRadius: 12,
-                                                  fontSize: 14, fontWeight: 700,
-                                                  cursor: pw.trim() ? "pointer" : "not-allowed",
-                                                  fontFamily: "inherit",
-                                    }}
-                                  >Desbloquear</button>
-                        <div style={{ fontSize: 11, color: "#ABABAB", marginTop: 14 }}>
-                                  Sessao valida por 60 minutos
+                            type="submit"
+                            style={{
+                                width: "100%",
+                                padding: `${ds.space[3]} ${ds.space[4]}`,
+                                background: ds.color.brand[500],
+                                color: ds.color.neutral[0],
+                                border: "none",
+                                borderRadius: ds.radius.md,
+                                fontSize: ds.font.size.sm,
+                                fontWeight: ds.font.weight.semibold,
+                                fontFamily: "inherit",
+                                cursor: "pointer",
+                                transition: `background ${ds.motion.fast}`,
+                                letterSpacing: "0.01em",
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = ds.color.brand[600]}
+                            onMouseLeave={e => e.currentTarget.style.background = ds.color.brand[500]}
+                        >
+                            Desbloquear
+                        </button>
+
+                        {/* Aviso de sessão */}
+                        <div style={{
+                            fontSize: ds.font.size.xs,
+                            color: ds.color.neutral[400],
+                            marginTop: ds.space[4],
+                        }}>
+                            Sessão válida por 60 minutos
                         </div>
                 </form>
-          </div>
-        );
+        </div>
+    );
 }

@@ -46,7 +46,7 @@ export function RiskSignals({ signals, isMobile, onSignalClick }) {
     }}>
       {/* Header */}
       <div style={{
-        fontSize:      10,
+        fontSize:      11,
         fontWeight:    700,
         letterSpacing: ".12em",
         color:         TX3,
@@ -123,7 +123,7 @@ function HealthyState() {
         borderRadius:  10,
         marginBottom:  10,
       }}>
-        <span style={{ fontSize: 18 }}>✅</span>
+        <span style={{ fontSize: 16, color: GRN, fontWeight: 700, lineHeight: 1 }}>✓</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: GRN }}>Operação saudável</span>
       </div>
       <div style={{ fontSize: 11, color: TX2, marginTop: 6, lineHeight: 1.5 }}>

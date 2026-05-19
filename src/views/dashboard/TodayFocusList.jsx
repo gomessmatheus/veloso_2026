@@ -110,7 +110,7 @@ export function TodayFocusList({ items, contracts, today, isMobile, hasWeekItems
   return (
     <div style={{ ...G, padding: isMobile ? ds.space[4] : `${ds.space[5]} ${ds.space[6]}`,
       display:"flex", flexDirection:"column" }}>
-      <div style={{ fontSize:9, fontWeight: ds.font.weight.semibold, letterSpacing:"0.12em",
+      <div style={{ fontSize: ds.font.size.xs, fontWeight: ds.font.weight.semibold, letterSpacing:"0.12em",
         color: ds.color.neutral[400], marginBottom: ds.space[3], textTransform:"uppercase" }}>
         {todayLabel}
       </div>

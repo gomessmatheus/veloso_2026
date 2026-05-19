@@ -245,7 +245,7 @@ function getNFEntries(c) {
 }
 function dlColor(d) { return d==null?TX:d<=7?RED:d<=14?AMB:GRN; }
 function currBadge(cur, rates) {
-  const s = { padding:"1px 6px",fontSize:8,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",borderRadius:3 };
+  const s = { padding:"1px 6px",fontSize:11,fontWeight:600,letterSpacing:".06em",textTransform:"uppercase",borderRadius:3 };
   const missingRate = rates && ((cur==="EUR"&&!rates.eur)||(cur==="USD"&&!rates.usd));
   const title = missingRate ? "Taxa de câmbio não definida — defina na barra superior" : undefined;
   if (cur==="EUR") return <span style={{...s,background:"rgba(99,102,241,.18)",border:`1px solid ${missingRate?"#F59E0B":"rgba(99,102,241,.3)"}`,color:missingRate?"#F59E0B":"#818CF8"}} title={title}>EUR{missingRate?" ⚠":""}</span>;
@@ -968,9 +968,6 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
 
       {/* Nav */}
       <nav aria-label="Navegação principal" style={{ padding:`${ds.space[3]} ${ds.space[2]}`, flex:1, overflowY:'auto' }}>
-        <div style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, letterSpacing:'0.12em', textTransform:'uppercase', color:ds.color.neutral[400], padding:`${ds.space[1]} ${ds.space[2]}`, marginBottom:ds.space[1] }}>
-          Navegação
-        </div>
         {NAV_ITEMS.filter(item => allowedNav.includes(item.id)).map(item => {
           const active = view===item.id;
           return (
@@ -981,8 +978,8 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
                 borderRadius:ds.radius.md, cursor:'pointer', marginBottom:2, outline:'none',
                 fontSize:ds.font.size.sm,
                 fontWeight:active?ds.font.weight.semibold:ds.font.weight.regular,
-                color:active?ds.color.neutral[900]:ds.color.neutral[500],
-                background:active?ds.color.neutral[100]:'transparent',
+                color:active?ds.color.brand[500]:ds.color.neutral[500],
+                background:active?`${ds.color.brand[500]}0D`:'transparent', borderLeft:active?`2px solid ${ds.color.brand[500]}`:'2px solid transparent', marginLeft:`-${ds.space[2]}`, paddingLeft:ds.space[3],
                 transition:`background ${ds.motion.fast}, color ${ds.motion.fast}` }}
               onMouseEnter={e=>{ if(!active){e.currentTarget.style.background=ds.color.neutral[50];e.currentTarget.style.color=ds.color.neutral[700];} }}
               onMouseLeave={e=>{ if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.color=ds.color.neutral[500];} }}>
@@ -3710,7 +3707,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
           </span>
         </div>
         <div style={{ marginTop:3 }}>
-          <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:99, background:`${color}18`, color, letterSpacing:".03em" }}>{badge}</span>
+          <span style={{ fontSize:11, fontWeight:600, padding:"1px 5px", borderRadius:99, background:`${color}18`, color, letterSpacing:".03em" }}>{badge}</span>
         </div>
       </div>
     );
@@ -3825,7 +3822,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
 
                 {/* Contract events (payment, deadline) — small badges (desktop only) */}
                 {!isMobile && cEvents.slice(0,2).map((ev,ei)=>(
-                  <div key={ei} style={{fontSize:8,fontWeight:700,padding:"1px 5px",marginBottom:2,borderRadius:3,background:`${ev.color}14`,color:ev.color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textTransform:"uppercase",letterSpacing:".03em"}}>
+                  <div key={ei} style={{fontSize:11,fontWeight:600,padding:"1px 5px",marginBottom:2,borderRadius:3,background:`${ev.color}14`,color:ev.color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textTransform:"uppercase",letterSpacing:".03em"}}>
                     {ev.label}
                   </div>
                 ))}

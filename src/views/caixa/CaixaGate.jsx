@@ -50,7 +50,7 @@ export default function CaixaGate({ children }) {
 
   function handleSubmit(e) {
         e.preventDefault();
-        const PASSWORD = "ranked2024";
+        const PASSWORD = "veloso2026";
         if (pw === PASSWORD) {
                 const until = Date.now() + SESSION_MS;
                 writeUnlockedUntil(until);

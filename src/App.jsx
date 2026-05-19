@@ -3193,10 +3193,10 @@ function MarcaDetalhe({ brandId, brands, contracts, posts, deliverables, saveBra
               {/* Aggregate metrics */}
               {(() => {
                 const items = [...bPosts.filter(p=>p.isPosted), ...bDels.filter(d=>d.stage==="done")];
-                const totalViews = items.reduce((s,i)=>s+(Number(i.views)||0),0);
-                const totalReach = items.reduce((s,i)=>s+(Number(i.reach)||0),0);
-                const totalLikes = items.reduce((s,i)=>s+(Number(i.likes)||0),0);
-                const engs = items.map(calcEngagement).filter(e=>e!==null);
+                const totalViews = items.reduce((s,i)=>s+sumNetworkMetrics(i,"views"),0);
+                const totalReach = items.reduce((s,i)=>s+sumNetworkMetrics(i,"reach"),0);
+                const totalLikes = items.reduce((s,i)=>s+sumNetworkMetrics(i,"likes"),0);
+                const engs = items.map(i=>{const r=sumNetworkMetrics(i,"reach");const l=sumNetworkMetrics(i,"likes");const c=sumNetworkMetrics(i,"comments");return r>0?(l+c)/r*100:null;}).filter(e=>e!==null);
                 const avgE = engs.length ? engs.reduce((s,v)=>s+v,0)/engs.length : null;
                 return (
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>

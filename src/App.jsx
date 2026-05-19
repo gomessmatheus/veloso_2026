@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
+çãimport React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase.js";
 import {
@@ -2968,11 +2968,11 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
                     <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>LTV</div>
-                    <div style={{ fontSize:13, fontWeight:800, color:TX }}>{ltv>0?fmtMoney(ltv):"—"}</div>
+                    <div style={{ fontSize:13, fontWeight:ds.font.weight.semibold, color:TX }}>{ltv>0?fmtMoney(ltv):"—"}</div>
                   </div>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
                     <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>Contratos</div>
-                    <div style={{ fontSize:13, fontWeight:800, color:TX }}>{active} ativos</div>
+                    <div style={{ fontSize:13, fontWeight:ds.font.weight.semibold, color:TX }}>{active} ativo{active !== 1 ? 's' : ''}</div>
                   </div>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
                     <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>Engajamento</div>
@@ -3507,7 +3507,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
           return (
             <div key={c.id}
               onClick={()=>setSelectedId(c.id)}
-              style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 80px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:12, cursor:"pointer", transition:TRANS, opacity:c.archived?.7:1 }}
+              style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 80px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:ds.font.size.sm, cursor:"pointer", transition:TRANS, opacity:c.archived?.7:1 }}
               onMouseEnter={e=>e.currentTarget.style.background=B2}
               onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
               <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }}/>

@@ -1,4 +1,4 @@
-çãimport React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, createContext, useContext } from "react";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase.js";
 import {

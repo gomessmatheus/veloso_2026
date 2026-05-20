@@ -795,7 +795,7 @@ function Modal({ title, onClose, children, footer, width=640 }) {
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:200, display:"flex", alignItems:mob?"flex-end":"flex-start", justifyContent:"center", padding:mob?0:"48px 16px", overflowY:mob?"hidden":"auto", backdropFilter:"blur(4px)" }}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{ background:B1, borderRadius:mob?"20px 20px 0 0":"14px", border:`1px solid ${LN}`, width:"100%", maxWidth:mob?"100%":width, flexShrink:0, maxHeight:mob?"92vh":"none", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,0.2)" }}>
+      <div style={{ background:"rgba(255,255,255,0.9)", backdropFilter:"blur(20px) saturate(180%)", WebkitBackdropFilter:"blur(20px) saturate(180%)", borderRadius:mob?"20px 20px 0 0":"14px", border:`1px solid ${LN}`, width:"100%", maxWidth:mob?"100%":width, flexShrink:0, maxHeight:mob?"92vh":"none", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,0.2)" }}>
         {/* Handle indicator on mobile */}
         {mob && <div style={{ width:40, height:4, background:LN2, borderRadius:2, margin:"12px auto 0", flexShrink:0 }}/>}
         <div style={{ padding:mob?"12px 20px 14px":"16px 20px", borderBottom:`1px solid ${LN}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
@@ -1062,7 +1062,7 @@ function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobil
   if (isMobile) return (
     <div style={{ height:56, borderBottom:ds.border.thin, display:'flex', alignItems:'center',
       padding:`0 ${ds.space[4]}`, gap:ds.space[3],
-      background:ds.color.neutral[0], flexShrink:0,
+      background:"rgba(255,255,255,0.72)", backdropFilter:"blur(16px) saturate(180%)", WebkitBackdropFilter:"blur(16px) saturate(180%)", flexShrink:0,
       position:'sticky', top:0, zIndex:ds.z.sticky, boxShadow:ds.shadow.xs }}>
       <div style={{ flex:1 }}>
         <div style={{ fontWeight:ds.font.weight.semibold, fontSize:ds.font.size.sm, letterSpacing:'0.14em', textTransform:'uppercase', color:ds.color.neutral[900], lineHeight:1 }}>
@@ -1083,7 +1083,7 @@ function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobil
   const statusLabel = { loading:'Sincronizando', ok:'Ao vivo', error:'Offline' }[syncStatus] || 'Ao vivo';
 
   return (
-    <div style={{ height:48, background:ds.color.neutral[0], borderBottom:ds.border.thin,
+    <div style={{ height:48, background:"rgba(255,255,255,0.72)", backdropFilter:"blur(16px) saturate(180%)", WebkitBackdropFilter:"blur(16px) saturate(180%)", borderBottom:ds.border.thin,
       display:'flex', alignItems:'center', padding:`0 ${ds.space[5]}`, gap:ds.space[3],
       flexShrink:0, position:'sticky', top:0, zIndex:ds.z.sticky }}>
       <div style={{ fontSize:ds.font.size.md, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:'-0.01em' }}>
@@ -2969,10 +2969,10 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
           <option value="recent">Ordenar: Recente</option>
         </select>
         {!isMobile && (
-          <div style={{ display:"flex", border:ds.border.thin, borderRadius:ds.radius.md, overflow:"hidden", flexShrink:0 }}>
+          <div style={{ display:"flex", border:ds.border.thin, borderRadius:ds.radius.md, overflow:"hidden", flexShrink:0, height:36, boxSizing:"border-box" }}>
             {[["grid","▦","grade"],["list","☰","lista"]].map(([m,icon,label])=>(
               <button key={m} type="button" onClick={()=>setViewMode(m)} title={`Ver como ${label}`}
-                style={{ width:38, height:36, border:"none", cursor:"pointer", fontSize:15, lineHeight:1, fontFamily:"inherit",
+                style={{ width:38, height:"100%", border:"none", cursor:"pointer", fontSize:15, lineHeight:1, fontFamily:"inherit",
                   background: viewMode===m?ds.color.neutral[900]:ds.color.neutral[0],
                   color: viewMode===m?ds.color.neutral[0]:ds.color.neutral[400] }}>
                 {icon}
@@ -6381,12 +6381,15 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
         <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.35)", zIndex:179 }}/>
       )}
 
-      {/* Panel */}
+      {/* Panel — amostra glassmorphism */}
       <div style={{
         position:"fixed", top:0, right:0, bottom:0,
         width: isMobile ? "100%" : 420,
-        background:B1,
-        boxShadow:"-8px 0 32px rgba(15,23,42,0.10)",
+        background:"rgba(255,255,255,0.72)",
+        backdropFilter:"blur(20px) saturate(180%)",
+        WebkitBackdropFilter:"blur(20px) saturate(180%)",
+        borderLeft:"1px solid rgba(255,255,255,0.65)",
+        boxShadow:"-8px 0 32px rgba(15,23,42,0.12)",
         zIndex: 180,
         display:"flex", flexDirection:"column",
         animation:"copilot-slide-in .2s ease-out",
@@ -7027,7 +7030,7 @@ function AppContent() {
   // App
   return (
     <ToastProvider>
-      <div style={{ display:"flex", minHeight:"100vh", background:ds.color.neutral[50], fontFamily:ds.font.sans, fontSize:ds.font.size.base, color:ds.color.neutral[900] }}>
+      <div style={{ display:"flex", minHeight:"100vh", background:"linear-gradient(150deg, #EEF1F9 0%, #F4F1F6 45%, #E9EFF6 100%)", fontFamily:ds.font.sans, fontSize:ds.font.size.base, color:ds.color.neutral[900] }}>
         {/* Globals CSS is imported via src/styles/globals.css → main.jsx */}
         {!isMobile && <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts} role={role} userName={userName} deliverables={deliverables}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>

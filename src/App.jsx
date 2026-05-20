@@ -102,8 +102,8 @@ const ROLE_META = {
   influencer:  { label:"Influenciador",  color: ds.color.success[500] },
 };
 const ROLE_NAV = {
-  admin:       ["dashboard","acompanhamento","contratos","marcas","financeiro","caixa"],
-  agente:      ["dashboard","contratos","marcas","financeiro"],
+  admin:       ["dashboard","performance","acompanhamento","propostas","contratos","marcas","midiakit","financeiro","caixa"],
+  agente:      ["dashboard","performance","propostas","contratos","marcas","midiakit","financeiro"],
   atendimento: ["dashboard","acompanhamento","contratos","marcas"],
   influencer:  ["dashboard","acompanhamento","financeiro"],
 };
@@ -895,9 +895,12 @@ function LoginPage() {
 // ─── App shell ────────────────────────────────────────────
 const NAV_ITEMS = [
   { id:"dashboard",      label:"Dashboard",  icon:"layoutDashboard" },
+  { id:"performance",    label:"Performance",icon:"trendingUp"      },
   { id:"acompanhamento", label:"Produção",   icon:"kanban"          },
+  { id:"propostas",      label:"Propostas",  icon:"filter"          },
   { id:"contratos",      label:"Contratos",  icon:"fileText"        },
   { id:"marcas",         label:"Marcas",     icon:"tag"             },
+  { id:"midiakit",       label:"Mídia Kit",  icon:"user"            },
   { id:"financeiro",     label:"Financeiro", icon:"banknote"        },
   { id:"caixa",          label:"Caixa",      icon:"landmark"        },
 ];
@@ -4064,7 +4067,7 @@ function Calendario({ contracts, calEvents, calMonth, setCal, calFilter, setCalF
 function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
   const isEdit=!!modal.data;
   const [f,setF]=useState(modal.data||{
-    company:"",cnpj:"",contractDeadline:"",contractValue:"",currency:"BRL",
+    company:modal.prefill?.company||"",cnpj:"",contractDeadline:"",contractValue:modal.prefill?.contractValue||"",currency:"BRL",
     monthlyValue:"",contractStart:"",paymentType:"single",paymentDeadline:"",
     installments:[{value:"",date:""},{value:"",date:""}],
     parc1Value:"",parc1Deadline:"",parc2Value:"",parc2Deadline:"",
@@ -4580,6 +4583,9 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
         <Caixa contracts={activeContracts} openCopilot={openCopilot} role={role} syncStatus={syncStatus} toast={toast} onRetrySync={()=>{ /* retry via saveTx re-sync */ }}/>
       </React.Suspense>
     );
+    if (view==="performance")    return <Performance posts={posts} deliverables={deliverables} contracts={activeContracts}/>;
+    if (view==="propostas")      return <Funil setModal={setModal}/>;
+    if (view==="midiakit")       return <MediaKit contracts={activeContracts} posts={posts} deliverables={deliverables} brands={brands}/>;
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
 
     return null;
@@ -4775,6 +4781,486 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ─── Mídia Kit ─────────────────────────────────────────────
+function MediaKitEditor({ initial, onClose, onSave }) {
+  const [f, setF] = useState(() => ({
+    name:"", handle:"", bio:"", niche:"", photo:"",
+    ...(initial||{}),
+    followers:{ instagram:"", tiktok:"", youtube:"", ...((initial&&initial.followers)||{}) },
+    audience:{ femalePct:"", ageRange:"", locations:"", ...((initial&&initial.audience)||{}) },
+  }));
+  const set  = (k,v)=>setF(x=>({...x,[k]:v}));
+  const setG = (g,k,v)=>setF(x=>({...x,[g]:{...x[g],[k]:v}}));
+
+  const onPhoto = (e) => {
+    const file = e.target.files && e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 400, scale = Math.min(1, max/Math.max(img.width,img.height));
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(img.width*scale); cv.height = Math.round(img.height*scale);
+        cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
+        set("photo", cv.toDataURL("image/jpeg",0.82));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <Modal title="Dados do Mídia Kit" onClose={onClose} width={560}
+      footer={<>
+        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
+        <Btn onClick={()=>onSave(f)} variant="primary" size="sm">Salvar</Btn>
+      </>}>
+      <SRule>Identificação</SRule>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <Field label="Nome"><Input value={f.name} onChange={e=>set("name",e.target.value)} placeholder="Lucas Veloso"/></Field>
+        <Field label="@ / Perfil"><Input value={f.handle} onChange={e=>set("handle",e.target.value)} placeholder="@veloso.lucas_"/></Field>
+        <Field label="Nicho"><Input value={f.niche} onChange={e=>set("niche",e.target.value)} placeholder="Esporte e lifestyle"/></Field>
+        <Field label="Foto">
+          {f.photo ? (
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <img src={f.photo} alt="" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover" }}/>
+              <Btn onClick={()=>set("photo","")} variant="ghost" size="sm">Remover</Btn>
+            </div>
+          ) : (
+            <label style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"8px 12px", background:B2, border:`1px dashed ${LN2}`, borderRadius:6, cursor:"pointer", fontSize:12, color:TX2 }}>
+              Enviar foto
+              <input type="file" accept="image/*" style={{ display:"none" }} onChange={onPhoto}/>
+            </label>
+          )}
+        </Field>
+        <Field label="Bio" full><Textarea value={f.bio} onChange={e=>set("bio",e.target.value)} rows={3} placeholder="Resumo curto sobre você e seu conteúdo."/></Field>
+      </div>
+
+      <SRule>Audiência por rede</SRule>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+        <Field label="Instagram"><Input type="number" value={f.followers.instagram} onChange={e=>setG("followers","instagram",e.target.value)} placeholder="0"/></Field>
+        <Field label="TikTok"><Input type="number" value={f.followers.tiktok} onChange={e=>setG("followers","tiktok",e.target.value)} placeholder="0"/></Field>
+        <Field label="YouTube"><Input type="number" value={f.followers.youtube} onChange={e=>setG("followers","youtube",e.target.value)} placeholder="0"/></Field>
+      </div>
+
+      <SRule>Perfil do público</SRule>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <Field label="% feminino"><Input type="number" value={f.audience.femalePct} onChange={e=>setG("audience","femalePct",e.target.value)} placeholder="ex: 60"/></Field>
+        <Field label="Faixa etária predominante">
+          <Select value={f.audience.ageRange} onChange={e=>setG("audience","ageRange",e.target.value)}>
+            <option value="">—</option>
+            {["13-17","18-24","25-34","35-44","45+"].map(r=><option key={r} value={r}>{r} anos</option>)}
+          </Select>
+        </Field>
+        <Field label="Principais cidades" full><Input value={f.audience.locations} onChange={e=>setG("audience","locations",e.target.value)} placeholder="São Paulo, Rio de Janeiro, Belo Horizonte"/></Field>
+      </div>
+    </Modal>
+  );
+}
+
+function MediaKit({ contracts=[], posts=[], deliverables=[], brands=[] }) {
+  const [profile, setProfile] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const today = new Date().toLocaleDateString("pt-BR", { day:"numeric", month:"long", year:"numeric" });
+
+  useEffect(() => {
+    let alive = true;
+    getSetting("mediaKit")
+      .then(v => { if(alive) setProfile(v && typeof v==="object" ? v : {}); })
+      .catch(() => { if(alive) setProfile({}); });
+    return () => { alive = false; };
+  }, []);
+
+  if (profile === null) return <div style={{ padding:24, color:TX2, fontSize:13 }}>Carregando…</div>;
+
+  const p = profile;
+  const fmtN = n => (Number(n)||0).toLocaleString("pt-BR");
+  const fol = p.followers || {};
+  const fIG = Number(fol.instagram)||0, fTT = Number(fol.tiktok)||0, fYT = Number(fol.youtube)||0;
+  const totalFollowers = fIG + fTT + fYT;
+  const aud = p.audience || {};
+
+  const doneItems = [...posts.filter(x=>x.isPosted), ...deliverables.filter(d=>d.stage==="done")];
+  const reaches = doneItems.map(i=>sumNetworkMetrics(i,"reach")).filter(r=>r>0);
+  const avgReach = reaches.length ? Math.round(reaches.reduce((s,r)=>s+r,0)/reaches.length) : 0;
+  const engRates = doneItems.map(i=>{ const r=sumNetworkMetrics(i,"reach"), l=sumNetworkMetrics(i,"likes"), c=sumNetworkMetrics(i,"comments"); return r>10?(l+c)/r*100:null; }).filter(e=>e!=null);
+  const avgEng = engRates.length ? engRates.reduce((s,e)=>s+e,0)/engRates.length : null;
+  const brandNames = [...new Set([...contracts.map(c=>c.company), ...brands.map(b=>b.name)].filter(Boolean))];
+  const campaigns = contracts.length;
+  const filled = !!(p.name || totalFollowers>0 || p.bio);
+
+  const save = async (data) => {
+    setProfile(data); setEditing(false);
+    try { await setSetting("mediaKit", data); } catch(e) { console.error("[mediaKit] save", e); }
+  };
+
+  const Stat = ({ label, value, sub, color }) => (
+    <div style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, padding:"16px", textAlign:"center", breakInside:"avoid" }}>
+      <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:8 }}>{label}</div>
+      <div style={{ fontSize:22, fontWeight:800, color:color||TX, lineHeight:1.1, letterSpacing:"-.01em" }}>{value}</div>
+      {sub && <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+  const secTitle = { fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", color:TX2, marginBottom:10 };
+
+  return (
+    <div style={{ padding:24, maxWidth:880 }}>
+      <div className="mk-toolbar" style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+        <div>
+          <h2 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-0.02em" }}>Mídia Kit</h2>
+          <div style={{ fontSize:ds.font.size.sm, color:TX2 }}>Apresentação do influenciador para marcas</div>
+        </div>
+        <div style={{ display:"flex", gap:8 }}>
+          <Btn onClick={()=>setEditing(true)} variant="default" size="sm">Editar dados</Btn>
+          <Btn onClick={()=>window.print()} variant="primary" size="sm">Imprimir / PDF</Btn>
+        </div>
+      </div>
+
+      {!filled && (
+        <div style={{ ...G, padding:"20px", marginBottom:16, textAlign:"center" }}>
+          <div style={{ fontSize:13, fontWeight:600, color:TX, marginBottom:6 }}>Preencha seus dados primeiro</div>
+          <div style={{ fontSize:12, color:TX2, marginBottom:12 }}>Foto, bio, seguidores e perfil do público aparecem no Mídia Kit depois de cadastrados.</div>
+          <Btn onClick={()=>setEditing(true)} variant="primary" size="sm">Preencher agora</Btn>
+        </div>
+      )}
+
+      <style>{`@media print { body * { visibility:hidden; } .mk-print, .mk-print * { visibility:visible; -webkit-print-color-adjust:exact; print-color-adjust:exact; } .mk-print { position:absolute;left:0;top:0;width:100%; } }`}</style>
+
+      <div className="mk-print">
+        <div style={{ background:`linear-gradient(135deg, ${RED}, ${RED}cc)`, borderRadius:12, padding:"24px", marginBottom:20, color:"#fff", display:"flex", alignItems:"center", gap:18 }}>
+          {p.photo
+            ? <img src={p.photo} alt="" style={{ width:84, height:84, borderRadius:"50%", objectFit:"cover", border:"3px solid rgba(255,255,255,.55)", flexShrink:0 }}/>
+            : <div style={{ width:84, height:84, borderRadius:"50%", background:"rgba(255,255,255,.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:800, flexShrink:0 }}>{(p.name||"?").charAt(0).toUpperCase()}</div>}
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", opacity:.85, marginBottom:4 }}>Mídia Kit</div>
+            <div style={{ fontSize:26, fontWeight:800, letterSpacing:"-.02em", lineHeight:1.1 }}>{p.name||"Seu nome"}</div>
+            <div style={{ fontSize:13, opacity:.9, marginTop:3 }}>{[p.handle, p.niche].filter(Boolean).join(" · ")}</div>
+          </div>
+          {totalFollowers>0 && (
+            <div style={{ textAlign:"right", flexShrink:0 }}>
+              <div style={{ fontSize:ds.font.size.xs, opacity:.85, textTransform:"uppercase", letterSpacing:".08em" }}>Audiência total</div>
+              <div style={{ fontSize:26, fontWeight:800 }}>{fmtN(totalFollowers)}</div>
+            </div>
+          )}
+        </div>
+
+        {p.bio && <div style={{ ...G, padding:"16px 18px", marginBottom:20, fontSize:13, color:TX, lineHeight:1.6 }}>{p.bio}</div>}
+
+        {totalFollowers>0 && (
+          <div style={{ marginBottom:20 }}>
+            <div style={secTitle}>Audiência por rede</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+              <Stat label="Instagram" value={fIG>0?fmtN(fIG):"—"} sub="seguidores"/>
+              <Stat label="TikTok" value={fTT>0?fmtN(fTT):"—"} sub="seguidores"/>
+              <Stat label="YouTube" value={fYT>0?fmtN(fYT):"—"} sub="inscritos"/>
+            </div>
+          </div>
+        )}
+
+        {(aud.femalePct || aud.ageRange || aud.locations) && (
+          <div style={{ marginBottom:20 }}>
+            <div style={secTitle}>Perfil do público</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <Stat label="Gênero" value={aud.femalePct?`${aud.femalePct}% / ${Math.max(0,100-Number(aud.femalePct))}%`:"—"} sub="feminino / masculino"/>
+              <Stat label="Faixa etária" value={aud.ageRange||"—"} sub="predominante"/>
+            </div>
+            {aud.locations && <div style={{ ...G, padding:"12px 16px", marginTop:10, fontSize:12, color:TX }}><span style={{ color:TX2, fontWeight:600 }}>Principais praças:</span> {aud.locations}</div>}
+          </div>
+        )}
+
+        <div style={{ marginBottom:20 }}>
+          <div style={secTitle}>Resultados de campanhas</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:12 }}>
+            <Stat label="Campanhas" value={campaigns>0?campaigns:"—"} sub="contratos"/>
+            <Stat label="Marcas" value={brandNames.length>0?brandNames.length:"—"} sub="parcerias"/>
+            <Stat label="Alcance médio" value={avgReach>0?fmtN(avgReach):"—"} sub="por publicação"/>
+            <Stat label="Engajamento" value={avgEng!=null?`${avgEng.toFixed(1)}%`:"—"} sub="média geral" color={avgEng!=null?(avgEng>=3?GRN:avgEng>=1?AMB:TX):TX}/>
+          </div>
+          {brandNames.length>0 && (
+            <div style={{ ...G, padding:"14px 16px" }}>
+              <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:8, textTransform:"uppercase", letterSpacing:".08em", fontWeight:700 }}>Marcas que já confiaram</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+                {brandNames.map((b,i)=>(
+                  <span key={i} style={{ fontSize:12, fontWeight:600, color:TX, background:B2, border:`1px solid ${LN}`, borderRadius:99, padding:"4px 12px" }}>{b}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontSize:ds.font.size.xs, color:TX3, textAlign:"center", paddingTop:12, borderTop:`1px solid ${LN}` }}>
+          {p.handle||"@veloso.lucas_"} · Atualizado em {today} · Ranked
+        </div>
+      </div>
+
+      {editing && <MediaKitEditor initial={p} onClose={()=>setEditing(false)} onSave={save}/>}
+    </div>
+  );
+}
+
+// ─── Painel de Performance ─────────────────────────────────
+function Performance({ posts=[], deliverables=[], contracts=[] }) {
+  const [hoverM, setHoverM] = useState(null);
+  const MES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+  const items = [...posts.filter(p=>p.isPosted), ...deliverables.filter(d=>d.stage==="done")];
+  const dOf = it => (it.publishDate||it.plannedDate||it.plannedPostDate||it.createdAt||"").slice(0,7);
+  const reachOf = it => sumNetworkMetrics(it,"reach");
+  const viewsOf = it => sumNetworkMetrics(it,"views");
+  const engOf = it => { const r=sumNetworkMetrics(it,"reach"), l=sumNetworkMetrics(it,"likes"), c=sumNetworkMetrics(it,"comments"); return r>10?(l+c)/r*100:null; };
+  const fmtN = n => (Number(n)||0).toLocaleString("pt-BR");
+  const engColor = e => e==null?TX3 : e>=3?GRN : e>=1?AMB : TX2;
+
+  const totalReach = items.reduce((s,it)=>s+reachOf(it),0);
+  const totalViews = items.reduce((s,it)=>s+viewsOf(it),0);
+  const allEngs = items.map(engOf).filter(e=>e!=null);
+  const avgEng = allEngs.length ? allEngs.reduce((s,e)=>s+e,0)/allEngs.length : null;
+
+  const byMonth = {};
+  items.forEach(it => { const m=dOf(it); if(m&&m.length===7) (byMonth[m]=byMonth[m]||[]).push(it); });
+  const months = Object.keys(byMonth).sort().slice(-8).map(m => {
+    const its=byMonth[m], es=its.map(engOf).filter(e=>e!=null), [y,mo]=m.split("-");
+    return { key:m, label:`${MES[parseInt(mo,10)-1]||"?"}/${y.slice(2)}`, reach: its.reduce((s,it)=>s+reachOf(it),0), count:its.length, eng: es.length?es.reduce((s,e)=>s+e,0)/es.length:null };
+  });
+  const maxReach = Math.max(...months.map(m=>m.reach), 1);
+
+  const TYPE_LABEL = { reel:"Reels", post:"Reels", story:"Stories", tiktok:"TikTok", repost:"TikTok", youtube:"YouTube", short:"Shorts", link:"Links" };
+  const byType = {};
+  items.forEach(it => { const t=TYPE_LABEL[it.type]||"Outros"; (byType[t]=byType[t]||[]).push(it); });
+  const typeRows = Object.entries(byType).map(([t,its])=>{
+    const es=its.map(engOf).filter(e=>e!=null);
+    return { type:t, count:its.length, eng: es.length?es.reduce((s,e)=>s+e,0)/es.length:null };
+  }).sort((a,b)=>b.count-a.count);
+  const maxTypeEng = Math.max(...typeRows.map(r=>r.eng||0), 1);
+
+  const topPosts = items.map(it=>({ it, eng:engOf(it), reach:reachOf(it) }))
+    .filter(x=>x.eng!=null).sort((a,b)=>b.eng-a.eng).slice(0,6);
+
+  const Stat = ({label,value,sub,color}) => (
+    <div style={{ background:B1,border:`1px solid ${LN}`,borderRadius:10,padding:"16px",breakInside:"avoid" }}>
+      <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:8 }}>{label}</div>
+      <div style={{ fontSize:23,fontWeight:800,color:color||TX,lineHeight:1.1,letterSpacing:"-.01em" }}>{value}</div>
+      {sub&&<div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <div style={{ padding:24, maxWidth:900 }}>
+      <div style={{ marginBottom:16 }}>
+        <h2 style={{ fontSize:ds.font.size['2xl'],fontWeight:ds.font.weight.semibold,color:ds.color.neutral[900],letterSpacing:"-0.02em" }}>Performance</h2>
+        <div style={{ fontSize:ds.font.size.sm,color:TX2 }}>Tendências e desempenho das publicações</div>
+      </div>
+
+      {items.length===0 ? (
+        <div style={{ ...G,padding:"40px 20px",textAlign:"center" }}>
+          <div style={{ fontSize:13,fontWeight:600,color:TX,marginBottom:6 }}>Ainda não há publicações com métricas</div>
+          <div style={{ fontSize:12,color:TX2 }}>Conforme você preenche alcance, curtidas e comentários nos posts, este painel se monta sozinho.</div>
+        </div>
+      ) : (
+        <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10 }}>
+            <Stat label="Publicações" value={items.length} sub="com entrega concluída"/>
+            <Stat label="Alcance total" value={totalReach>0?fmtN(totalReach):"—"} sub="somado"/>
+            <Stat label="Visualizações" value={totalViews>0?fmtN(totalViews):"—"} sub="somadas"/>
+            <Stat label="Engajamento médio" value={avgEng!=null?`${avgEng.toFixed(1)}%`:"—"} sub="geral" color={engColor(avgEng)}/>
+          </div>
+
+          <div style={{ ...G,padding:"18px 20px" }}>
+            <div style={{ display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,marginBottom:12,flexWrap:"wrap" }}>
+              <div style={{ fontSize:12,fontWeight:700,color:TX }}>Alcance por mês</div>
+              <div style={{ fontSize:ds.font.size.xs,fontVariantNumeric:"tabular-nums" }}>
+                {hoverM!=null && months[hoverM] ? (()=>{ const m=months[hoverM]; return (
+                  <span>
+                    <strong style={{color:TX}}>{m.label}</strong>
+                    <span style={{color:TX2,marginLeft:8}}>{fmtN(m.reach)} alcance</span>
+                    <span style={{color:TX2,marginLeft:8}}>{m.count} {m.count===1?"post":"posts"}</span>
+                    {m.eng!=null&&<span style={{color:engColor(m.eng),fontWeight:700,marginLeft:8}}>{m.eng.toFixed(1)}% eng.</span>}
+                  </span>
+                ); })() : <span style={{color:TX3}}>Passe o mouse sobre um mês</span>}
+              </div>
+            </div>
+            <div style={{ display:"flex",alignItems:"flex-end",gap:6,height:120 }}>
+              {months.map((m,i)=>{
+                const isH = hoverM===i;
+                return (
+                  <div key={m.key} onMouseEnter={()=>setHoverM(i)} onMouseLeave={()=>setHoverM(null)}
+                    style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,cursor:"default" }}>
+                    <div style={{ width:"100%",height:96,display:"flex",alignItems:"flex-end" }}>
+                      <div style={{ width:"100%",height:`${Math.max(3,m.reach/maxReach*100)}%`,background:isH?RED:`${RED}99`,borderRadius:"4px 4px 0 0",transition:"background .12s, height .3s" }}/>
+                    </div>
+                    <div style={{ fontSize:9,color:isH?TX:TX3,fontWeight:isH?700:400 }}>{m.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ ...G,padding:"18px 20px" }}>
+            <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:14 }}>Engajamento por tipo de conteúdo</div>
+            {typeRows.map((r,i)=>(
+              <div key={r.type} style={{ marginBottom:i<typeRows.length-1?12:0 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:5 }}>
+                  <span style={{ color:TX,fontWeight:600 }}>{r.type} <span style={{ color:TX3,fontWeight:400 }}>· {r.count}</span></span>
+                  <span style={{ fontWeight:700,color:engColor(r.eng) }}>{r.eng!=null?`${r.eng.toFixed(1)}%`:"—"}</span>
+                </div>
+                <div style={{ height:6,background:LN,borderRadius:99 }}>
+                  <div style={{ height:6,borderRadius:99,background:engColor(r.eng),width:`${r.eng!=null?Math.max(2,r.eng/maxTypeEng*100):0}%`,transition:"width .3s" }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {topPosts.length>0 && (
+            <div style={{ ...G,padding:"18px 20px" }}>
+              <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:12 }}>Melhores publicações</div>
+              {topPosts.map(({it,eng,reach},i)=>(
+                <div key={it.id||i} style={{ display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:i<topPosts.length-1?`1px solid ${LN}`:"none" }}>
+                  <span style={{ fontSize:12,fontWeight:800,color:TX3,width:18,flexShrink:0 }}>{i+1}</span>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:12,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{it.title||"Publicação"}</div>
+                    <div style={{ fontSize:ds.font.size.xs,color:TX3 }}>{reach>0?`${fmtN(reach)} de alcance`:"sem alcance registrado"}</div>
+                  </div>
+                  <span style={{ fontSize:14,fontWeight:800,color:engColor(eng),flexShrink:0 }}>{eng.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Funil de Propostas ────────────────────────────────────
+const FUNIL_STAGES = [
+  { id:"lead",       label:"Lead",       color:"#2563EB" },
+  { id:"proposta",   label:"Proposta",   color:"#7C3AED" },
+  { id:"negociando", label:"Negociando", color:"#D97706" },
+  { id:"fechado",    label:"Fechado",    color:"#16A34A" },
+  { id:"perdido",    label:"Perdido",    color:"#94A3B8" },
+];
+
+function PropostaModal({ initial, onClose, onSave, onDelete, onConvert }) {
+  const isEdit = !!(initial && initial.id);
+  const [f, setF] = useState(() => ({ company:"", contactName:"", contactInfo:"", value:"", scope:"", stage:"lead", notes:"", ...(initial||{}) }));
+  const set = (k,v)=>setF(x=>({...x,[k]:v}));
+  const disabled = !f.company.trim();
+  return (
+    <Modal title={isEdit?"Editar proposta":"Nova proposta"} onClose={onClose} width={520}
+      footer={<>
+        {isEdit && <Btn onClick={()=>onDelete(f.id)} variant="danger" size="sm">Excluir</Btn>}
+        <div style={{ flex:1 }}/>
+        {isEdit && <Btn onClick={()=>onConvert(f)} variant="default" size="sm">Virar contrato</Btn>}
+        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
+        <Btn onClick={()=>onSave(f)} variant="primary" size="sm" disabled={disabled}>Salvar</Btn>
+      </>}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <Field label="Marca / empresa" full><Input value={f.company} onChange={e=>set("company",e.target.value)} placeholder="ex: Netshoes"/></Field>
+        <Field label="Contato"><Input value={f.contactName} onChange={e=>set("contactName",e.target.value)} placeholder="Nome do contato"/></Field>
+        <Field label="E-mail / telefone"><Input value={f.contactInfo} onChange={e=>set("contactInfo",e.target.value)} placeholder="opcional"/></Field>
+        <Field label="Valor estimado (R$)"><Input type="number" value={f.value} onChange={e=>set("value",e.target.value)} placeholder="0"/></Field>
+        <Field label="Etapa">
+          <Select value={f.stage} onChange={e=>set("stage",e.target.value)}>
+            {FUNIL_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+          </Select>
+        </Field>
+        <Field label="Escopo" full><Input value={f.scope} onChange={e=>set("scope",e.target.value)} placeholder="ex: 2 reels + 4 stories"/></Field>
+        <Field label="Observações" full><Textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2}/></Field>
+      </div>
+    </Modal>
+  );
+}
+
+function Funil({ setModal }) {
+  const [list, setList] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const toast = useToast();
+
+  useEffect(() => {
+    let alive = true;
+    getSetting("proposals").then(v=>{ if(alive) setList(Array.isArray(v)?v:[]); }).catch(()=>{ if(alive) setList([]); });
+    return ()=>{ alive=false; };
+  }, []);
+
+  if (list === null) return <div style={{ padding:24, color:TX2, fontSize:13 }}>Carregando…</div>;
+
+  const persist = async (next) => {
+    setList(next);
+    try { await setSetting("proposals", next); } catch(e){ console.error("[proposals] save", e); }
+  };
+  const save = (p) => {
+    const now = new Date().toISOString();
+    persist(p.id ? list.map(x=>x.id===p.id?{...p,updatedAt:now}:x) : [...list, {...p,id:uid(),createdAt:now,updatedAt:now}]);
+    setEditing(null);
+  };
+  const del = (id) => { if(window.confirm("Excluir esta proposta?")){ persist(list.filter(x=>x.id!==id)); setEditing(null); } };
+  const convert = (p) => {
+    setEditing(null);
+    setModal({ type:"contract", data:null, prefill:{ company:p.company, contractValue:p.value } });
+    toast?.("Copiamos os dados da proposta para o novo contrato","success");
+  };
+
+  const inFunnel = list.filter(p=>["lead","proposta","negociando"].includes(p.stage));
+  const pipelineValue = inFunnel.reduce((s,p)=>s+(Number(p.value)||0),0);
+  const won = list.filter(p=>p.stage==="fechado").length;
+  const decided = list.filter(p=>p.stage==="fechado"||p.stage==="perdido").length;
+  const convRate = decided>0 ? Math.round(won/decided*100) : null;
+
+  return (
+    <div style={{ padding:24 }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+        <div>
+          <h2 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-0.02em" }}>Propostas</h2>
+          <div style={{ fontSize:ds.font.size.sm, color:TX2 }}>Funil de vendas — antes do contrato</div>
+        </div>
+        <Btn onClick={()=>setEditing({})} variant="primary" size="sm">+ Nova proposta</Btn>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:18 }}>
+        {[
+          ["No funil", inFunnel.length, "propostas ativas", TX],
+          ["Valor estimado", pipelineValue>0?fmtMoney(pipelineValue):"—", "em negociação", TX],
+          ["Taxa de fechamento", convRate!=null?`${convRate}%`:"—", `${won} fechada${won===1?"":"s"}`, convRate!=null?(convRate>=50?GRN:AMB):TX],
+        ].map(([label,value,sub,color],i)=>(
+          <div key={i} style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, padding:"14px 16px" }}>
+            <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:6 }}>{label}</div>
+            <div style={{ fontSize:20, fontWeight:800, color }}>{value}</div>
+            <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:3 }}>{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:"flex", gap:12, overflowX:"auto", paddingBottom:8 }}>
+        {FUNIL_STAGES.map(stage=>{
+          const cards = list.filter(p=>p.stage===stage.id);
+          return (
+            <div key={stage.id} style={{ flex:"1 0 200px", minWidth:200, background:B2, borderRadius:10, padding:10 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"2px" }}>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:stage.color, flexShrink:0 }}/>
+                <span style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:TX2 }}>{stage.label}</span>
+                <span style={{ fontSize:ds.font.size.xs, color:TX3, marginLeft:"auto" }}>{cards.length}</span>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {cards.map(p=>(
+                  <div key={p.id} onClick={()=>setEditing(p)}
+                    style={{ background:B1, border:`1px solid ${LN}`, borderLeft:`3px solid ${stage.color}`, borderRadius:8, padding:"10px 12px", cursor:"pointer" }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:TX, marginBottom:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.company||"—"}</div>
+                    {Number(p.value)>0 && <div style={{ fontSize:12, fontWeight:600, color:TX2 }}>{fmtMoney(Number(p.value))}</div>}
+                    {p.scope && <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.scope}</div>}
+                  </div>
+                ))}
+                {cards.length===0 && <div style={{ fontSize:ds.font.size.xs, color:TX3, textAlign:"center", padding:"10px 0" }}>—</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {editing && <PropostaModal initial={editing} onClose={()=>setEditing(null)} onSave={save} onDelete={del} onConvert={convert}/>}
+    </div>
   );
 }
 

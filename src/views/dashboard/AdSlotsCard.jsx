@@ -11,11 +11,11 @@ import React, { useState } from "react";
 import { calcAdSlots } from "../../lib/adSlots.js";
 
 // ── Tokens inline ──────────────────────────────────────────
-const B1   = "#FEFEFE";
-const LN   = "#F0F0F2";
-const TX   = "#000000";
-const TX2  = "#6E6E6E";
-const TX3  = "#ABABAB";
+const B1   = "#FFFFFF";
+const LN   = "#E2E8F0";
+const TX   = "#0F172A";
+const TX2  = "#64748B";
+const TX3  = "#94A3B8";
 const GRN  = "#16A34A";
 const AMB  = "#D97706";
 const RED  = "#C8102E";
@@ -150,7 +150,7 @@ export function AdSlotsCard({ deliverables = [], contracts = [], isMobile = fals
   return (
     <div style={{ ...G, padding: isMobile ? 14 : 20 }}>
       {/* Título */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
         <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: TX }}>
           Slots disponíveis para venda
         </h2>
@@ -158,6 +158,7 @@ export function AdSlotsCard({ deliverables = [], contracts = [], isMobile = fals
           <span style={{
             fontSize: 11, fontWeight: 600, color: GRN,
             background: "#DCFCE7", borderRadius: 6, padding: "2px 8px",
+            whiteSpace: "nowrap",
           }}>
             Melhor mês: {best.label} ({Math.floor(best.available)} livres)
           </span>

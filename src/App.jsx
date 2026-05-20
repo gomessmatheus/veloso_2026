@@ -53,15 +53,15 @@ import { rolloverMonthlyContracts }   from "./lib/monthlyRollover.js";
 
 
 // ─── Design tokens ────────────────────────────────────────
-const B0  = "#FEFEFE";           // background (oklch 0.9940 0 0)
-const B1  = "#FEFEFE";           // card
-const B2  = "#F7F7F7";           // muted (oklch 0.9702 0 0)
-const B3  = "#EFEFEF";           // input (oklch 0.9401 0 0)
-const LN  = "#F0F0F2";           // border default
-const LN2 = "#D8D8D8";           // border strong
-const TX  = "#000000";           // foreground
-const TX2 = "#6E6E6E";           // muted foreground (oklch 0.4386)
-const TX3 = "#ABABAB";           // tertiary
+const B0  = "#FFFFFF";           // background
+const B1  = "#FFFFFF";           // card
+const B2  = "#F8FAFC";           // muted (slate-50)
+const B3  = "#F1F5F9";           // input (slate-100)
+const LN  = "#E2E8F0";           // border default (slate-200)
+const LN2 = "#CBD5E1";           // border strong (slate-300)
+const TX  = "#0F172A";           // foreground (slate-900)
+const TX2 = "#64748B";           // muted foreground (slate-500)
+const TX3 = "#94A3B8";           // tertiary (slate-400)
 const RED = "#C8102E";           // brand red
 const GRN = "#16A34A";           // brand green
 const AMB = "#D97706";           // brand amber
@@ -2421,15 +2421,6 @@ Responda APENAS com o JSON.` }]
             leftIcon={<DsIcon name="chevronLeft" size={14} color={ds.color.neutral[600]}/>}>
             Contratos
           </DsButton>
-          <DsButton variant="ghost" size="sm" onClick={async()=>{
-            if(!confirm("Excluir contrato "+c.company+" e todos os seus entregáveis?")) return;
-            await saveC(contracts.filter(x=>x.id!==c.id));
-            if(saveDeliverables) await saveDeliverables(deliverables.filter(d=>d.contractId!==c.id));
-            onBack();
-          }} leftIcon={<DsIcon name="trash" size={13} color={ds.color.danger[500]}/>}
-            style={{ color:ds.color.danger[500] }}>
-            Excluir
-          </DsButton>
           <div style={{ flex:1 }}>
             <div style={{ display:"flex", alignItems:"center", gap:ds.space[3], marginBottom:ds.space[1] }}>
               <div style={{ width:10, height:10, borderRadius:"50%", background:c.color }}/>
@@ -2461,7 +2452,7 @@ Responda APENAS com o JSON.` }]
             Excluir
           </DsButton>
           <DsButton variant="secondary" size="sm"
-            onClick={()=>openCopilot?.({contractId:c.id,actionId:"generate-client-report"})}
+            onClick={()=>setShowClientReport(true)}
             leftIcon={<DsIcon name="download" size={13} color={ds.color.neutral[600]}/>}>
             Relatório
           </DsButton>
@@ -2648,6 +2639,41 @@ Responda APENAS com o JSON.` }]
               </div>
             )}
           </div>
+        </div>
+        {/* Pagamentos recebidos — mesma informação da aba Financeiro › Pagamentos */}
+        <div style={{ ...G, padding:"18px 20px" }}>
+          <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:14 }}>Pagamentos recebidos</div>
+          {(() => {
+            const payEntries = c.paymentType==="split"
+              ? getInstallments(c).map((inst,i)=>({ key:`parc${i+1}`, label:`${i+1}ª parcela`, amount:Number(inst.value)||0, date:inst.date }))
+              : c.paymentType==="monthly"
+                ? [{ key:"monthly", label:"Mensalidade", amount:c.monthlyValue||0, date:c.contractDeadline }]
+                : [{ key:"single", label:"Pagamento único", amount:contractTotal(c), date:c.paymentDeadline }];
+            const togglePaid = (key) => {
+              const received = {...(c.paymentsReceived||{})};
+              if (received[key]) delete received[key];
+              else received[key] = { date:new Date().toISOString().substr(0,10) };
+              saveC(contracts.map(x => x.id===c.id ? {...x, paymentsReceived:received} : x));
+            };
+            if (!payEntries.length) return <div style={{ fontSize:12,color:TX3 }}>Sem pagamento configurado</div>;
+            return payEntries.map((e,i) => {
+              const rec = c.paymentsReceived?.[e.key];
+              return (
+                <div key={e.key} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<payEntries.length-1?`1px solid ${LN}`:"none" }}>
+                  <div>
+                    <div style={{ fontSize:12,fontWeight:600,color:TX }}>{e.label}</div>
+                    {e.date&&<div style={{ fontSize:ds.font.size.xs,color:TX2 }}>{fmtDate(e.date)}{rec?.date?` · recebido ${fmtDate(rec.date)}`:""}</div>}
+                  </div>
+                  <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                    {e.amount>0&&<span style={{ fontSize:13,fontWeight:700,color:TX }}>{fmtMoney(e.amount,c.currency)}</span>}
+                    <div onClick={()=>togglePaid(e.key)} style={{ padding:"4px 12px",fontSize:ds.font.size.xs,fontWeight:700,cursor:"pointer",borderRadius:5,transition:TRANS,background:rec?`${GRN}15`:"rgba(0,0,0,.04)",border:`1px solid ${rec?GRN+"44":LN2}`,color:rec?GRN:TX2 }}>
+                      {rec?"✓ Recebido":"Marcar recebido"}
+                    </div>
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
         </div>
       )}
@@ -2875,6 +2901,7 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
   const [catFilter, setCatFilter] = useState("all");
   const [sort, setSort] = useState("ltv"); // ltv | alpha | recent
   const [showNewModal, setShowNewModal] = useState(false);
+  const [viewMode, setViewMode] = useState("grid"); // grid | list
   const toast = useToast();
 
   const filtered = useMemo(() => {
@@ -2890,11 +2917,11 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
     return list;
   }, [brands, contracts, posts, deliverables, search, catFilter, sort]);
 
-  const handleCreate = async ({ name, category }) => {
+  const handleCreate = async ({ name, category, primaryColor, cnpj }) => {
     const now = new Date().toISOString();
     const brand = {
-      id: uid(), name, slug: slugify(name), category,
-      primaryColor: CONTRACT_COLORS[brands.length % CONTRACT_COLORS.length],
+      id: uid(), name, slug: slugify(name), category, cnpj: cnpj || "",
+      primaryColor: primaryColor || CONTRACT_COLORS[brands.length % CONTRACT_COLORS.length],
       contact: {}, exclusivityWindowDays: 7,
       recurringBriefing: "", notes: "", createdAt: now, updatedAt: now,
     };
@@ -2918,26 +2945,38 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
       </div>
 
       {/* Filters */}
-      <div style={{ display:"flex", gap:ds.space[2], marginBottom:ds.space[4], flexWrap:"wrap" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:ds.space[2], marginBottom:ds.space[4], flexWrap:"wrap" }}>
         <div style={{ position:"relative", flex:1, minWidth:180 }}>
           <DsIcon name="search" size={13} color={ds.color.neutral[400]}
             style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar marca…"
-            style={{ width:"100%", padding:`${ds.space[2]} ${ds.space[3]} ${ds.space[2]} 32px`,
+            style={{ width:"100%", height:36, padding:`0 ${ds.space[3]} 0 32px`,
               background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md,
               fontSize:ds.font.size.sm, color:ds.color.neutral[900], fontFamily:"inherit", outline:"none", boxSizing:"border-box" }}/>
         </div>
         <select value={catFilter} onChange={e=>setCatFilter(e.target.value)}
-          style={{ padding:`${ds.space[2]} ${ds.space[3]}`, background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, fontSize:ds.font.size.sm, color:ds.color.neutral[900], fontFamily:"inherit", outline:"none" }}>
+          style={{ height:36, padding:`0 ${ds.space[3]}`, background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, fontSize:ds.font.size.sm, color:ds.color.neutral[900], fontFamily:"inherit", outline:"none", boxSizing:"border-box" }}>
           <option value="all">Todas as categorias</option>
           {Object.entries(BRAND_CATEGORIES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
         </select>
         <select value={sort} onChange={e=>setSort(e.target.value)}
-          style={{ padding:`${ds.space[2]} ${ds.space[3]}`, background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, fontSize:ds.font.size.sm, color:ds.color.neutral[900], fontFamily:"inherit", outline:"none" }}>
+          style={{ height:36, padding:`0 ${ds.space[3]}`, background:ds.color.neutral[50], border:ds.border.thin, borderRadius:ds.radius.md, fontSize:ds.font.size.sm, color:ds.color.neutral[900], fontFamily:"inherit", outline:"none", boxSizing:"border-box" }}>
           <option value="ltv">Ordenar: LTV</option>
           <option value="alpha">Ordenar: A-Z</option>
           <option value="recent">Ordenar: Recente</option>
         </select>
+        {!isMobile && (
+          <div style={{ display:"flex", border:ds.border.thin, borderRadius:ds.radius.md, overflow:"hidden", flexShrink:0 }}>
+            {[["grid","▦","grade"],["list","☰","lista"]].map(([m,icon,label])=>(
+              <button key={m} type="button" onClick={()=>setViewMode(m)} title={`Ver como ${label}`}
+                style={{ width:38, height:36, border:"none", cursor:"pointer", fontSize:15, lineHeight:1, fontFamily:"inherit",
+                  background: viewMode===m?ds.color.neutral[900]:ds.color.neutral[0],
+                  color: viewMode===m?ds.color.neutral[0]:ds.color.neutral[400] }}>
+                {icon}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Grid */}
@@ -2947,11 +2986,57 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
           <div style={{ fontSize:ds.font.size.md, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], marginTop:ds.space[3], marginBottom:ds.space[1] }}>Nenhuma marca encontrada</div>
           <div style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>Crie uma nova marca ou ajuste os filtros.</div>
         </div>
+      ) : (viewMode === "list" && !isMobile) ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {filtered.map(brand => {
+            const bContracts = contracts.filter(c=>c.brandId===brand.id);
+            const active = bContracts.filter(c=>!c.archived).length;
+            const isActive = active > 0;
+            const ltv = brandLTV(brand, contracts, posts, deliverables, rates || { EUR:0,USD:0,eur:0,usd:0 });
+            const eng = brandAvgEng(brand, contracts, posts, deliverables);
+            const lastC = bContracts.map(c=>c.contractDeadline).filter(Boolean).sort().reverse()[0];
+            const catLabel = BRAND_CATEGORIES[brand.category] || brand.category;
+            const col = brand.primaryColor || "#374151";
+            return (
+              <div key={brand.id}
+                onClick={()=>{ setSelectedBrand(brand.id); navigateTo("marca-detalhe"); }}
+                style={{ ...G, padding:"10px 16px", cursor:"pointer", transition:TRANS, borderLeft:`4px solid ${col}`, opacity:isActive?1:0.78, display:"flex", alignItems:"center", gap:14 }}
+                onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.08)";e.currentTarget.style.opacity="1";}}
+                onMouseLeave={e=>{e.currentTarget.style.boxShadow=G.boxShadow;e.currentTarget.style.opacity=isActive?"1":"0.78";}}>
+                <BrandInitial brand={brand} size={34}/>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                    <span style={{ fontWeight:700, fontSize:ds.font.size.md, color:TX, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{brand.name}</span>
+                    <span title={isActive?`${active} contrato(s) ativo(s)`:"Sem contrato ativo"} style={{ width:8, height:8, borderRadius:"50%", flexShrink:0, background:isActive?GRN:LN2 }}/>
+                  </div>
+                  <span style={{ fontSize:ds.font.size.xs, fontWeight:700, color:col }}>{catLabel}</span>
+                </div>
+                <div style={{ width:120, textAlign:"right", flexShrink:0 }}>
+                  <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>LTV</div>
+                  <div style={{ fontSize:ds.font.size.md, fontWeight:700, color:ltv>0?TX:TX3 }}>{ltv>0?fmtMoney(ltv):"—"}</div>
+                </div>
+                <div style={{ width:104, textAlign:"right", flexShrink:0 }}>
+                  <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>Contratos</div>
+                  <div style={{ fontSize:ds.font.size.sm, fontWeight:600, color:isActive?TX:TX3 }}>{isActive?`${active} ativo${active!==1?'s':''}`:'Sem contrato'}</div>
+                </div>
+                <div style={{ width:84, textAlign:"right", flexShrink:0 }}>
+                  <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>Engaj.</div>
+                  <div style={{ fontSize:ds.font.size.sm, fontWeight:700, color:eng!=null?(eng>=3?GRN:eng>=1?AMB:TX2):TX3 }}>{fmtEng(eng)}</div>
+                </div>
+                <div style={{ width:96, textAlign:"right", flexShrink:0 }}>
+                  <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>Últ. prazo</div>
+                  <div style={{ fontSize:ds.font.size.sm, fontWeight:600, color:TX }}>{lastC?fmtDate(lastC):"—"}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(260px,1fr))", gap:14 }}>
           {filtered.map(brand => {
             const bContracts = contracts.filter(c=>c.brandId===brand.id);
             const active = bContracts.filter(c=>!c.archived).length;
+            const isActive = active > 0;
             const ltv = brandLTV(brand, contracts, posts, deliverables, rates || { EUR: 0, USD: 0, eur: 0, usd: 0 });
             const eng = brandAvgEng(brand, contracts, posts, deliverables);
             const lastC = bContracts.map(c=>c.contractDeadline).filter(Boolean).sort().reverse()[0];
@@ -2959,24 +3044,26 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
             return (
               <div key={brand.id}
                 onClick={()=>{ setSelectedBrand(brand.id); navigateTo("marca-detalhe"); }}
-                style={{ ...G, padding:"18px 20px", cursor:"pointer", transition:TRANS, borderLeft:`4px solid ${brand.primaryColor||"#374151"}` }}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 6px 24px rgba(0,0,0,0.1)`;}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow=G.boxShadow;}}>
-                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+                style={{ ...G, padding:"18px 20px", cursor:"pointer", transition:TRANS, borderLeft:`4px solid ${brand.primaryColor||"#374151"}`, opacity:isActive?1:0.78 }}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 6px 24px rgba(0,0,0,0.1)`;e.currentTarget.style.opacity="1";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow=G.boxShadow;e.currentTarget.style.opacity=isActive?"1":"0.78";}}>
+                <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:14 }}>
                   <BrandInitial brand={brand} size={40}/>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:14, color:TX, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{brand.name}</div>
+                    <div style={{ fontWeight:700, fontSize:ds.font.size.md, color:TX, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:4 }}>{brand.name}</div>
                     <span style={{ fontSize:ds.font.size.xs, fontWeight:700, padding:"1px 7px", borderRadius:99, background:`${brand.primaryColor||"#374151"}18`, color:brand.primaryColor||TX2 }}>{catLabel}</span>
                   </div>
+                  <span title={isActive?`${active} contrato(s) ativo(s)`:"Sem contrato ativo"}
+                    style={{ width:9, height:9, borderRadius:"50%", flexShrink:0, marginTop:3, background:isActive?GRN:LN2 }}/>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
                     <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>LTV</div>
-                    <div style={{ fontSize:13, fontWeight:ds.font.weight.semibold, color:TX }}>{ltv>0?fmtMoney(ltv):"—"}</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:ltv>0?TX:TX3 }}>{ltv>0?fmtMoney(ltv):"—"}</div>
                   </div>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
                     <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>Contratos</div>
-                    <div style={{ fontSize:13, fontWeight:ds.font.weight.semibold, color:TX }}>{active} ativo{active !== 1 ? 's' : ''}</div>
+                    <div style={{ fontSize:13, fontWeight:ds.font.weight.semibold, color:isActive?TX:TX3 }}>{isActive ? `${active} ativo${active!==1?'s':''}` : 'Sem contrato'}</div>
                   </div>
                   <div style={{ background:B2, borderRadius:8, padding:"8px 10px" }}>
                     <div style={{ fontSize:ds.font.size.xs, color:TX3, marginBottom:2 }}>Engajamento</div>
@@ -3004,21 +3091,47 @@ function Marcas({ brands, contracts, posts, deliverables, saveBrands, navigateTo
 function NewBrandModal({ onClose, onSave }) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("OUTROS");
+  const [color, setColor] = useState(CONTRACT_COLORS[0]);
+  const [cnpj, setCnpj] = useState("");
   const disabled = !name.trim();
+  const letter = (name.trim() || "?").charAt(0).toUpperCase();
   return (
     <Modal title="Nova Marca" onClose={onClose} width={420}
       footer={<>
         <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
-        <Btn onClick={()=>onSave({name:name.trim(),category})} variant="primary" size="sm" disabled={disabled}>Criar marca</Btn>
+        <Btn onClick={()=>onSave({name:name.trim(),category,primaryColor:color,cnpj:cnpj.trim()})} variant="primary" size="sm" disabled={disabled}>Criar marca</Btn>
       </>}>
+      {/* Preview ao vivo do card da marca */}
+      <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", background:B2, border:`1px solid ${LN}`, borderRadius:10, borderLeft:`4px solid ${color}`, marginBottom:18 }}>
+        <div style={{ width:44, height:44, borderRadius:11, background:color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:800, color:"#fff", flexShrink:0 }}>{letter}</div>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontSize:ds.font.size.md, fontWeight:700, color:name.trim()?TX:TX3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{name.trim()||"Nome da marca"}</div>
+          <div style={{ fontSize:ds.font.size.xs, color:TX2, marginTop:2 }}>{BRAND_CATEGORIES[category]||category}</div>
+        </div>
+      </div>
       <Field label="Nome da marca" full>
         <Input value={name} onChange={e=>setName(e.target.value)} placeholder="ex: Netshoes"/>
       </Field>
-      <div style={{ height:12 }}/>
+      <div style={{ height:14 }}/>
+      <Field label="CNPJ" full>
+        <Input value={cnpj} onChange={e=>setCnpj(e.target.value)} placeholder="00.000.000/0001-00"/>
+      </Field>
+      <div style={{ height:14 }}/>
       <Field label="Categoria" full>
         <Select value={category} onChange={e=>setCategory(e.target.value)}>
           {Object.entries(BRAND_CATEGORIES).map(([k,v])=><option key={k} value={k}>{v}</option>)}
         </Select>
+      </Field>
+      <div style={{ height:14 }}/>
+      <Field label="Cor da marca" full>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          {CONTRACT_COLORS.map(c=>(
+            <button key={c} type="button" onClick={()=>setColor(c)} title="Escolher cor"
+              style={{ width:30, height:30, borderRadius:8, background:c, cursor:"pointer", padding:0,
+                border:"none", outline:color===c?`2px solid ${TX}`:`1px solid ${LN}`, outlineOffset:2,
+                transition:"transform .1s", transform:color===c?"scale(1.05)":"scale(1)" }}/>
+          ))}
+        </div>
       </Field>
     </Modal>
   );
@@ -3494,10 +3607,10 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
       </div>
 
       <div className="table-scroll">
-      <div style={{ border:`1px solid ${LN}`, borderRadius:10, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)", minWidth:860 }}>
-        <div style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 80px", background:B2, borderBottom:`1px solid ${LN}`, padding:"8px 0" }}>
-          {["","Empresa","Valor","Prazo","Pagamento","Prog.","Posts","Stories","Links",""].map((h,i)=>(
-            <div key={i} style={{ padding:"0 12px", fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX3, textAlign:i>=6&&i<=8?"center":"left" }}>{h}</div>
+      <div style={{ border:`1px solid ${LN}`, borderRadius:12, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)", minWidth:1040 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"4px minmax(160px,1fr) 150px 120px 140px 132px 78px 78px 78px 84px", background:B2, borderBottom:`1px solid ${LN}`, padding:"11px 0" }}>
+          {["","Empresa","Valor","Prazo","Pagamento","Progresso","Posts","Stories","Links",""].map((h,i)=>(
+            <div key={i} style={{ padding:"0 12px", fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX2, textAlign:i>=6&&i<=8?"center":"left" }}>{h}</div>
           ))}
         </div>
         {displayContracts.map(c=>{
@@ -3515,12 +3628,12 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
           return (
             <div key={c.id}
               onClick={()=>setSelectedId(c.id)}
-              style={{ display:"grid", gridTemplateColumns:"3px 1fr 140px 120px 140px 100px 80px 80px 80px 80px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:ds.font.size.sm, cursor:"pointer", transition:TRANS, opacity:c.archived?.7:1 }}
+              style={{ display:"grid", gridTemplateColumns:"4px minmax(160px,1fr) 150px 120px 140px 132px 78px 78px 78px 84px", alignItems:"center", borderBottom:`1px solid ${LN}`, fontSize:ds.font.size.sm, cursor:"pointer", transition:TRANS, opacity:c.archived?.7:1 }}
               onMouseEnter={e=>e.currentTarget.style.background=B2}
               onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <div style={{ background:c.color, alignSelf:"stretch", minHeight:48 }}/>
-              <div style={{ padding:"12px", display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                <span style={{ fontWeight:600, color:TX }}>{c.company}</span>
+              <div style={{ background:c.color, alignSelf:"stretch", minHeight:56 }}/>
+              <div style={{ padding:"14px 12px", display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                <span style={{ fontWeight:ds.font.weight.semibold, fontSize:ds.font.size.md, color:TX }}>{c.company}</span>
                 {currBadge(c.currency)}
                 {c.paymentType==="monthly"&&<Badge color={TX2}>M</Badge>}
                 {c.hasTravel&&<Badge color={BLU}>✈️</Badge>}
@@ -3545,14 +3658,32 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
                 {c.paymentType==="single"&&fmtDate(c.paymentDeadline)}
               </div>
               <div style={{ padding:"0 12px" }}>
-                <div style={{ height:3, background:"rgba(0,0,0,.08)", borderRadius:2, marginBottom:3 }}>
-                  <div style={{ height:3, background:tot&&don/tot===1?GRN:c.color, width:`${tot?Math.min(100,don/tot*100):0}%`, borderRadius:2 }}/>
-                </div>
-                <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>{don}/{tot}</div>
+                {(() => {
+                  const p = tot ? Math.min(100, Math.round(don/tot*100)) : 0;
+                  const full = tot>0 && don>=tot;
+                  return (
+                    <>
+                      <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:5 }}>
+                        <span style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold, color:TX2, fontVariantNumeric:"tabular-nums" }}>{don}/{tot}</span>
+                        <span style={{ fontSize:ds.font.size.xs, fontWeight:700, color:full?GRN:p>0?TX2:TX3, fontVariantNumeric:"tabular-nums" }}>{p}%</span>
+                      </div>
+                      <div style={{ height:6, background:LN, borderRadius:99, overflow:"hidden" }}>
+                        <div style={{ height:6, background:full?GRN:c.color, width:`${p}%`, borderRadius:99, transition:"width .4s ease" }}/>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
-              <div style={{ padding:"0 12px", color:TX2, textAlign:"center", fontVariantNumeric:"tabular-nums" }}>{cp}/{c.numPosts}</div>
-              <div style={{ padding:"0 12px", color:TX2, textAlign:"center", fontVariantNumeric:"tabular-nums" }}>{cs}/{c.numStories}</div>
-              <div style={{ padding:"0 12px", color:TX2, textAlign:"center", fontVariantNumeric:"tabular-nums" }}>{cl}/{c.numCommunityLinks}</div>
+              {[[cp,c.numPosts],[cs,c.numStories],[cl,c.numCommunityLinks]].map(([d,tt],i)=>{
+                const full = tt>0 && d>=tt;
+                return (
+                  <div key={i} style={{ padding:"0 12px", textAlign:"center", fontSize:ds.font.size.sm, fontVariantNumeric:"tabular-nums" }}>
+                    {tt>0
+                      ? <><span style={{ fontWeight:700, color:full?GRN:TX }}>{d}</span><span style={{ color:TX3 }}>/{tt}</span></>
+                      : <span style={{ color:TX3 }}>—</span>}
+                  </div>
+                );
+              })}
               <div style={{ padding:`0 ${ds.space[2]}`, display:"flex", gap:2 }} onClick={e=>e.stopPropagation()}>
                 {!c.archived && canEdit && (
                   <DsIconButton size="sm" variant="ghost" ariaLabel="Editar contrato"
@@ -3944,6 +4075,8 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
     color:CONTRACT_COLORS[contracts.length%CONTRACT_COLORS.length],notes:""
   });
   const set=(k,v)=>setF(x=>({...x,[k]:v}));
+  const STEPS=["Identificação","Pagamento","Entregas","Extras"];
+  const [step,setStep]=useState(0);
   const setInst=(i,field,val)=>setF(x=>{const inst=[...(x.installments||[])];inst[i]={...inst[i],[field]:val};return{...x,installments:inst};});
   const addInst=()=>setF(x=>({...x,installments:[...(x.installments||[]),{value:"",date:""}]}));
   const rmInst=i=>setF(x=>({...x,installments:(x.installments||[]).filter((_,j)=>j!==i)}));
@@ -4029,28 +4162,40 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
   return (
     <Modal title={isEdit?"Editar Contrato":"Novo Contrato"} onClose={()=>setModal(null)}
       footer={<>
-        <Btn onClick={()=>setModal(null)} variant="ghost" size="sm">Cancelar</Btn>
-        <Btn onClick={handleSave} variant="primary" size="sm" disabled={hardErrors.length>0}>
-          {isEdit?"Salvar":"Criar"}
-        </Btn>
+        {step>0
+          ? <Btn onClick={()=>setStep(step-1)} variant="ghost" size="sm">← Voltar</Btn>
+          : <Btn onClick={()=>setModal(null)} variant="ghost" size="sm">Cancelar</Btn>}
+        <div style={{ flex:1 }}/>
+        <span style={{ fontSize:ds.font.size.xs, color:TX3, alignSelf:"center" }}>Etapa {step+1} de {STEPS.length}</span>
+        {step<STEPS.length-1
+          ? <Btn onClick={()=>setStep(step+1)} variant="primary" size="sm" disabled={step===0&&!f.company?.trim()}>Próximo →</Btn>
+          : <Btn onClick={handleSave} variant="primary" size="sm" disabled={hardErrors.length>0}>{isEdit?"Salvar":"Criar"}</Btn>}
       </>}>
+      {/* Wizard — indicador de etapas */}
+      <div style={{ display:"flex", gap:6, marginBottom:20 }}>
+        {STEPS.map((label,i)=>(
+          <div key={i} onClick={()=>setStep(i)} style={{ flex:1, cursor:"pointer" }}>
+            <div style={{ height:3, borderRadius:2, background:i<=step?RED:LN, marginBottom:6, transition:"background .2s" }}/>
+            <div style={{ fontSize:ds.font.size.xs, fontWeight:i===step?700:500, color:i===step?TX:i<step?TX2:TX3 }}>{i+1}. {label}</div>
+          </div>
+        ))}
+      </div>
+      {step===0 && (<>
       <SRule>Empresa</SRule>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
         <Field label="Marca vinculada" full>
-          <Select value={f.brandId||""} onChange={e=>set("brandId",e.target.value)}>
+          <Select value={f.brandId||""} onChange={e=>{ const bid=e.target.value; set("brandId",bid); const b=brands.find(x=>x.id===bid); if(b&&b.primaryColor) set("color",b.primaryColor); }}>
             <option value="">— Sem vínculo com marca —</option>
             {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>
           <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:3 }}>
-            Vincula este contrato a uma marca para LTV, conflitos de agenda e métricas consolidadas.
+            O CNPJ e a cor vêm da marca. Vincular também ativa LTV, conflitos de agenda e métricas consolidadas.
           </div>
         </Field>
         <Field label="Nome" full>
           <Input value={f.company} onChange={e=>set("company",e.target.value)} placeholder="ex: Netshoes"/>
           <WarnBanner field="company"/>
         </Field>
-        <Field label="CNPJ"><Input value={f.cnpj} onChange={e=>set("cnpj",e.target.value)} placeholder="00.000.000/0001-00"/></Field>
-        <Field label="Cor"><input type="color" value={f.color} onChange={e=>set("color",e.target.value)} style={{width:"100%",height:36,padding:2,background:B2,border:`1px solid ${LN}`,borderRadius:6,cursor:"pointer"}}/></Field>
         <Field label="Obs." full><Textarea value={f.notes} onChange={e=>set("notes",e.target.value)} rows={2}/></Field>
         <Field label="Exclusividade neste contrato" full>
           <Select value={f.exclusivityOverride||"DEFAULT"} onChange={e=>set("exclusivityOverride",e.target.value)}>
@@ -4062,6 +4207,8 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
         </Field>
       </div>
 
+      </>)}
+      {step===1 && (<>
       <SRule>Financeiro & Pagamento</SRule>
       <div style={{display:"flex",background:B2,border:`1px solid ${LN}`,borderRadius:6,overflow:"hidden",marginBottom:14,width:"fit-content"}}>
         {[["single","Único"],["split","Parcelas"],["monthly","Mensal"]].map(([v,l])=>(
@@ -4146,6 +4293,8 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
         </Field>
       </div>
 
+      </>)}
+      {step===2 && (<>
       <SRule>Entregas Contratadas</SRule>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
         {[["numPosts","Posts/Reels"],["numStories","Stories"],["numCommunityLinks","Links"],["numReposts","Reposts/TT"],["numYoutube","YouTube"],["numShorts","Shorts"]].map(([k,l])=>(
@@ -4153,6 +4302,8 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
         ))}
       </div>
 
+      </>)}
+      {step===3 && (<>
       <SRule>Viagem</SRule>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
         <Toggle on={!!f.hasTravel} onToggle={()=>set("hasTravel",!f.hasTravel)}/>
@@ -4235,6 +4386,7 @@ function ContractModal({ modal, setModal, contracts, saveC, brands=[] }) {
           </div>
         );
       })()}
+      </>)}
     </Modal>
   );
 }
@@ -4508,10 +4660,10 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
   };
 
   const MetricCard = ({label, value, sub, color}) => (
-    <div style={{background:B2,border:`1px solid ${LN}`,borderRadius:8,padding:"14px 16px",textAlign:"center"}}>
-      <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:6}}>{label}</div>
-      <div style={{fontSize:20,fontWeight:700,color:color||TX,lineHeight:1}}>{value}</div>
-      {sub&&<div style={{fontSize:ds.font.size.xs,color:TX3,marginTop:3}}>{sub}</div>}
+    <div style={{background:B1,border:`1px solid ${LN}`,borderRadius:10,padding:"16px",textAlign:"center",breakInside:"avoid"}}>
+      <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:8}}>{label}</div>
+      <div style={{fontSize:23,fontWeight:800,color:color||TX,lineHeight:1,letterSpacing:"-.01em"}}>{value}</div>
+      {sub&&<div style={{fontSize:ds.font.size.xs,color:TX3,marginTop:4}}>{sub}</div>}
     </div>
   );
 
@@ -4522,22 +4674,21 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
         <div style={{flex:1}}/>
         <Btn onClick={onClose} variant="ghost" size="sm">Fechar</Btn>
       </>}>
-      <style>{`@media print { body * { visibility:hidden; } .print-area, .print-area * { visibility:visible; } .print-area { position:absolute;left:0;top:0;width:100%; } }`}</style>
+      <style>{`@media print { body * { visibility:hidden; } .print-area, .print-area * { visibility:visible; -webkit-print-color-adjust:exact; print-color-adjust:exact; } .print-area { position:absolute;left:0;top:0;width:100%; } }`}</style>
       <div className="print-area">
-        {/* Header */}
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:20,paddingBottom:16,borderBottom:`1px solid ${LN}`}}>
-          <div>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-              <div style={{width:10,height:10,borderRadius:"50%",background:c.color}}/>
-              <span style={{fontSize:18,fontWeight:700,color:TX}}>{c.company}</span>
+        {/* Header band — cor da marca */}
+        <div style={{ background:`linear-gradient(135deg, ${c.color}, ${c.color}cc)`, borderRadius:10, padding:"22px 24px", marginBottom:20, color:"#fff" }}>
+          <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", opacity:.85, marginBottom:8 }}>Relatório de Performance</div>
+          <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
+            <div>
+              <div style={{ fontSize:26, fontWeight:800, letterSpacing:"-.02em", lineHeight:1.1 }}>{c.company}</div>
+              <div style={{ fontSize:12, opacity:.9, marginTop:5 }}>Parceria com @veloso.lucas_ · {today}</div>
             </div>
-            <div style={{fontSize:12,color:TX2}}>Parceria com @veloso.lucas_ · Relatório de Performance</div>
-            <div style={{fontSize:11,color:TX3,marginTop:2}}>Gerado em {today} · Stand Produções</div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontSize:11,color:TX2}}>Investimento total</div>
-            <div style={{fontSize:20,fontWeight:700,color:TX}}>{fmtMoney(contractValue, c.currency)}</div>
-            {c.currency!=="BRL"&&<div style={{fontSize:11,color:TX3}}>≈ {fmtMoney(contractBRL)}</div>}
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:ds.font.size.xs, opacity:.85, textTransform:"uppercase", letterSpacing:".08em" }}>Investimento</div>
+              <div style={{ fontSize:24, fontWeight:800 }}>{fmtMoney(contractValue, c.currency)}</div>
+              {c.currency!=="BRL"&&<div style={{ fontSize:11, opacity:.85 }}>≈ {fmtMoney(contractBRL)}</div>}
+            </div>
           </div>
         </div>
 
@@ -6399,7 +6550,7 @@ function AppContent() {
             onNewPost={()=>setModal({type:"post",data:null})}
             onNewTask={()=>setTriggerNewTask(true)}
             syncStatus={syncStatus} isMobile={isMobile} role={role} userName={userName}/>
-          <div style={{ flex:1, overflowY:"auto", paddingBottom:isMobile?0:0 }}>
+          <div style={{ flex:1, overflowY:"auto", paddingBottom:isMobile?124:0 }}>
             <ViewRenderer view={view} contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates}
               saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid}
               toggleNF={toggleNF} setModal={setModal} setView={setView}

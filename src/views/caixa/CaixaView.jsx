@@ -35,14 +35,14 @@ import {
 // ─── Tokens (local — mirrors App.jsx globals) ─────────────
 // These are duplicated intentionally until a shared tokens file exists.
 // TODO Fase 6: move to src/lib/tokens.js and import from there.
-const B1  = "#FEFEFE";
-const B2  = "#F7F7F7";
-const B3  = "#EFEFEF";
-const LN  = "#F0F0F2";
-const LN2 = "#D8D8D8";
-const TX  = "#000000";
-const TX2 = "#6E6E6E";
-const TX3 = "#ABABAB";
+const B1  = "#FFFFFF";
+const B2  = "#F8FAFC";
+const B3  = "#F1F5F9";
+const LN  = "#E2E8F0";
+const LN2 = "#CBD5E1";
+const TX  = "#0F172A";
+const TX2 = "#64748B";
+const TX3 = "#94A3B8";
 const RED = "#C8102E";
 const GRN = "#16A34A";
 const AMB = "#D97706";
@@ -666,6 +666,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
   const currentYear = new Date().getFullYear();
   const MONTHS_SH2 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   const today = new Date();
+  const [hoverMonth, setHoverMonth] = useState(null);
 
   // ── Compromissos futuros (parcelamentos) — via finance.js ──
   const futureInstallments = useMemo(
@@ -815,9 +816,21 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
         );
       })()}
 
-      {/* Bar chart with projection (Task 4) */}
+      {/* Bar chart com projeção — interativo */}
       <div style={{ ...G,padding:"18px 20px" }}>
-        <div style={{ fontSize:12,fontWeight:700,color:TX,marginBottom:4 }}>Entradas vs Saídas {currentYear}</div>
+        <div style={{ display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,marginBottom:10,flexWrap:"wrap" }}>
+          <div style={{ fontSize:12,fontWeight:700,color:TX }}>Entradas vs Saídas {currentYear}</div>
+          <div style={{ fontSize:ds.font.size.xs,fontVariantNumeric:"tabular-nums" }}>
+            {hoverMonth!=null && monthData[hoverMonth] ? (()=>{ const d=monthData[hoverMonth]; return (
+              <span>
+                <strong style={{ color:TX }}>{d.month}</strong>
+                <span style={{ color:GRN,marginLeft:8 }}>▲ {valuesHidden?"•••":fmtMoney(d.entradas)}</span>
+                <span style={{ color:RED,marginLeft:8 }}>▼ {valuesHidden?"•••":fmtMoney(d.saidas)}</span>
+                <span style={{ color:d.net>=0?GRN:RED,fontWeight:700,marginLeft:8 }}>= {valuesHidden?"•••":fmtMoney(d.net)}</span>
+              </span>
+            ); })() : <span style={{ color:TX3 }}>Passe o mouse sobre um mês</span>}
+          </div>
+        </div>
         <div style={{ display:"flex",gap:12,fontSize:ds.font.size.xs,color:TX2,marginBottom:16,flexWrap:"wrap" }}>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:GRN,display:"inline-block" }}/>Entradas</span>
           <span style={{ display:"flex",alignItems:"center",gap:4 }}><span style={{ width:10,height:10,borderRadius:2,background:RED,display:"inline-block" }}/>Saídas</span>
@@ -835,22 +848,26 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
             const isCurrentYear = currentYear===new Date().getFullYear();
             const isFuture  = isCurrentYear && i > new Date().getMonth();
             const inPeriod  = activePeriod ? monthInPeriod(activePeriod, currentYear, i) : false;
+            const isHover   = hoverMonth===i;
             const projStyle = isFuture ? {
               opacity:0.45,
               backgroundImage:"repeating-linear-gradient(45deg,transparent 0 4px,rgba(0,0,0,.08) 4px 8px)",
             } : {};
             return (
-              <div key={i} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,
-                borderRadius:"4px 4px 0 0",
-                boxShadow: inPeriod ? `0 -2px 0 0 #2563EB` : "none",
-                background: inPeriod ? "#2563EB08" : "none",
+              <div key={i}
+                onMouseEnter={()=>setHoverMonth(i)} onMouseLeave={()=>setHoverMonth(null)}
+                style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                  borderRadius:"4px 4px 0 0", cursor:"default",
+                  boxShadow: inPeriod ? `0 -2px 0 0 #2563EB` : "none",
+                  background: isHover ? `${BLU}14` : inPeriod ? "#2563EB08" : "none",
+                  transition:"background .12s",
               }}>
                 <div style={{ width:"100%",display:"flex",gap:1,alignItems:"flex-end",height:100 }}>
                   <div style={{ flex:1,background:GRN,height:`${maxVal>0?d.entradas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.entradas>0?3:0,...projStyle }}/>
                   <div style={{ flex:1,background:RED,height:`${maxVal>0?d.saidas/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",minHeight:d.saidas>0?3:0,...projStyle }}/>
                   {d.dividendos>0&&<div style={{ flex:1,background:"#7C3AED",height:`${maxVal>0?d.dividendos/maxVal*100:0}%`,borderRadius:"3px 3px 0 0",...projStyle }}/>}
                 </div>
-                <div style={{ fontSize:8,color:inPeriod?BLU:isFuture?TX3+"88":TX3,fontWeight:inPeriod?700:400,textAlign:"center" }}>{d.month}</div>
+                <div style={{ fontSize:8,color:isHover?TX:inPeriod?BLU:isFuture?TX3+"88":TX3,fontWeight:(isHover||inPeriod)?700:400,textAlign:"center" }}>{d.month}</div>
               </div>
             );
           })}

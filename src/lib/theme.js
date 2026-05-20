@@ -41,13 +41,13 @@ export const theme = {
       1000: '#020617',
     },
 
-    // Marca Ranked — vermelho dessaturado, mais maduro.
+    // Marca Ranked — vermelho oficial (#C8102E), igual logo, favicon e theme-color.
     brand: {
       50:  '#FEF2F2',
       100: '#FEE2E2',
-      500: '#B91C1C',
-      600: '#991B1B',
-      700: '#7F1D1D',
+      500: '#C8102E',
+      600: '#A60E26',
+      700: '#7F0A1E',
     },
 
     // Acento Copiloto — SOMENTE no painel/botão flutuante do Copiloto.
@@ -58,7 +58,7 @@ export const theme = {
     },
 
     // Semânticas — usar APENAS para o significado correspondente.
-    danger:  { 50: '#FEF2F2', 500: '#B91C1C', 700: '#7F1D1D' },
+    danger:  { 50: '#FEF2F2', 500: '#C8102E', 700: '#7F0A1E' },
     warning: { 50: '#FFFBEB', 500: '#B45309', 700: '#78350F' },
     success: { 50: '#F0FDF4', 500: '#15803D', 700: '#14532D' },
     info:    { 50: '#EFF6FF', 500: '#1D4ED8', 700: '#1E3A8A' },
@@ -134,7 +134,7 @@ export const theme = {
   border: {
     thin:   '1px solid #E2E8F0',  // neutral.200
     medium: '1px solid #CBD5E1',  // neutral.300
-    focus:  '2px solid #B91C1C',  // brand.500
+    focus:  '2px solid #C8102E',  // brand.500
   },
 
   // ── TRANSITIONS ──────────────────────────────────────────

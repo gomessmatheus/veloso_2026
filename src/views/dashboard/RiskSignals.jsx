@@ -9,19 +9,19 @@
  */
 
 // ─── Tokens inline (sem dependência de src/constants/) ──────
-const B1   = "#FEFEFE";
-const B2   = "#F7F7F7";
-const B3   = "#EFEFEF";
-const LN   = "#F0F0F2";
-const LN2  = "#D8D8D8";
-const TX   = "#000000";
-const TX2  = "#6E6E6E";
-const TX3  = "#ABABAB";
+const B1   = "#FFFFFF";
+const B2   = "#F8FAFC";
+const B3   = "#F1F5F9";
+const LN   = "#E2E8F0";
+const LN2  = "#CBD5E1";
+const TX   = "#0F172A";
+const TX2  = "#64748B";
+const TX3  = "#94A3B8";
 const RED  = "#C8102E";
 const GRN  = "#16A34A";
 const AMB  = "#D97706";
 const BLU  = "#2563EB";
-const G    = { background:"#FEFEFE", border:"1px solid #F0F0F2", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06)" };
+const G    = { background:"#FFFFFF", border:"1px solid #E2E8F0", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06)" };
 const TRANS = "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)";
 
 const SEVERITY_BORDER = {

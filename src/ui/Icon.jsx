@@ -263,6 +263,13 @@ const ICONS = {
       <polyline points="17 6 23 6 23 12"/>
     </>
   ),
+  activity: () => <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
+  pieChart: () => (
+    <>
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
+      <path d="M22 12A10 10 0 0 0 12 2v10z"/>
+    </>
+  ),
   arrowUp: () => (
     <>
       <line x1="12" y1="19" x2="12" y2="5"/>

@@ -102,8 +102,8 @@ const ROLE_META = {
   influencer:  { label:"Influenciador",  color: ds.color.success[500] },
 };
 const ROLE_NAV = {
-  admin:       ["dashboard","performance","acompanhamento","propostas","contratos","marcas","midiakit","financeiro","caixa"],
-  agente:      ["dashboard","performance","propostas","contratos","marcas","midiakit","financeiro"],
+  admin:       ["dashboard","canal","performance","acompanhamento","comercial","propostas","contratos","marcas","financeiro","caixa"],
+  agente:      ["dashboard","canal","performance","comercial","propostas","contratos","marcas","financeiro"],
   atendimento: ["dashboard","acompanhamento","contratos","marcas"],
   influencer:  ["dashboard","acompanhamento","financeiro"],
 };
@@ -893,20 +893,34 @@ function LoginPage() {
 }
 
 // ─── App shell ────────────────────────────────────────────
-const NAV_ITEMS = [
-  { id:"dashboard",      label:"Dashboard",  icon:"layoutDashboard" },
-  { id:"performance",    label:"Performance",icon:"trendingUp"      },
-  { id:"acompanhamento", label:"Produção",   icon:"kanban"          },
-  { id:"propostas",      label:"Propostas",  icon:"filter"          },
-  { id:"contratos",      label:"Contratos",  icon:"fileText"        },
-  { id:"marcas",         label:"Marcas",     icon:"tag"             },
-  { id:"midiakit",       label:"Mídia Kit",  icon:"user"            },
-  { id:"financeiro",     label:"Financeiro", icon:"banknote"        },
-  { id:"caixa",          label:"Caixa",      icon:"landmark"        },
+const NAV_GROUPS = [
+  { label:"Operação", items:[
+    { id:"dashboard",      label:"Dashboard",  icon:"layoutDashboard" },
+    { id:"acompanhamento", label:"Produção",   icon:"kanban"          },
+  ]},
+  { label:"Influenciador", items:[
+    { id:"canal",          label:"Saúde do canal", icon:"activity"    },
+    { id:"performance",    label:"Performance",icon:"trendingUp"      },
+  ]},
+  { label:"Marcas", items:[
+    { id:"comercial",      label:"Visão geral",icon:"pieChart"        },
+    { id:"marcas",         label:"Marcas",     icon:"tag"             },
+    { id:"propostas",      label:"Propostas",  icon:"filter"          },
+    { id:"contratos",      label:"Contratos",  icon:"fileText"        },
+    { id:"financeiro",     label:"Financeiro", icon:"banknote"        },
+  ]},
+  { label:"Caixa", items:[
+    { id:"caixa",          label:"Caixa",      icon:"landmark"        },
+  ]},
 ];
+// Lista achatada — TopBar (título da página) e buscas por id continuam usando isto.
+const NAV_ITEMS = NAV_GROUPS.flatMap(g => g.items);
+// Telas acessíveis fora do menu (relatórios, detalhes) — rótulo para a TopBar.
+const OFF_NAV_LABELS = { midiakit:"Mídia Kit", "marca-detalhe":"Marca" };
 
 function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contracts, role, userName, deliverables }) {
   const my = useMemo(() => getMyPresence(), []);
+  const [collapsedGroups, setCollapsedGroups] = useState({});
   const allowedNav = ROLE_NAV[role] || ROLE_NAV.admin;
   const roleMeta = ROLE_META[role] || ROLE_META.admin;
   const today = new Date();
@@ -971,23 +985,55 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
 
       {/* Nav */}
       <nav aria-label="Navegação principal" style={{ padding:`${ds.space[3]} ${ds.space[2]}`, flex:1, overflowY:'auto' }}>
-        {NAV_ITEMS.filter(item => allowedNav.includes(item.id)).map(item => {
-          const active = view===item.id;
+        {NAV_GROUPS.map(group => {
+          const groupItems = group.items.filter(item => allowedNav.includes(item.id));
+          if (groupItems.length === 0) return null;
+          const isOpen    = !collapsedGroups[group.label];
+          const hasActive = groupItems.some(it => it.id === view);
+          const toggle    = () => setCollapsedGroups(c => ({ ...c, [group.label]: isOpen }));
           return (
-            <div key={item.id} onClick={()=>setView(item.id)}
-              role="button" tabIndex={0} aria-current={active?"page":undefined}
-              onKeyDown={e=>e.key==="Enter"&&setView(item.id)}
-              style={{ display:'flex', alignItems:'center', gap:ds.space[2], padding:`${ds.space[2]} ${ds.space[3]}`,
-                borderRadius:ds.radius.md, cursor:'pointer', marginBottom:2, outline:'none',
-                fontSize:ds.font.size.sm,
-                fontWeight:active?ds.font.weight.semibold:ds.font.weight.regular,
-                color:active?ds.color.brand[500]:ds.color.neutral[500],
-                background:active?`${ds.color.brand[500]}0D`:'transparent', borderLeft:active?`2px solid ${ds.color.brand[500]}`:'2px solid transparent', marginLeft:`-${ds.space[2]}`, paddingLeft:ds.space[3],
-                transition:`background ${ds.motion.fast}, color ${ds.motion.fast}` }}
-              onMouseEnter={e=>{ if(!active){e.currentTarget.style.background=ds.color.neutral[50];e.currentTarget.style.color=ds.color.neutral[700];} }}
-              onMouseLeave={e=>{ if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.color=ds.color.neutral[500];} }}>
-              <DsIcon name={item.icon} size={15} color={active?ds.color.neutral[900]:ds.color.neutral[400]}/>
-              {item.label}
+            <div key={group.label} style={{ marginBottom:ds.space[3] }}>
+              {/* Cabeçalho do grupo — clicável: abre/fecha (formato Drop) */}
+              <div role="button" tabIndex={0} aria-expanded={isOpen}
+                onClick={toggle}
+                onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } }}
+                style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                  cursor:'pointer', userSelect:'none', outline:'none',
+                  marginLeft:`-${ds.space[2]}`, paddingLeft:`calc(${ds.space[3]} + 2px)`,
+                  paddingRight:ds.space[2], paddingTop:ds.space[1], paddingBottom:ds.space[1],
+                  borderRadius:ds.radius.sm, marginBottom:isOpen?ds.space[1]:0,
+                  transition:`background ${ds.motion.fast}` }}
+                onMouseEnter={e=>e.currentTarget.style.background=ds.color.neutral[50]}
+                onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                <span style={{ fontSize:ds.font.size.xs, fontWeight:ds.font.weight.semibold,
+                  letterSpacing:ds.font.letterSpacing.widest, textTransform:'uppercase',
+                  color:(!isOpen&&hasActive)?ds.color.brand[500]:ds.color.neutral[400] }}>
+                  {group.label}
+                </span>
+                <DsIcon name={isOpen?"chevronDown":"chevronRight"} size={13}
+                  color={(!isOpen&&hasActive)?ds.color.brand[500]:ds.color.neutral[400]}/>
+              </div>
+              {/* Itens do grupo */}
+              {isOpen && groupItems.map(item => {
+                const active = view===item.id;
+                return (
+                  <div key={item.id} onClick={()=>setView(item.id)}
+                    role="button" tabIndex={0} aria-current={active?"page":undefined}
+                    onKeyDown={e=>e.key==="Enter"&&setView(item.id)}
+                    style={{ display:'flex', alignItems:'center', gap:ds.space[2], padding:`${ds.space[2]} ${ds.space[3]}`,
+                      borderRadius:ds.radius.md, cursor:'pointer', marginBottom:2, outline:'none',
+                      fontSize:ds.font.size.sm,
+                      fontWeight:active?ds.font.weight.semibold:ds.font.weight.regular,
+                      color:active?ds.color.brand[500]:ds.color.neutral[500],
+                      background:active?`${ds.color.brand[500]}0D`:'transparent', borderLeft:active?`2px solid ${ds.color.brand[500]}`:'2px solid transparent', marginLeft:`-${ds.space[2]}`, paddingLeft:ds.space[3],
+                      transition:`background ${ds.motion.fast}, color ${ds.motion.fast}` }}
+                    onMouseEnter={e=>{ if(!active){e.currentTarget.style.background=ds.color.neutral[50];e.currentTarget.style.color=ds.color.neutral[700];} }}
+                    onMouseLeave={e=>{ if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.color=ds.color.neutral[500];} }}>
+                    <DsIcon name={item.icon} size={15} color={active?ds.color.neutral[900]:ds.color.neutral[400]}/>
+                    {item.label}
+                  </div>
+                );
+              })}
             </div>
           );
         })}
@@ -1056,7 +1102,7 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
 }
 
 function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobile, role, userName }) {
-  const title = NAV_ITEMS.find(i=>i.id===view)?.label || view;
+  const title = NAV_ITEMS.find(i=>i.id===view)?.label || OFF_NAV_LABELS[view] || view;
 
   // Mobile header
   if (isMobile) return (
@@ -4584,8 +4630,10 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
       </React.Suspense>
     );
     if (view==="performance")    return <Performance posts={posts} deliverables={deliverables} contracts={activeContracts}/>;
+    if (view==="canal")          return <ChannelHealth posts={posts} deliverables={deliverables} navigateTo={setView}/>;
+    if (view==="comercial")      return <ComercialOverview contracts={activeContracts} brands={brands} rates={rates} navigateTo={setView}/>;
     if (view==="propostas")      return <Funil setModal={setModal}/>;
-    if (view==="midiakit")       return <MediaKit contracts={activeContracts} posts={posts} deliverables={deliverables} brands={brands}/>;
+    if (view==="midiakit")       return <MediaKit contracts={activeContracts} posts={posts} deliverables={deliverables} brands={brands} navigateTo={setView}/>;
     if (view==="financeiro")     return <Financeiro contracts={activeContracts} posts={posts} deliverables={deliverables} rates={rates} toggleNF={toggleNF} toggleCommPaid={toggleCommPaid} saveC={saveC} role={role}/>;
 
     return null;
@@ -4839,11 +4887,8 @@ function MediaKitEditor({ initial, onClose, onSave }) {
         <Field label="Bio" full><Textarea value={f.bio} onChange={e=>set("bio",e.target.value)} rows={3} placeholder="Resumo curto sobre você e seu conteúdo."/></Field>
       </div>
 
-      <SRule>Audiência por rede</SRule>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
-        <Field label="Instagram"><Input type="number" value={f.followers.instagram} onChange={e=>setG("followers","instagram",e.target.value)} placeholder="0"/></Field>
-        <Field label="TikTok"><Input type="number" value={f.followers.tiktok} onChange={e=>setG("followers","tiktok",e.target.value)} placeholder="0"/></Field>
-        <Field label="YouTube"><Input type="number" value={f.followers.youtube} onChange={e=>setG("followers","youtube",e.target.value)} placeholder="0"/></Field>
+      <div style={{ fontSize:12, color:TX2, background:B2, border:`1px solid ${LN}`, borderRadius:8, padding:"10px 12px" }}>
+        Os números de seguidores agora vêm do painel <strong style={{ color:TX }}>Saúde do canal</strong> — registre lá uma vez por mês.
       </div>
 
       <SRule>Perfil do público</SRule>
@@ -4861,16 +4906,22 @@ function MediaKitEditor({ initial, onClose, onSave }) {
   );
 }
 
-function MediaKit({ contracts=[], posts=[], deliverables=[], brands=[] }) {
+function MediaKit({ contracts=[], posts=[], deliverables=[], brands=[], navigateTo }) {
   const [profile, setProfile] = useState(null);
+  const [followerHistory, setFollowerHistory] = useState([]);
   const [editing, setEditing] = useState(false);
   const today = new Date().toLocaleDateString("pt-BR", { day:"numeric", month:"long", year:"numeric" });
 
   useEffect(() => {
     let alive = true;
-    getSetting("mediaKit")
-      .then(v => { if(alive) setProfile(v && typeof v==="object" ? v : {}); })
-      .catch(() => { if(alive) setProfile({}); });
+    Promise.all([
+      getSetting("mediaKit").catch(()=>null),
+      getSetting("followerHistory").catch(()=>null),
+    ]).then(([mk, fh]) => {
+      if (!alive) return;
+      setProfile(mk && typeof mk==="object" ? mk : {});
+      setFollowerHistory(Array.isArray(fh) ? fh : []);
+    });
     return () => { alive = false; };
   }, []);
 
@@ -4878,7 +4929,9 @@ function MediaKit({ contracts=[], posts=[], deliverables=[], brands=[] }) {
 
   const p = profile;
   const fmtN = n => (Number(n)||0).toLocaleString("pt-BR");
-  const fol = p.followers || {};
+  // Seguidores vêm do painel Saúde do canal (followerHistory); fallback p/ dados antigos do kit
+  const fhSorted = [...followerHistory].sort((a,b)=>String(a.month).localeCompare(String(b.month)));
+  const fol = fhSorted[fhSorted.length-1] || p.followers || {};
   const fIG = Number(fol.instagram)||0, fTT = Number(fol.tiktok)||0, fYT = Number(fol.youtube)||0;
   const totalFollowers = fIG + fTT + fYT;
   const aud = p.audience || {};
@@ -4910,6 +4963,10 @@ function MediaKit({ contracts=[], posts=[], deliverables=[], brands=[] }) {
     <div style={{ padding:24, maxWidth:880 }}>
       <div className="mk-toolbar" style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
         <div>
+          <span onClick={()=>navigateTo&&navigateTo("canal")}
+            style={{ fontSize:ds.font.size.xs, fontWeight:600, color:BLU, cursor:"pointer", display:"inline-block", marginBottom:6 }}>
+            ← Voltar para Saúde do canal
+          </span>
           <h2 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-0.02em" }}>Mídia Kit</h2>
           <div style={{ fontSize:ds.font.size.sm, color:TX2 }}>Apresentação do influenciador para marcas</div>
         </div>
@@ -4922,7 +4979,7 @@ function MediaKit({ contracts=[], posts=[], deliverables=[], brands=[] }) {
       {!filled && (
         <div style={{ ...G, padding:"20px", marginBottom:16, textAlign:"center" }}>
           <div style={{ fontSize:13, fontWeight:600, color:TX, marginBottom:6 }}>Preencha seus dados primeiro</div>
-          <div style={{ fontSize:12, color:TX2, marginBottom:12 }}>Foto, bio, seguidores e perfil do público aparecem no Mídia Kit depois de cadastrados.</div>
+          <div style={{ fontSize:12, color:TX2, marginBottom:12 }}>Foto, bio e perfil do público aparecem aqui depois de cadastrados. Os seguidores vêm do painel Saúde do canal.</div>
           <Btn onClick={()=>setEditing(true)} variant="primary" size="sm">Preencher agora</Btn>
         </div>
       )}
@@ -5129,6 +5186,289 @@ function Performance({ posts=[], deliverables=[], contracts=[] }) {
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Saúde do canal (dashboard do grupo Influenciador) ─────
+const MES_CURTO = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MES_LONGO = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+function mesKey(d)   { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+function mesCurto(k) { const [y,m]=String(k).split("-"); return `${MES_CURTO[(+m||1)-1]}/${String(y).slice(2)}`; }
+function mesLongo(k) { const [y,m]=String(k).split("-"); return `${MES_LONGO[(+m||1)-1]} ${y}`; }
+function mesesRecentes(n) {
+  const out=[], d=new Date(); d.setDate(1);
+  for (let i=0;i<n;i++) { out.push(mesKey(d)); d.setMonth(d.getMonth()-1); }
+  return out;
+}
+
+function FollowerEntryModal({ initial, prefill, onClose, onSave }) {
+  const isEdit = !!initial;
+  const [month, setMonth] = useState(initial?.month || mesKey(new Date()));
+  const [ig, setIg] = useState(String(initial?.instagram ?? prefill?.instagram ?? ""));
+  const [tt, setTt] = useState(String(initial?.tiktok    ?? prefill?.tiktok    ?? ""));
+  const [yt, setYt] = useState(String(initial?.youtube   ?? prefill?.youtube   ?? ""));
+  const total = (Number(ig)||0)+(Number(tt)||0)+(Number(yt)||0);
+
+  return (
+    <Modal title={isEdit?"Editar registro de seguidores":"Registrar seguidores do mês"} onClose={onClose} width={440}
+      footer={<>
+        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
+        <Btn onClick={()=>onSave({ month, instagram:Number(ig)||0, tiktok:Number(tt)||0, youtube:Number(yt)||0 })} variant="primary" size="sm">Salvar</Btn>
+      </>}>
+      <Field label="Mês de referência">
+        {isEdit ? (
+          <div style={{ padding:"8px 12px", background:B2, border:`1px solid ${LN}`, borderRadius:6, fontSize:13, color:TX }}>
+            {mesLongo(month)}
+          </div>
+        ) : (
+          <Select value={month} onChange={e=>setMonth(e.target.value)}>
+            {mesesRecentes(15).map(mk => <option key={mk} value={mk}>{mesLongo(mk)}</option>)}
+          </Select>
+        )}
+      </Field>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginTop:12 }}>
+        <Field label="Instagram"><Input type="number" value={ig} onChange={e=>setIg(e.target.value)} placeholder="0"/></Field>
+        <Field label="TikTok"><Input type="number" value={tt} onChange={e=>setTt(e.target.value)} placeholder="0"/></Field>
+        <Field label="YouTube"><Input type="number" value={yt} onChange={e=>setYt(e.target.value)} placeholder="0"/></Field>
+      </div>
+      <div style={{ marginTop:14, padding:"10px 12px", background:B2, borderRadius:8, fontSize:12, color:TX2 }}>
+        Total do mês: <strong style={{ color:TX }}>{total.toLocaleString("pt-BR")}</strong> seguidores
+        {!isEdit && prefill && (
+          <div style={{ marginTop:4, color:TX3, fontSize:11 }}>
+            Pré-preenchido com os números mais recentes — ajuste o que mudou.
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
+  const [history, setHistory]   = useState(null);
+  const [mediaKit, setMediaKit] = useState(null);
+  const [modalEntry, setModalEntry] = useState(undefined); // undefined=fechado · null=novo · obj=editar
+  const [hoverBar, setHoverBar] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      getSetting("followerHistory").catch(()=>null),
+      getSetting("mediaKit").catch(()=>null),
+    ]).then(([h, mk]) => {
+      if (!alive) return;
+      setHistory(Array.isArray(h) ? h : []);
+      setMediaKit(mk && typeof mk==="object" ? mk : {});
+    });
+    return () => { alive = false; };
+  }, []);
+
+  if (history === null) return <div style={{ padding:24, color:TX2, fontSize:13 }}>Carregando…</div>;
+
+  const fmtN    = n => (Number(n)||0).toLocaleString("pt-BR");
+  const totalOf = e => (Number(e.instagram)||0)+(Number(e.tiktok)||0)+(Number(e.youtube)||0);
+
+  const sorted    = [...history].sort((a,b)=>a.month.localeCompare(b.month));
+  const latest    = sorted[sorted.length-1] || null;
+  const prev      = sorted[sorted.length-2] || null;
+  const totalNow  = latest ? totalOf(latest) : 0;
+  const totalPrev = prev ? totalOf(prev) : null;
+  const gain      = (latest && prev) ? totalNow - totalPrev : null;
+  const growthPct = (gain!=null && totalPrev>0) ? gain/totalPrev*100 : null;
+
+  // Engajamento médio — mesma base do painel Performance
+  const doneItems = [...posts.filter(p=>p.isPosted), ...deliverables.filter(d=>d.stage==="done")];
+  const engOf = it => { const r=sumNetworkMetrics(it,"reach"), l=sumNetworkMetrics(it,"likes"), c=sumNetworkMetrics(it,"comments"); return r>10?(l+c)/r*100:null; };
+  const engs   = doneItems.map(engOf).filter(e=>e!=null);
+  const avgEng = engs.length ? engs.reduce((s,e)=>s+e,0)/engs.length : null;
+
+  // Consistência — publicações concluídas por mês (últimos 6)
+  const porMes = {};
+  doneItems.forEach(it => {
+    const mk = (it.publishDate||it.plannedDate||it.plannedPostDate||it.createdAt||"").slice(0,7);
+    if (mk && mk.length===7) porMes[mk] = (porMes[mk]||0)+1;
+  });
+  const pubMeses = mesesRecentes(6).reverse().map(mk => ({ key:mk, count:porMes[mk]||0 }));
+  const maxPub   = Math.max(...pubMeses.map(m=>m.count), 1);
+  const mediaPub = pubMeses.reduce((s,m)=>s+m.count,0)/pubMeses.length;
+  const temPub   = doneItems.length>0;
+
+  // Gráfico de crescimento — últimos 8 registros
+  const chart    = sorted.slice(-8).map(e => ({ key:e.month, total:totalOf(e) }));
+  const chartMax = Math.max(...chart.map(c=>c.total), 1);
+  const chartMin = Math.min(...chart.map(c=>c.total), chartMax);
+  const barH     = v => chartMax===chartMin ? 60 : 18 + (v-chartMin)/(chartMax-chartMin)*82;
+
+  const saveEntry = async (entry) => {
+    const next = [...history.filter(e=>e.month!==entry.month), entry].sort((a,b)=>a.month.localeCompare(b.month));
+    setHistory(next);
+    setModalEntry(undefined);
+    try { await setSetting("followerHistory", next); } catch(err) { console.error("[followerHistory] save", err); }
+  };
+  const removeEntry = async (month) => {
+    if (!window.confirm(`Remover o registro de ${mesLongo(month)}?`)) return;
+    const next = history.filter(e=>e.month!==month);
+    setHistory(next);
+    try { await setSetting("followerHistory", next); } catch(err) { console.error("[followerHistory] del", err); }
+  };
+
+  const prefillNew = latest
+    ? { instagram:latest.instagram, tiktok:latest.tiktok, youtube:latest.youtube }
+    : (mediaKit && mediaKit.followers) || null;
+
+  const REDES = [
+    { key:"instagram", label:"Instagram" },
+    { key:"tiktok",    label:"TikTok"    },
+    { key:"youtube",   label:"YouTube"   },
+  ];
+
+  const Stat = ({ label, value, sub, color }) => (
+    <div style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, padding:"16px" }}>
+      <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:8 }}>{label}</div>
+      <div style={{ fontSize:23, fontWeight:800, color:color||TX, lineHeight:1.1, letterSpacing:"-.01em" }}>{value}</div>
+      {sub && <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <div style={{ padding:24, maxWidth:900 }}>
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, flexWrap:"wrap", marginBottom:16 }}>
+        <div>
+          <h2 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-0.02em" }}>Saúde do canal</h2>
+          <div style={{ fontSize:ds.font.size.sm, color:TX2 }}>Crescimento de seguidores e consistência do seu conteúdo</div>
+        </div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <Btn onClick={()=>navigateTo&&navigateTo("midiakit")} variant="default" size="sm">Mídia Kit</Btn>
+          <Btn onClick={()=>setModalEntry(null)} variant="primary" size="sm">+ Registrar mês</Btn>
+        </div>
+      </div>
+
+      {/* Indicadores */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
+        <Stat label="Seguidores" value={latest?fmtN(totalNow):"—"} sub={latest?`em ${mesCurto(latest.month)}`:"sem registro"}/>
+        <Stat label="Ganho no mês" value={gain!=null?`${gain>=0?"+":""}${fmtN(gain)}`:"—"} sub={gain!=null?"vs. mês anterior":"registre 2 meses"} color={gain==null?TX:gain>0?GRN:gain<0?RED:TX}/>
+        <Stat label="Crescimento" value={growthPct!=null?`${growthPct>=0?"+":""}${growthPct.toFixed(1)}%`:"—"} sub="no último mês" color={growthPct==null?TX:growthPct>0?GRN:growthPct<0?RED:TX}/>
+        <Stat label="Engajamento" value={avgEng!=null?`${avgEng.toFixed(1)}%`:"—"} sub="médio das publicações" color={avgEng==null?TX:avgEng>=3?GRN:avgEng>=1?AMB:TX2}/>
+      </div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {/* Crescimento de seguidores */}
+        <div style={{ ...G, padding:"18px 20px" }}>
+          <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:14 }}>Crescimento de seguidores</div>
+          {chart.length===0 && (
+            <div style={{ textAlign:"center", padding:"24px 0" }}>
+              <div style={{ fontSize:13, fontWeight:600, color:TX, marginBottom:6 }}>Nenhum mês registrado ainda</div>
+              <div style={{ fontSize:12, color:TX2, marginBottom:14 }}>Registre seus seguidores para o painel começar a mostrar o crescimento.</div>
+              <Btn onClick={()=>setModalEntry(null)} variant="primary" size="sm">+ Registrar primeiro mês</Btn>
+            </div>
+          )}
+          {chart.length===1 && (
+            <div style={{ textAlign:"center", padding:"20px 0" }}>
+              <div style={{ fontSize:28, fontWeight:800, color:TX, letterSpacing:"-.02em" }}>{fmtN(chart[0].total)}</div>
+              <div style={{ fontSize:12, color:TX2, marginTop:4 }}>seguidores em {mesLongo(chart[0].key)}</div>
+              <div style={{ fontSize:12, color:TX3, marginTop:10 }}>Registre mais um mês para ver a evolução.</div>
+            </div>
+          )}
+          {chart.length>=2 && (
+            <div style={{ display:"flex", alignItems:"flex-end", gap:8 }}>
+              {chart.map((c,i)=>{
+                const isH = hoverBar===i;
+                return (
+                  <div key={c.key} onMouseEnter={()=>setHoverBar(i)} onMouseLeave={()=>setHoverBar(null)}
+                    style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:6, cursor:"default" }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:TX, height:14, fontVariantNumeric:"tabular-nums" }}>{isH?fmtN(c.total):""}</div>
+                    <div style={{ width:"100%", height:96, display:"flex", alignItems:"flex-end" }}>
+                      <div style={{ width:"100%", height:`${barH(c.total)}%`, background:isH?GRN:`${GRN}99`, borderRadius:"4px 4px 0 0", transition:"background .12s, height .3s" }}/>
+                    </div>
+                    <div style={{ fontSize:ds.font.size.xs, color:isH?TX:TX3, fontWeight:isH?700:400 }}>{mesCurto(c.key)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Seguidores por rede */}
+        {latest && (
+          <div style={{ ...G, padding:"18px 20px" }}>
+            <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:14 }}>Seguidores por rede</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+              {REDES.map(r => {
+                const cur = Number(latest[r.key])||0;
+                const old = prev ? (Number(prev[r.key])||0) : null;
+                const d   = old!=null ? cur-old : null;
+                return (
+                  <div key={r.key} style={{ background:B2, borderRadius:8, padding:"12px 14px" }}>
+                    <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:TX2, marginBottom:6 }}>{r.label}</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:TX, letterSpacing:"-.01em" }}>{fmtN(cur)}</div>
+                    {d!=null && (
+                      <div style={{ fontSize:11, fontWeight:700, color:d>0?GRN:d<0?RED:TX3, marginTop:3 }}>
+                        {d>0?"+":""}{fmtN(d)} no mês
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Consistência de postagem */}
+        <div style={{ ...G, padding:"18px 20px" }}>
+          <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+            <div style={{ fontSize:12, fontWeight:700, color:TX }}>Consistência de postagem</div>
+            <div style={{ fontSize:ds.font.size.xs, color:TX2 }}>~{mediaPub.toFixed(1)} publicações/mês</div>
+          </div>
+          {!temPub ? (
+            <div style={{ fontSize:12, color:TX3, padding:"8px 0" }}>Ainda não há publicações concluídas para medir a frequência.</div>
+          ) : (
+            <div style={{ display:"flex", alignItems:"flex-end", gap:8 }}>
+              {pubMeses.map(m => (
+                <div key={m.key} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+                  <div style={{ width:"100%", height:74, display:"flex", alignItems:"flex-end" }}>
+                    <div style={{ width:"100%", height:`${Math.max(3,m.count/maxPub*100)}%`, background:m.count===0?LN:`${BLU}99`, borderRadius:"4px 4px 0 0", transition:"height .3s" }}/>
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:800, color:TX }}>{m.count}</div>
+                  <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>{mesCurto(m.key)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Meses registrados */}
+        {sorted.length>0 && (
+          <div style={{ ...G, padding:"18px 20px" }}>
+            <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:12 }}>Meses registrados</div>
+            {[...sorted].reverse().map((e,idx,arr) => (
+              <div key={e.month} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:idx<arr.length-1?`1px solid ${LN}`:"none" }}>
+                <div style={{ fontSize:12, fontWeight:600, color:TX, width:118, flexShrink:0 }}>{mesLongo(e.month)}</div>
+                <div style={{ flex:1, minWidth:0, fontSize:ds.font.size.xs, color:TX3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  IG {fmtN(e.instagram)} · TT {fmtN(e.tiktok)} · YT {fmtN(e.youtube)}
+                </div>
+                <div style={{ fontSize:13, fontWeight:800, color:TX, flexShrink:0 }}>{fmtN(totalOf(e))}</div>
+                <button onClick={()=>setModalEntry(e)}
+                  style={{ border:`1px solid ${LN}`, background:B1, borderRadius:6, padding:"3px 10px", fontSize:11, color:TX2, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+                  Editar
+                </button>
+                <button onClick={()=>removeEntry(e.month)}
+                  style={{ border:`1px solid ${LN}`, background:B1, borderRadius:6, padding:"3px 10px", fontSize:11, color:RED, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+                  Remover
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {modalEntry!==undefined && (
+        <FollowerEntryModal
+          initial={modalEntry}
+          prefill={modalEntry ? null : prefillNew}
+          onClose={()=>setModalEntry(undefined)}
+          onSave={saveEntry}/>
       )}
     </div>
   );
@@ -5519,6 +5859,142 @@ function PaymentsList({ contracts, saveC, rates }) {
 
 
 // ─── Financeiro View ──────────────────────────────────────
+// ─── Visão geral de Marcas (dashboard do grupo Marcas) ─────
+function ComercialOverview({ contracts=[], brands=[], rates, navigateTo }) {
+  const [proposals, setProposals] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    getSetting("proposals")
+      .then(v => { if(alive) setProposals(Array.isArray(v)?v:[]); })
+      .catch(() => { if(alive) setProposals([]); });
+    return () => { alive = false; };
+  }, []);
+
+  if (proposals === null) return <div style={{ padding:24, color:TX2, fontSize:13 }}>Carregando…</div>;
+
+  // Contratos
+  const volumeAtivo = contracts.reduce((s,c)=>s+(toBRL(contractTotal(c),c.currency,rates)||0), 0);
+  const aVencer = contracts
+    .filter(c => c.contractDeadline)
+    .map(c => ({ c, d: daysLeft(c.contractDeadline) }))
+    .filter(x => x.d != null && x.d >= -45)
+    .sort((a,b) => a.d - b.d)
+    .slice(0,4);
+
+  // Propostas
+  const inFunnel  = proposals.filter(p=>["lead","proposta","negociando"].includes(p.stage));
+  const pipeline  = inFunnel.reduce((s,p)=>s+(Number(p.value)||0),0);
+  const won       = proposals.filter(p=>p.stage==="fechado").length;
+  const decided   = proposals.filter(p=>p.stage==="fechado"||p.stage==="perdido").length;
+  const convRate  = decided>0 ? Math.round(won/decided*100) : null;
+  const porEstagio = FUNIL_STAGES.map(s => ({ ...s, count: proposals.filter(p=>p.stage===s.id).length }));
+
+  // Financeiro
+  const nfPend   = contracts.filter(c => getNFEntries(c).some(e=>!e.isEmitted)).length;
+  const commPend = contracts.reduce((s,c)=>{
+    if (!c.hasCommission) return s;
+    return s + getCommEntries(c).filter(e=>!e.isPaid).reduce((a,e)=>a+e.amount,0);
+  }, 0);
+
+  const Stat = ({ label, value, sub, color }) => (
+    <div style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, padding:"16px" }}>
+      <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:8 }}>{label}</div>
+      <div style={{ fontSize:23, fontWeight:800, color:color||TX, lineHeight:1.1, letterSpacing:"-.01em" }}>{value}</div>
+      {sub && <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+  const CardHead = ({ title, onVer }) => (
+    <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:12, marginBottom:14 }}>
+      <div style={{ fontSize:12, fontWeight:700, color:TX }}>{title}</div>
+      {onVer && (
+        <span onClick={onVer}
+          style={{ fontSize:ds.font.size.xs, fontWeight:600, color:BLU, cursor:"pointer" }}
+          onMouseEnter={e=>e.currentTarget.style.textDecoration="underline"}
+          onMouseLeave={e=>e.currentTarget.style.textDecoration="none"}>
+          Ver tudo →
+        </span>
+      )}
+    </div>
+  );
+  const MiniStat = ({ label, value, color }) => (
+    <div style={{ background:B2, borderRadius:8, padding:"12px 14px" }}>
+      <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color:TX2, marginBottom:6 }}>{label}</div>
+      <div style={{ fontSize:18, fontWeight:800, color:color||TX, letterSpacing:"-.01em" }}>{value}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ padding:24, maxWidth:900 }}>
+      {/* Header */}
+      <div style={{ marginBottom:16 }}>
+        <h2 style={{ fontSize:ds.font.size['2xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:"-0.02em" }}>Visão geral</h2>
+        <div style={{ fontSize:ds.font.size.sm, color:TX2 }}>Resumo comercial — marcas, propostas, contratos e financeiro</div>
+      </div>
+
+      {/* Indicadores */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
+        <Stat label="Marcas" value={brands.length} sub="cadastradas"/>
+        <Stat label="Contratos ativos" value={contracts.length} sub="em andamento"/>
+        <Stat label="No funil" value={inFunnel.length} sub="propostas ativas"/>
+        <Stat label="Volume ativo" value={fmtMoney(volumeAtivo)} sub="em contratos"/>
+      </div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {/* Funil de propostas */}
+        <div style={{ ...G, padding:"18px 20px" }}>
+          <CardHead title="Funil de propostas" onVer={()=>navigateTo&&navigateTo("propostas")}/>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
+            {porEstagio.map(s => (
+              <div key={s.id} style={{ background:B2, borderRadius:8, padding:"10px 8px", textAlign:"center" }}>
+                <div style={{ fontSize:22, fontWeight:800, color:TX, lineHeight:1 }}>{s.count}</div>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginTop:7 }}>
+                  <span style={{ width:7, height:7, borderRadius:"50%", background:s.color, flexShrink:0 }}/>
+                  <span style={{ fontSize:ds.font.size.xs, color:TX2, fontWeight:600 }}>{s.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${LN}`, display:"flex", gap:20, flexWrap:"wrap", fontSize:12 }}>
+            <span style={{ color:TX2 }}>Em negociação: <strong style={{ color:TX }}>{pipeline>0?fmtMoney(pipeline):"—"}</strong></span>
+            <span style={{ color:TX2 }}>Taxa de fechamento: <strong style={{ color:convRate==null?TX:convRate>=50?GRN:AMB }}>{convRate!=null?`${convRate}%`:"—"}</strong></span>
+          </div>
+        </div>
+
+        {/* Contratos a vencer */}
+        <div style={{ ...G, padding:"18px 20px" }}>
+          <CardHead title="Contratos a vencer" onVer={()=>navigateTo&&navigateTo("contratos")}/>
+          {aVencer.length===0 ? (
+            <div style={{ fontSize:12, color:TX3, padding:"4px 0" }}>Nenhum contrato com vencimento próximo.</div>
+          ) : (
+            aVencer.map(({c,d},i)=>{
+              const txt = d<0?`vencido há ${Math.abs(d)}d`:d===0?"vence hoje":`em ${d}d`;
+              return (
+                <div key={c.id||i} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:i<aVencer.length-1?`1px solid ${LN}`:"none" }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:c.color||TX3, flexShrink:0 }}/>
+                  <div style={{ flex:1, minWidth:0, fontSize:12, fontWeight:600, color:TX, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.company||"Contrato"}</div>
+                  <div style={{ fontSize:ds.font.size.xs, color:TX3, flexShrink:0 }}>{fmtDate(c.contractDeadline)}</div>
+                  <div style={{ fontSize:11, fontWeight:700, color:dlColor(d), flexShrink:0, minWidth:84, textAlign:"right" }}>{txt}</div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Financeiro */}
+        <div style={{ ...G, padding:"18px 20px" }}>
+          <CardHead title="Financeiro" onVer={()=>navigateTo&&navigateTo("financeiro")}/>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+            <MiniStat label="Volume bruto" value={fmtMoney(volumeAtivo)}/>
+            <MiniStat label="NFs a emitir" value={nfPend} color={nfPend>0?AMB:GRN}/>
+            <MiniStat label="Comissão a pagar" value={fmtMoney(commPend)} color={commPend>0?RED:GRN}/>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCommPaid, saveC, role }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("visao");
@@ -6753,6 +7229,7 @@ function CopilotPanel({ isOpen, onClose, view, context={}, contracts=[], deliver
 
 // ─── App Root ─────────────────────────────────────────────
 // AppContent está DENTRO do FxProvider — pode chamar useFx() com segurança.
+
 function AppContent() {
   const isMobile = useIsMobile();
   const [user, setUser]     = useState(undefined);

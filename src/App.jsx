@@ -3890,7 +3890,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
         }}>
         <div style={{ display:"flex", alignItems:"center", gap:4 }}>
           <span style={{ fontSize:ds.font.size.xs, flexShrink:0, opacity:.7 }}>📄</span>
-          <span style={{ fontSize:ds.font.size.xs, fontWeight:500, color:TX, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>
+          <span style={{ fontSize:ds.font.size.xs, fontWeight:500, color:TX, flex:1, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", lineHeight:1.3, wordBreak:"break-word" }}>
             {del.title}
           </span>
         </div>
@@ -3937,8 +3937,8 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
           ))}
         </div>
 
-        {/* Day cells */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gridAutoRows:isMobile?"minmax(52px, auto)":"minmax(160px, auto)",gap:"1px",background:LN}}>
+        {/* {del.title} */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"1px",background:LN}}>
           {cells.map((d,i)=>{
             if(!d) return <div key={`e${i}`} style={{minHeight:isMobile?48:110,background:"#FAFAFA"}}/>;
             const dStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
@@ -3992,7 +3992,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                 </div>
 
                 {/* Deliverable cards (desktop) */}
-                {!isMobile && dayDels.map(del=>(
+                {!isMobile && dayDels.slice(0,3).map(del=>(
                   <CalCard key={del.id} del={del}/>
                 ))}
 

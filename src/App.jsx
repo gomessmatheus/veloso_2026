@@ -3938,7 +3938,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
         </div>
 
         {/* Day cells */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"1px",background:LN}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gridAutoRows:isMobile?"minmax(52px, auto)":"minmax(160px, auto)",gap:"1px",background:LN}}>
           {cells.map((d,i)=>{
             if(!d) return <div key={`e${i}`} style={{minHeight:isMobile?48:110,background:"#FAFAFA"}}/>;
             const dStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;

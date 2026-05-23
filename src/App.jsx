@@ -1173,7 +1173,9 @@ function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobil
  *   TODO: substituir window.__dashboardFilter por estado React
  *         passado via prop (requer ajuste em ViewRenderer).
  */
-function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo, role = "admin", userName = "Matheus" }) {
+function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stats, rates, saveNote, toggleComm, toggleCommPaid, toggleNF, setModal, navigateTo, role = "admin", userName = "Matheus", saveDeliverables, brands = [] }) {
+  const [openDelivItem, setOpenDelivItem] = useState(null);
+  const toast = useToast();
   const isMobile       = useIsMobile();
   const today          = useMemo(() => new Date(), []);
   const allDeliverables = dashDeliverables || [];
@@ -1252,15 +1254,25 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
     }
   };
 
-  const handleOpenItem = (d) => {
-    // Navigate to acompanhamento and pre-select the item
-    navigateWithFilter("acompanhamento", { type: "ids", ids: [d.id] });
-  };
+  // Abre o card do entregável diretamente no Dashboard (sem navegar pro pipeline)
+  const handleOpenItem = (d) => setOpenDelivItem(d);
+  const handleActionClick = (d) => setOpenDelivItem(d);
 
-  const handleActionClick = (d) => {
-    // TODO: wire to actual stage-advance action or show inline modal.
-    //       For now, open the deliverable detail via pipeline.
-    handleOpenItem(d);
+  const handleSaveDeliv = (item) => {
+    if (saveDeliverables) {
+      saveDeliverables(allDeliverables.map(d => d.id === item.id ? item : d));
+      toast?.("Entregável atualizado", "success");
+    }
+    setOpenDelivItem(null);
+  };
+  const handleAutoSaveDeliv = (item) => {
+    if (saveDeliverables) saveDeliverables(allDeliverables.map(d => d.id === item.id ? item : d));
+  };
+  const handleDeleteDeliv = (id) => {
+    if (saveDeliverables && window.confirm("Excluir este entregável?")) {
+      saveDeliverables(allDeliverables.filter(d => d.id !== id));
+      setOpenDelivItem(null);
+    }
   };
 
   // ── Skeleton on first load ───────────────────────────────
@@ -1326,6 +1338,20 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
         onOpenItem={handleOpenItem}
         onNavigate={navigateTo}
       />
+
+      {/* Modal do entregável — aberto direto a partir do Foco de hoje / Timeline */}
+      {openDelivItem && (
+        <DeliverableModal
+          item={openDelivItem}
+          contracts={contracts}
+          allDeliverables={allDeliverables}
+          brands={brands}
+          onClose={() => setOpenDelivItem(null)}
+          onSave={handleSaveDeliv}
+          onAutoSave={handleAutoSaveDeliv}
+          onDelete={handleDeleteDeliv}
+        />
+      )}
     </div>
   );
 }
@@ -4621,7 +4647,7 @@ function ViewRenderer({ view, contracts, posts, deliverables, stats, rates, save
     </div>
   );
   try {
-    if (view==="dashboard")      return <Dashboard contracts={activeContracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView} role={role} userName={userName}/>;
+    if (view==="dashboard")      return <Dashboard contracts={activeContracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates} saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} setModal={setModal} navigateTo={setView} role={role} userName={userName} saveDeliverables={saveD} brands={brands}/>;
     if (view==="acompanhamento") return <Acompanhamento contracts={activeContracts} posts={posts} deliverables={deliverables} saveDeliverables={saveD} calEvents={calEvents} calMonth={calMonth} setCal={setCal} calFilter={calFilter} setCalF={setCalF} role={role} brands={brands}/>;
     if (view==="contratos")      return <Contratos contracts={contracts} posts={posts} deliverables={deliverables} saveC={saveC} saveP={saveP} saveDeliverables={saveD} setModal={setModal} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid} toggleNF={toggleNF} saveNote={saveNote} rates={rates} role={role} brands={brands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} openCopilot={openCopilot}/>;
     if (view==="marcas")         return <Marcas brands={brands} contracts={contracts} posts={posts} deliverables={deliverables} saveBrands={saveBrands} navigateTo={v=>{setView(v);}} setSelectedBrand={setSelectedBrand} role={role} rates={rates} openCopilot={openCopilot}/>;

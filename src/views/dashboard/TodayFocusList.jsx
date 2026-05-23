@@ -42,12 +42,13 @@ function RelativeDate({ days }) {
   return <span style={{ color:ds.color.neutral[500] }}>em {days}d</span>;
 }
 
-function FocusItem({ d, contract, today, onOpenItem, onActionClick }) {
+function FocusItem({ d, idx, contract, today, onOpenItem, onActionClick }) {
   const days       = daysBetween(today, d.plannedPostDate);
   const brandColor = contract?.color || ds.color.neutral[400];
   const stageLabel = STAGE_LABELS[d.stage] || d.stage;
   const stageColor = STAGE_COLORS[d.stage] || ds.color.neutral[500];
   const nextAction = NEXT_ACTION[d.stage];
+  const isTop      = idx < 3;
 
   return (
     <div onClick={() => onOpenItem(d)}
@@ -57,9 +58,22 @@ function FocusItem({ d, contract, today, onOpenItem, onActionClick }) {
         cursor:"pointer", transition:`background ${ds.motion.fast}` }}
       onMouseEnter={e => e.currentTarget.style.background = ds.color.neutral[50]}
       onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+      {/* Priority number — top 3 destacados em vermelho */}
+      <div style={{
+        width:24, height:24, borderRadius:"50%",
+        background: isTop ? ds.color.brand[500] : "transparent",
+        border: isTop ? "none" : `1px solid ${ds.color.neutral[200]}`,
+        color: isTop ? ds.color.neutral[0] : ds.color.neutral[500],
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontSize: ds.font.size.xs, fontWeight: ds.font.weight.semibold,
+        fontVariantNumeric:"tabular-nums",
+        flexShrink:0, marginLeft: ds.space[1],
+      }}>
+        {idx + 1}
+      </div>
       {/* Brand dot */}
       <div style={{ width:8, height:8, borderRadius:"50%", background:brandColor,
-        flexShrink:0, marginLeft: ds.space[1] }}/>
+        flexShrink:0 }} title={contract?.company || ""}/>
       {/* Title + meta */}
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ fontSize: ds.font.size.md, fontWeight: ds.font.weight.medium,
@@ -110,16 +124,23 @@ export function TodayFocusList({ items, contracts, today, isMobile, hasWeekItems
   return (
     <div style={{ ...G, padding: isMobile ? ds.space[4] : `${ds.space[5]} ${ds.space[6]}`,
       display:"flex", flexDirection:"column" }}>
-      <div style={{ fontSize: ds.font.size.xs, fontWeight: ds.font.weight.semibold, letterSpacing:"0.12em",
-        color: ds.color.neutral[400], marginBottom: ds.space[3], textTransform:"uppercase" }}>
-        {todayLabel}
+      <div style={{ marginBottom: ds.space[3] }}>
+        <div style={{ fontSize: ds.font.size.xs, fontWeight: ds.font.weight.semibold, letterSpacing:"0.12em",
+          color: ds.color.neutral[400], textTransform:"uppercase" }}>
+          {todayLabel}
+        </div>
+        {items.length > 0 && (
+          <div style={{ fontSize: ds.font.size.xs, color: ds.color.neutral[400], marginTop: 2 }}>
+            Em ordem de prioridade — atrasados e à espera de você primeiro
+          </div>
+        )}
       </div>
       {items.length === 0 ? (
         <EmptyFocus hasWeekItems={hasWeekItems} onNavigate={onNavigate}/>
       ) : (
         <div>
-          {items.map(d => (
-            <FocusItem key={d.id} d={d}
+          {items.map((d, idx) => (
+            <FocusItem key={d.id} d={d} idx={idx}
               contract={contracts.find(c => c.id === d.contractId)}
               today={today} onOpenItem={onOpenItem} onActionClick={onActionClick}/>
           ))}

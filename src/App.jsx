@@ -5202,31 +5202,29 @@ function mesesRecentes(n) {
   for (let i=0;i<n;i++) { out.push(mesKey(d)); d.setMonth(d.getMonth()-1); }
   return out;
 }
+// Date helpers — para o registro de seguidores (data livre, não mensal)
+function dateKey(d)     { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function fmtDateShort(k){ const [, m, d]=String(k).split("-"); return `${d}/${m}`; }
+function fmtDateBr(k)   { const [y, m, d]=String(k).split("-"); return `${d}/${m}/${String(y).slice(2)}`; }
+function fmtDateLong(k) { const [y, m, d]=String(k).split("-"); return `${d}/${m}/${y}`; }
 
-function FollowerEntryModal({ initial, prefill, onClose, onSave }) {
+function FollowerEntryModal({ initial, prefill, isBase, onClose, onSave }) {
   const isEdit = !!initial;
-  const [month, setMonth] = useState(initial?.month || mesKey(new Date()));
+  const [date, setDate] = useState(initial?.date || dateKey(new Date()));
   const [ig, setIg] = useState(String(initial?.instagram ?? prefill?.instagram ?? ""));
   const [tt, setTt] = useState(String(initial?.tiktok    ?? prefill?.tiktok    ?? ""));
   const [yt, setYt] = useState(String(initial?.youtube   ?? prefill?.youtube   ?? ""));
   const total = (Number(ig)||0)+(Number(tt)||0)+(Number(yt)||0);
+  const title = isEdit ? "Editar atualização" : isBase ? "Definir base de seguidores" : "Atualizar seguidores";
 
   return (
-    <Modal title={isEdit?"Editar registro de seguidores":"Registrar seguidores do mês"} onClose={onClose} width={440}
+    <Modal title={title} onClose={onClose} width={440}
       footer={<>
         <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
-        <Btn onClick={()=>onSave({ month, instagram:Number(ig)||0, tiktok:Number(tt)||0, youtube:Number(yt)||0 })} variant="primary" size="sm">Salvar</Btn>
+        <Btn onClick={()=>onSave({ date, instagram:Number(ig)||0, tiktok:Number(tt)||0, youtube:Number(yt)||0 })} variant="primary" size="sm">Salvar</Btn>
       </>}>
-      <Field label="Mês de referência">
-        {isEdit ? (
-          <div style={{ padding:"8px 12px", background:B2, border:`1px solid ${LN}`, borderRadius:6, fontSize:13, color:TX }}>
-            {mesLongo(month)}
-          </div>
-        ) : (
-          <Select value={month} onChange={e=>setMonth(e.target.value)}>
-            {mesesRecentes(15).map(mk => <option key={mk} value={mk}>{mesLongo(mk)}</option>)}
-          </Select>
-        )}
+      <Field label="Data">
+        <Input type="date" value={date} onChange={e=>setDate(e.target.value)}/>
       </Field>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginTop:12 }}>
         <Field label="Instagram"><Input type="number" value={ig} onChange={e=>setIg(e.target.value)} placeholder="0"/></Field>
@@ -5234,10 +5232,12 @@ function FollowerEntryModal({ initial, prefill, onClose, onSave }) {
         <Field label="YouTube"><Input type="number" value={yt} onChange={e=>setYt(e.target.value)} placeholder="0"/></Field>
       </div>
       <div style={{ marginTop:14, padding:"10px 12px", background:B2, borderRadius:8, fontSize:12, color:TX2 }}>
-        Total do mês: <strong style={{ color:TX }}>{total.toLocaleString("pt-BR")}</strong> seguidores
-        {!isEdit && prefill && (
+        Total: <strong style={{ color:TX }}>{total.toLocaleString("pt-BR")}</strong> seguidores
+        {!isEdit && (
           <div style={{ marginTop:4, color:TX3, fontSize:11 }}>
-            Pré-preenchido com os números mais recentes — ajuste o que mudou.
+            {isBase
+              ? "Use seus números atuais — este vira o ponto de partida do crescimento."
+              : "Pré-preenchido com a última atualização — ajuste o que mudou."}
           </div>
         )}
       </div>
@@ -5258,7 +5258,11 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
       getSetting("mediaKit").catch(()=>null),
     ]).then(([h, mk]) => {
       if (!alive) return;
-      setHistory(Array.isArray(h) ? h : []);
+      // Migração: entradas antigas usavam {month:"YYYY-MM"}; novas usam {date:"YYYY-MM-DD"}.
+      const normalized = Array.isArray(h)
+        ? h.map(e => ({ ...e, date: e.date || (e.month ? String(e.month) + "-01" : null) })).filter(e => e.date)
+        : [];
+      setHistory(normalized);
       setMediaKit(mk && typeof mk==="object" ? mk : {});
     });
     return () => { alive = false; };
@@ -5269,13 +5273,17 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
   const fmtN    = n => (Number(n)||0).toLocaleString("pt-BR");
   const totalOf = e => (Number(e.instagram)||0)+(Number(e.tiktok)||0)+(Number(e.youtube)||0);
 
-  const sorted    = [...history].sort((a,b)=>a.month.localeCompare(b.month));
+  const sorted    = [...history].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const latest    = sorted[sorted.length-1] || null;
   const prev      = sorted[sorted.length-2] || null;
+  const base      = sorted[0] || null;
   const totalNow  = latest ? totalOf(latest) : 0;
   const totalPrev = prev ? totalOf(prev) : null;
+  const totalBase = base ? totalOf(base) : null;
   const gain      = (latest && prev) ? totalNow - totalPrev : null;
   const growthPct = (gain!=null && totalPrev>0) ? gain/totalPrev*100 : null;
+  const sinceBaseGain = (latest && base && base!==latest) ? totalNow - totalBase : null;
+  const sinceBasePct  = (sinceBaseGain!=null && totalBase>0) ? sinceBaseGain/totalBase*100 : null;
 
   // Engajamento médio — mesma base do painel Performance
   const doneItems = [...posts.filter(p=>p.isPosted), ...deliverables.filter(d=>d.stage==="done")];
@@ -5294,21 +5302,21 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
   const mediaPub = pubMeses.reduce((s,m)=>s+m.count,0)/pubMeses.length;
   const temPub   = doneItems.length>0;
 
-  // Gráfico de crescimento — últimos 8 registros
-  const chart    = sorted.slice(-8).map(e => ({ key:e.month, total:totalOf(e) }));
+  // Gráfico de crescimento — últimas 8 atualizações
+  const chart    = sorted.slice(-8).map(e => ({ key:e.date, total:totalOf(e) }));
   const chartMax = Math.max(...chart.map(c=>c.total), 1);
   const chartMin = Math.min(...chart.map(c=>c.total), chartMax);
   const barH     = v => chartMax===chartMin ? 60 : 18 + (v-chartMin)/(chartMax-chartMin)*82;
 
   const saveEntry = async (entry) => {
-    const next = [...history.filter(e=>e.month!==entry.month), entry].sort((a,b)=>a.month.localeCompare(b.month));
+    const next = [...history.filter(e=>e.date!==entry.date), entry].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     setHistory(next);
     setModalEntry(undefined);
     try { await setSetting("followerHistory", next); } catch(err) { console.error("[followerHistory] save", err); }
   };
-  const removeEntry = async (month) => {
-    if (!window.confirm(`Remover o registro de ${mesLongo(month)}?`)) return;
-    const next = history.filter(e=>e.month!==month);
+  const removeEntry = async (date) => {
+    if (!window.confirm(`Remover a atualização de ${fmtDateLong(date)}?`)) return;
+    const next = history.filter(e=>e.date!==date);
     setHistory(next);
     try { await setSetting("followerHistory", next); } catch(err) { console.error("[followerHistory] del", err); }
   };
@@ -5341,15 +5349,25 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
         </div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
           <Btn onClick={()=>navigateTo&&navigateTo("midiakit")} variant="default" size="sm">Mídia Kit</Btn>
-          <Btn onClick={()=>setModalEntry(null)} variant="primary" size="sm">+ Registrar mês</Btn>
+          <Btn onClick={()=>setModalEntry(null)} variant="primary" size="sm">
+            {sorted.length===0 ? "+ Definir base" : "+ Atualizar seguidores"}
+          </Btn>
         </div>
       </div>
 
       {/* Indicadores */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
-        <Stat label="Seguidores" value={latest?fmtN(totalNow):"—"} sub={latest?`em ${mesCurto(latest.month)}`:"sem registro"}/>
-        <Stat label="Ganho no mês" value={gain!=null?`${gain>=0?"+":""}${fmtN(gain)}`:"—"} sub={gain!=null?"vs. mês anterior":"registre 2 meses"} color={gain==null?TX:gain>0?GRN:gain<0?RED:TX}/>
-        <Stat label="Crescimento" value={growthPct!=null?`${growthPct>=0?"+":""}${growthPct.toFixed(1)}%`:"—"} sub="no último mês" color={growthPct==null?TX:growthPct>0?GRN:growthPct<0?RED:TX}/>
+        <Stat label="Seguidores" value={latest?fmtN(totalNow):"—"} sub={latest?`em ${fmtDateBr(latest.date)}`:"sem registro"}/>
+        <Stat
+          label="Ganho recente"
+          value={gain!=null?`${gain>=0?"+":""}${fmtN(gain)}`:"—"}
+          sub={gain!=null?`${growthPct>=0?"+":""}${growthPct.toFixed(1)}% desde ${fmtDateShort(prev.date)}`:(latest?"atualize de novo para ver":"defina a base primeiro")}
+          color={gain==null?TX:gain>0?GRN:gain<0?RED:TX}/>
+        <Stat
+          label="Desde a base"
+          value={sinceBasePct!=null?`${sinceBasePct>=0?"+":""}${sinceBasePct.toFixed(1)}%`:"—"}
+          sub={sinceBasePct!=null?`${sinceBaseGain>=0?"+":""}${fmtN(sinceBaseGain)} desde ${fmtDateBr(base.date)}`:(base?"você ainda está na base":"defina a base primeiro")}
+          color={sinceBasePct==null?TX:sinceBasePct>0?GRN:sinceBasePct<0?RED:TX}/>
         <Stat label="Engajamento" value={avgEng!=null?`${avgEng.toFixed(1)}%`:"—"} sub="médio das publicações" color={avgEng==null?TX:avgEng>=3?GRN:avgEng>=1?AMB:TX2}/>
       </div>
 
@@ -5359,16 +5377,16 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
           <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:14 }}>Crescimento de seguidores</div>
           {chart.length===0 && (
             <div style={{ textAlign:"center", padding:"24px 0" }}>
-              <div style={{ fontSize:13, fontWeight:600, color:TX, marginBottom:6 }}>Nenhum mês registrado ainda</div>
-              <div style={{ fontSize:12, color:TX2, marginBottom:14 }}>Registre seus seguidores para o painel começar a mostrar o crescimento.</div>
-              <Btn onClick={()=>setModalEntry(null)} variant="primary" size="sm">+ Registrar primeiro mês</Btn>
+              <div style={{ fontSize:13, fontWeight:600, color:TX, marginBottom:6 }}>Defina sua base de seguidores</div>
+              <div style={{ fontSize:12, color:TX2, marginBottom:14 }}>Registre seus números atuais — depois é só atualizar de tempos em tempos. O painel mostra o crescimento desde a base.</div>
+              <Btn onClick={()=>setModalEntry(null)} variant="primary" size="sm">+ Definir base</Btn>
             </div>
           )}
           {chart.length===1 && (
             <div style={{ textAlign:"center", padding:"20px 0" }}>
               <div style={{ fontSize:28, fontWeight:800, color:TX, letterSpacing:"-.02em" }}>{fmtN(chart[0].total)}</div>
-              <div style={{ fontSize:12, color:TX2, marginTop:4 }}>seguidores em {mesLongo(chart[0].key)}</div>
-              <div style={{ fontSize:12, color:TX3, marginTop:10 }}>Registre mais um mês para ver a evolução.</div>
+              <div style={{ fontSize:12, color:TX2, marginTop:4 }}>seguidores em {fmtDateLong(chart[0].key)}</div>
+              <div style={{ fontSize:12, color:TX3, marginTop:10 }}>Atualize quando puder para ver a evolução.</div>
             </div>
           )}
           {chart.length>=2 && (
@@ -5382,7 +5400,7 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
                     <div style={{ width:"100%", height:96, display:"flex", alignItems:"flex-end" }}>
                       <div style={{ width:"100%", height:`${barH(c.total)}%`, background:isH?GRN:`${GRN}99`, borderRadius:"4px 4px 0 0", transition:"background .12s, height .3s" }}/>
                     </div>
-                    <div style={{ fontSize:ds.font.size.xs, color:isH?TX:TX3, fontWeight:isH?700:400 }}>{mesCurto(c.key)}</div>
+                    <div style={{ fontSize:ds.font.size.xs, color:isH?TX:TX3, fontWeight:isH?700:400 }}>{fmtDateShort(c.key)}</div>
                   </div>
                 );
               })}
@@ -5405,7 +5423,7 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
                     <div style={{ fontSize:18, fontWeight:800, color:TX, letterSpacing:"-.01em" }}>{fmtN(cur)}</div>
                     {d!=null && (
                       <div style={{ fontSize:11, fontWeight:700, color:d>0?GRN:d<0?RED:TX3, marginTop:3 }}>
-                        {d>0?"+":""}{fmtN(d)} no mês
+                        {d>0?"+":""}{fmtN(d)} desde a última
                       </div>
                     )}
                   </div>
@@ -5438,27 +5456,33 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
           )}
         </div>
 
-        {/* Meses registrados */}
+        {/* Atualizações */}
         {sorted.length>0 && (
           <div style={{ ...G, padding:"18px 20px" }}>
-            <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:12 }}>Meses registrados</div>
-            {[...sorted].reverse().map((e,idx,arr) => (
-              <div key={e.month} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:idx<arr.length-1?`1px solid ${LN}`:"none" }}>
-                <div style={{ fontSize:12, fontWeight:600, color:TX, width:118, flexShrink:0 }}>{mesLongo(e.month)}</div>
-                <div style={{ flex:1, minWidth:0, fontSize:ds.font.size.xs, color:TX3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  IG {fmtN(e.instagram)} · TT {fmtN(e.tiktok)} · YT {fmtN(e.youtube)}
+            <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:12 }}>Atualizações</div>
+            {[...sorted].reverse().map((e,idx,arr) => {
+              const isBaseRow = e === sorted[0];
+              return (
+                <div key={e.date} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:idx<arr.length-1?`1px solid ${LN}`:"none" }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:TX, minWidth:118, flexShrink:0, display:"flex", alignItems:"center", gap:6 }}>
+                    {fmtDateLong(e.date)}
+                    {isBaseRow && <span style={{ fontSize:9, fontWeight:700, color:BLU, background:`${BLU}14`, padding:"1px 6px", borderRadius:99, letterSpacing:".06em", textTransform:"uppercase" }}>Base</span>}
+                  </div>
+                  <div style={{ flex:1, minWidth:0, fontSize:ds.font.size.xs, color:TX3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    IG {fmtN(e.instagram)} · TT {fmtN(e.tiktok)} · YT {fmtN(e.youtube)}
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:800, color:TX, flexShrink:0 }}>{fmtN(totalOf(e))}</div>
+                  <button onClick={()=>setModalEntry(e)}
+                    style={{ border:`1px solid ${LN}`, background:B1, borderRadius:6, padding:"3px 10px", fontSize:11, color:TX2, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+                    Editar
+                  </button>
+                  <button onClick={()=>removeEntry(e.date)}
+                    style={{ border:`1px solid ${LN}`, background:B1, borderRadius:6, padding:"3px 10px", fontSize:11, color:RED, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+                    Remover
+                  </button>
                 </div>
-                <div style={{ fontSize:13, fontWeight:800, color:TX, flexShrink:0 }}>{fmtN(totalOf(e))}</div>
-                <button onClick={()=>setModalEntry(e)}
-                  style={{ border:`1px solid ${LN}`, background:B1, borderRadius:6, padding:"3px 10px", fontSize:11, color:TX2, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
-                  Editar
-                </button>
-                <button onClick={()=>removeEntry(e.month)}
-                  style={{ border:`1px solid ${LN}`, background:B1, borderRadius:6, padding:"3px 10px", fontSize:11, color:RED, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
-                  Remover
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -5467,6 +5491,7 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
         <FollowerEntryModal
           initial={modalEntry}
           prefill={modalEntry ? null : prefillNew}
+          isBase={modalEntry === null && sorted.length === 0}
           onClose={()=>setModalEntry(undefined)}
           onSave={saveEntry}/>
       )}

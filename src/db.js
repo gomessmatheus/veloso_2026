@@ -152,13 +152,20 @@ export async function deleteBrand(id) {
 export async function getSetting(key) {
   try {
     const snap = await getDoc(doc(db, 'settings', key))
-    return snap.exists() ? snap.data().value : null
+    if (!snap.exists()) return null
+    const raw = snap.data().value
+    // Serializado como JSON desde a correção do bug (objetos/arrays viravam
+    // "[object Object]" via String()). Dados antigos corrompidos viram null.
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw) } catch { return null }
+    }
+    return raw
   } catch (err) { dbErr(`getSetting(${key})`, err); return null }
 }
 
 export async function setSetting(key, value) {
   try {
-    await setDoc(doc(db, 'settings', key), { key, value: String(value) })
+    await setDoc(doc(db, 'settings', key), { key, value: JSON.stringify(value) })
   } catch (err) { dbErr(`setSetting(${key})`, err); throw err }
 }
 

@@ -3930,8 +3930,8 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
 
       {/* ── Grid ── */}
       <div style={{border:`1px solid ${LN}`,borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.05)"}}>
-        {/* Day headers */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:B2,borderBottom:`1px solid ${LN}`}}>
+        {/* Day headers — gap:1px combina com a grade de dias (3941) para alinhar as colunas */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"1px",background:B2,borderBottom:`1px solid ${LN}`}}>
           {DAY_LABELS.map((d,i)=>(
             <div key={i} style={{padding:"10px 0",textAlign:"center",fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3}}>{d}</div>
           ))}

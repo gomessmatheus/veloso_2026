@@ -3930,17 +3930,17 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
 
       {/* ── Grid ── */}
       <div style={{border:`1px solid ${LN}`,borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.05)"}}>
-        {/* Day headers — gap:1px combina com a grade de dias (3941) para alinhar as colunas */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"1px",background:B2,borderBottom:`1px solid ${LN}`}}>
+        {/* Day headers — minmax(0,1fr) impede que conteúdo longo (eventos) alargue colunas */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:"1px",background:B2,borderBottom:`1px solid ${LN}`}}>
           {DAY_LABELS.map((d,i)=>(
-            <div key={i} style={{padding:"10px 0",textAlign:"center",fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3}}>{d}</div>
+            <div key={i} style={{padding:"10px 0",textAlign:"center",fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,minWidth:0}}>{d}</div>
           ))}
         </div>
 
         {/* Day cells */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:"1px",background:LN}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:"1px",background:LN}}>
           {cells.map((d,i)=>{
-            if(!d) return <div key={`e${i}`} style={{minHeight:isMobile?48:110,background:"#FAFAFA"}}/>;
+            if(!d) return <div key={`e${i}`} style={{minHeight:isMobile?48:110,background:"#FAFAFA",minWidth:0}}/>;
             const dStr = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
             const isT = dStr===todayStr;
             const isDragTarget = dragOver===dStr;
@@ -3961,6 +3961,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                 onClick={isMobile&&(dayDels.length>0||onNewDeliverable)?()=>setHoveredDate(hoveredDate===dStr?null:dStr):undefined}
                 style={{
                   minHeight: isMobile?52:110,
+                  minWidth: 0,
                   padding: isMobile?"5px 4px":"6px 7px",
                   background: isDragTarget?`${RED}06`:isT?`${RED}04`:(isMobile&&hoveredDate===dStr)?`${RED}04`:cellHov&&!isMobile?B2:B1,
                   border: isDragTarget ? `1px solid ${RED}40`
@@ -3969,6 +3970,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                   title: conflictSev ? `Conflito ${conflictSev} detectado nesta data` : undefined,
                   transition:"background .12s",
                   position:"relative",
+                  overflow: "hidden",
                   cursor: isMobile?(dayDels.length>0||onNewDeliverable)?"pointer":"default":"default",
                 }}>
 

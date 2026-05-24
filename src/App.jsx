@@ -3986,7 +3986,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                 onDrop={e=>handleDrop(e,dStr)}
                 onClick={isMobile&&(dayDels.length>0||onNewDeliverable)?()=>setHoveredDate(hoveredDate===dStr?null:dStr):undefined}
                 style={{
-                  minHeight: isMobile?52:110,
+                  minHeight: isMobile?72:110,
                   minWidth: 0,
                   padding: isMobile?"5px 4px":"6px 7px",
                   background: isDragTarget?`${RED}06`:isT?`${RED}04`:(isMobile&&hoveredDate===dStr)?`${RED}04`:cellHov&&!isMobile?B2:B1,
@@ -4024,14 +4024,31 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                   <CalCard key={del.id} del={del}/>
                 ))}
 
-                {/* Mobile: pill indicators */}
+                {/* Mobile: chips truncados (tap direto abre o card) */}
                 {isMobile && dayDels.length>0 && (
-                  <div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"center",marginTop:2}}>
-                    {dayDels.slice(0,3).map((del,i)=>{
-                      const c=contracts.find(x=>x.id===del.contractId);
-                      return <div key={i} style={{width:6,height:6,borderRadius:"50%",background:c?.color||TX3}}/>;
+                  <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0, marginTop:2 }}>
+                    {dayDels.slice(0,2).map(del => {
+                      const c   = contracts.find(x=>x.id===del.contractId);
+                      const col = c?.color || TX3;
+                      return (
+                        <div key={del.id}
+                          onClick={e=>{ e.stopPropagation(); onEditDeliverable?.(del); }}
+                          style={{
+                            background:`${col}18`, borderLeft:`2px solid ${col}`,
+                            color:col, fontSize:11, fontWeight:600,
+                            padding:"1px 4px", borderRadius:2,
+                            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                            minWidth:0, lineHeight:1.3, cursor:"pointer",
+                          }}>
+                          {del.title}
+                        </div>
+                      );
                     })}
-                    {dayDels.length>3&&<div style={{width:6,height:6,borderRadius:"50%",background:TX3}}/>}
+                    {dayDels.length > 2 && (
+                      <div style={{ fontSize:11, color:TX3, fontWeight:600, paddingLeft:4 }}>
+                        +{dayDels.length - 2} mais
+                      </div>
+                    )}
                   </div>
                 )}
                 {isMobile && travels.length>0 && <div style={{textAlign:"center",fontSize:ds.font.size.xs,marginTop:2}}>✈️</div>}
@@ -6109,17 +6126,29 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
         ))}
       </div>
 
-      {/* Tabs — sticky on mobile */}
+      {/* Tabs — outer faz sticky, inner faz scroll horizontal (separar pra não brigar no iOS) */}
       <div style={{
-        display:"flex", gap:0, borderBottom:`1px solid ${LN}`, marginBottom:16, overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch",
-        ...(isMobile ? { position:"sticky", top:0, zIndex:10, background:B1, paddingLeft:16, paddingRight:16 } : {}),
+        marginBottom: 16,
+        ...(isMobile ? {
+          position:"sticky", top:0, zIndex:20,
+          background:B1,
+          boxShadow:"0 1px 2px rgba(15,23,42,0.06)",
+        } : {}),
       }}>
-        {TABS.map(t => (
-          <div key={t.id} onClick={()=>setTab(t.id)}
-            style={{ padding:"10px 14px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
-            {t.label}
-          </div>
-        ))}
+        <div style={{
+          display:"flex", gap:0,
+          borderBottom:`1px solid ${LN}`,
+          overflowX:"auto", scrollbarWidth:"none", WebkitOverflowScrolling:"touch",
+          paddingLeft: isMobile?16:0, paddingRight: isMobile?16:0,
+          background: isMobile ? B1 : "transparent",
+        }}>
+          {TABS.map(t => (
+            <div key={t.id} onClick={()=>setTab(t.id)}
+              style={{ padding:"10px 14px", fontSize:12, fontWeight:tab===t.id?700:400, cursor:"pointer", color:tab===t.id?TX:TX2, borderBottom:`2px solid ${tab===t.id?ds.color.neutral[900]:"transparent"}`, transition:TRANS, marginBottom:-1, whiteSpace:"nowrap", flexShrink:0 }}>
+              {t.label}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Visão Geral */}

@@ -51,47 +51,67 @@ function ProgressBar({ pct }) {
 }
 
 /** Card de um único mês */
-function MonthCard({ data, expanded, onToggle }) {
+function MonthCard({ data, expanded, onToggle, isMobile = false }) {
   const { label, capacity, committed, available, pctUsed, breakdown } = data;
   const ac = availColor(available);
 
   return (
     <div style={{ border: `1px solid ${LN}`, borderRadius: 8, overflow: "hidden", marginBottom: 8 }}>
       {/* Cabeçalho clicável */}
-      <div
-        onClick={onToggle}
-        style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "10px 14px", cursor: "pointer",
-          background: expanded ? "#F9F9FB" : B1,
-        }}
-      >
-        {/* Mês */}
-        <span style={{ fontWeight: 600, fontSize: 14, color: TX, minWidth: 80 }}>{label}</span>
-
-        {/* Barra */}
-        <div style={{ flex: 1 }}>
+      {isMobile ? (
+        <div onClick={onToggle}
+          style={{ padding: "12px 14px", cursor: "pointer", background: expanded ? "#F9F9FB" : B1 }}>
+          {/* Linha 1: mês + livres + chevron */}
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+            <span style={{ fontWeight:600, fontSize:14, color:TX, flex:1, minWidth:0 }}>{label}</span>
+            <span style={{ fontWeight:700, fontSize:15, color:ac, whiteSpace:"nowrap" }}>
+              {Math.floor(available)} livres
+            </span>
+            <span style={{ fontSize:11, color:TX3, marginLeft:2 }}>{expanded ? "▲" : "▼"}</span>
+          </div>
+          {/* Linha 2: barra */}
           <ProgressBar pct={pctUsed} />
+          {/* Linha 3: capacidade */}
+          <div style={{ fontSize:11, color:TX3, marginTop:6 }}>
+            {Math.ceil(committed)} de {capacity} comprometidos
+          </div>
         </div>
+      ) : (
+        <div
+          onClick={onToggle}
+          style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 14px", cursor: "pointer",
+            background: expanded ? "#F9F9FB" : B1,
+          }}
+        >
+          {/* Mês */}
+          <span style={{ fontWeight: 600, fontSize: 14, color: TX, minWidth: 80 }}>{label}</span>
 
-        {/* Disponíveis */}
-        <span style={{ fontWeight: 700, fontSize: 15, color: ac, minWidth: 30, textAlign: "right" }}>
-          {Math.floor(available)}
-        </span>
-        <span style={{ fontSize: 11, color: TX3, whiteSpace: "nowrap" }}>
-          disponíveis
-        </span>
+          {/* Barra */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <ProgressBar pct={pctUsed} />
+          </div>
 
-        {/* Comprometidos / capacidade */}
-        <span style={{ fontSize: 11, color: TX2, whiteSpace: "nowrap", marginLeft: 6 }}>
-          {Math.ceil(committed)}/{capacity}
-        </span>
+          {/* Disponíveis */}
+          <span style={{ fontWeight: 700, fontSize: 15, color: ac, minWidth: 30, textAlign: "right" }}>
+            {Math.floor(available)}
+          </span>
+          <span style={{ fontSize: 11, color: TX3, whiteSpace: "nowrap" }}>
+            disponíveis
+          </span>
 
-        {/* Chevron */}
-        <span style={{ fontSize: 10, color: TX3, marginLeft: 4 }}>
-          {expanded ? "▲" : "▼"}
-        </span>
-      </div>
+          {/* Comprometidos / capacidade */}
+          <span style={{ fontSize: 11, color: TX2, whiteSpace: "nowrap", marginLeft: 6 }}>
+            {Math.ceil(committed)}/{capacity}
+          </span>
+
+          {/* Chevron */}
+          <span style={{ fontSize: 11, color: TX3, marginLeft: 4 }}>
+            {expanded ? "▲" : "▼"}
+          </span>
+        </div>
+      )}
 
       {/* Detalhe por contrato */}
       {expanded && (
@@ -172,6 +192,7 @@ export function AdSlotsCard({ deliverables = [], contracts = [], isMobile = fals
           data={s}
           expanded={expanded === s.month}
           onToggle={() => toggle(s.month)}
+          isMobile={isMobile}
         />
       ))}
 

@@ -34,6 +34,14 @@ const NEXT_ACTION = {
   postagem:"Marcar postado", done:null,
 };
 
+// Versão curta para mobile (botão não pode ter minWidth grande em 360px)
+const NEXT_ACTION_SHORT = {
+  briefing:"Roteirizar", roteiro:"Aprovar",
+  ap_roteiro:"Cobrar", gravacao:"Gravado",
+  edicao:"Aprovar", ap_final:"Cobrar",
+  postagem:"Postado", done:null,
+};
+
 function RelativeDate({ days }) {
   if (days === null) return <span style={{ color:ds.color.neutral[400] }}>sem data</span>;
   if (days < 0)  return <span style={{ color:ds.color.danger[500],  fontWeight:ds.font.weight.semibold }}>atrasado {Math.abs(days)}d</span>;
@@ -42,12 +50,12 @@ function RelativeDate({ days }) {
   return <span style={{ color:ds.color.neutral[500] }}>em {days}d</span>;
 }
 
-function FocusItem({ d, idx, contract, today, onOpenItem, onActionClick }) {
+function FocusItem({ d, idx, contract, today, isMobile, onOpenItem, onActionClick }) {
   const days       = daysBetween(today, d.plannedPostDate);
   const brandColor = contract?.color || ds.color.neutral[400];
   const stageLabel = STAGE_LABELS[d.stage] || d.stage;
   const stageColor = STAGE_COLORS[d.stage] || ds.color.neutral[500];
-  const nextAction = NEXT_ACTION[d.stage];
+  const nextAction = (isMobile ? NEXT_ACTION_SHORT[d.stage] : NEXT_ACTION[d.stage]) || NEXT_ACTION[d.stage];
   const isTop      = idx < 3;
 
   return (
@@ -96,16 +104,20 @@ function FocusItem({ d, idx, contract, today, onOpenItem, onActionClick }) {
           )}
         </div>
       </div>
-      {/* Action button */}
+      {/* Action button — no mobile o texto encurta e o minWidth some pra caber em 360px */}
       {nextAction && (
         <button onClick={e => { e.stopPropagation(); onOpenItem(d); }}
           title={nextAction}
-          style={{ padding:`4px ${ds.space[3]}`, fontSize: ds.font.size.xs,
+          style={{ padding: isMobile ? `4px ${ds.space[2]}` : `4px ${ds.space[3]}`,
+            fontSize: ds.font.size.xs,
             fontWeight: ds.font.weight.semibold,
             color: ds.color.info[500], background:"none",
             border:`1px solid ${ds.color.info[500]}40`,
             borderRadius: ds.radius.md, cursor:"pointer",
-            flexShrink:0, fontFamily:"inherit", whiteSpace:"nowrap", minWidth:"130px", textAlign:"center",
+            flexShrink:0, fontFamily:"inherit", whiteSpace:"nowrap",
+            minWidth: isMobile ? undefined : "130px",
+            textAlign:"center",
+            touchAction:"manipulation",
             transition:`background ${ds.motion.fast}` }}
           onMouseEnter={e => e.currentTarget.style.background = `${ds.color.info[500]}10`}
           onMouseLeave={e => e.currentTarget.style.background = "none"}>
@@ -142,7 +154,7 @@ export function TodayFocusList({ items, contracts, today, isMobile, hasWeekItems
           {items.map((d, idx) => (
             <FocusItem key={d.id} d={d} idx={idx}
               contract={contracts.find(c => c.id === d.contractId)}
-              today={today} onOpenItem={onOpenItem} onActionClick={onActionClick}/>
+              today={today} isMobile={isMobile} onOpenItem={onOpenItem} onActionClick={onActionClick}/>
           ))}
           {items.length === 7 && (
             <div style={{ fontSize: ds.font.size.xs, color: ds.color.info[500],

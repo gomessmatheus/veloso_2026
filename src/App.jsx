@@ -1899,7 +1899,7 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
 
   const mob = typeof window !== "undefined" && window.innerWidth < 768;
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:500,display:"flex",alignItems:mob?"flex-end":"center",justifyContent:"center",backdropFilter:"blur(2px)"}}
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:ds.z.modal,display:"flex",alignItems:mob?"flex-end":"center",justifyContent:"center",backdropFilter:"blur(2px)",touchAction:"manipulation"}}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{background:"#FEFEFE",borderRadius:mob?"20px 20px 0 0":12,width:"100%",maxWidth:mob?"100%":560,boxShadow:"0 32px 80px rgba(0,0,0,0.14),0 4px 16px rgba(0,0,0,0.08)",overflow:"hidden",maxHeight:mob?"92vh":"none",display:"flex",flexDirection:"column"}}>
         {mob&&<div style={{width:40,height:4,background:LN2,borderRadius:2,margin:"12px auto 0",flexShrink:0}}/>}
@@ -3984,7 +3984,15 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                 onDragOver={e=>{e.preventDefault();setDragOver(dStr);}}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
                 onDrop={e=>handleDrop(e,dStr)}
-                onClick={isMobile&&(dayDels.length>0||onNewDeliverable)?()=>setHoveredDate(hoveredDate===dStr?null:dStr):undefined}
+                onClick={isMobile&&(dayDels.length>0||onNewDeliverable)?()=>{
+                  // 1 entregável: abre o modal direto (atalho mais comum).
+                  // 2+ entregáveis ou nenhum (com botão de criar): abre painel pra escolher.
+                  if (dayDels.length===1 && onEditDeliverable) {
+                    onEditDeliverable(dayDels[0]);
+                  } else {
+                    setHoveredDate(hoveredDate===dStr?null:dStr);
+                  }
+                }:undefined}
                 style={{
                   minHeight: isMobile?72:110,
                   minWidth: 0,
@@ -4032,13 +4040,17 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
                       const col = c?.color || TX3;
                       return (
                         <div key={del.id}
+                          role="button" tabIndex={0}
                           onClick={e=>{ e.stopPropagation(); onEditDeliverable?.(del); }}
+                          onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.stopPropagation(); onEditDeliverable?.(del); } }}
                           style={{
                             background:`${col}18`, borderLeft:`2px solid ${col}`,
                             color:col, fontSize:11, fontWeight:600,
-                            padding:"1px 4px", borderRadius:2,
+                            padding:"3px 5px", borderRadius:2,
                             whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
                             minWidth:0, lineHeight:1.3, cursor:"pointer",
+                            touchAction:"manipulation",
+                            WebkitTapHighlightColor:`${col}40`,
                           }}>
                           {del.title}
                         </div>
@@ -4096,8 +4108,11 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
             {visibleDels.filter(d=>d.plannedPostDate===hoveredDate).length === 0
               ? <div style={{ padding:"20px", textAlign:"center", color:TX3, fontSize:13 }}>Nenhum entregável neste dia</div>
               : visibleDels.filter(d=>d.plannedPostDate===hoveredDate).map(del=>(
-                <div key={del.id} onClick={()=>onEditDeliverable?.(del)}
-                  style={{ padding:"12px 14px", borderRadius:10, border:`1px solid ${LN}`, marginBottom:6, cursor:"pointer", background:B1, transition:"all .15s" }}
+                <div key={del.id}
+                  role="button" tabIndex={0}
+                  onClick={()=>onEditDeliverable?.(del)}
+                  onKeyDown={e=>(e.key==="Enter"||e.key===" ")&&onEditDeliverable?.(del)}
+                  style={{ padding:"14px 14px", borderRadius:10, border:`1px solid ${LN}`, marginBottom:6, cursor:"pointer", background:B1, transition:"all .15s", touchAction:"manipulation", WebkitTapHighlightColor:"rgba(200,16,46,0.15)" }}
                   onMouseEnter={e=>e.currentTarget.style.background=B2}
                   onMouseLeave={e=>e.currentTarget.style.background=B1}>
                   {(() => {
@@ -6133,6 +6148,9 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
           position:"sticky", top:0, zIndex:20,
           background:B1,
           boxShadow:"0 1px 2px rgba(15,23,42,0.06)",
+          // força camada GPU própria — evita distorção/jitter no overscroll do iOS
+          transform:"translate3d(0,0,0)",
+          willChange:"transform",
         } : {}),
       }}>
         <div style={{
@@ -7598,7 +7616,7 @@ function AppContent() {
             onNewPost={()=>setModal({type:"post",data:null})}
             onNewTask={()=>setTriggerNewTask(true)}
             syncStatus={syncStatus} isMobile={isMobile} role={role} userName={userName}/>
-          <div style={{ flex:1, overflowY:"auto", paddingBottom:isMobile?124:0 }}>
+          <div style={{ flex:1, overflowY:"auto", paddingBottom:isMobile?124:0, overscrollBehavior:"contain", WebkitOverflowScrolling:"touch" }}>
             <ViewRenderer view={view} contracts={contracts} posts={posts} deliverables={deliverables} stats={stats} rates={rates}
               saveNote={saveNote} toggleComm={toggleComm} toggleCommPaid={toggleCommPaid}
               toggleNF={toggleNF} setModal={setModal} setView={setView}

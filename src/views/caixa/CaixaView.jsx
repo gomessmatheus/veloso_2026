@@ -17,7 +17,6 @@ import {
   loadCaixaTx, subscribeCaixaTx, syncCaixaTx, getSetting, setSetting, deleteItem,
 } from "../../db.js";
 import CaixaGate from "./CaixaGate.jsx";
-import ReembolsosPessoaisView from "./ReembolsosPessoaisView.jsx";
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard, Modal as DsModal, Toggle as DsToggle, Select as DsSelect } from "../../ui/index.js";
 import {
   aggregate, monthlyBreakdown, burnRate as calcBurnRate,
@@ -407,6 +406,48 @@ function TransactionModal({ accounts, contracts, initial, onClose, onSave, defau
       <SRule>Nota Fiscal & Obs.</SRule>
       <Field label="Número / Link da NF"><Input value={f.nfLink||""} onChange={e=>set("nfLink",e.target.value)} placeholder="Número ou URL da nota"/></Field>
       <Field label="Notas" full><Input value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Informações adicionais"/></Field>
+
+      {/* ── Reembolso ── */}
+      <SRule>Reembolso</SRule>
+      <div style={{ background:f.reembolsavel?`${GRN}06`:B2, border:`1px solid ${f.reembolsavel?GRN+"30":LN}`, borderRadius:10, padding:"12px 14px" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontSize:12, fontWeight:700, color:TX }}>Reembolsável</div>
+            <div style={{ fontSize:11, color:TX3, marginTop:2 }}>Marque se este lançamento será reembolsado posteriormente</div>
+          </div>
+          <div onClick={()=>set("reembolsavel",!f.reembolsavel)}
+            style={{ width:44,height:24,borderRadius:99,background:f.reembolsavel?GRN:LN,cursor:"pointer",position:"relative",transition:TRANS,flexShrink:0 }}>
+            <div style={{ width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:f.reembolsavel?22:2,transition:TRANS,boxShadow:"0 1px 3px rgba(0,0,0,0.15)" }}/>
+          </div>
+        </div>
+
+        {f.reembolsavel && (
+          <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${LN}` }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:f.reembolsado?12:0 }}>
+              <div>
+                <div style={{ fontSize:12, fontWeight:700, color:TX }}>Já reembolsado</div>
+                <div style={{ fontSize:11, color:TX3, marginTop:2 }}>Marque quando a transferência de reembolso for feita</div>
+              </div>
+              <div onClick={()=>{
+                const novoEstado = !f.reembolsado;
+                if (novoEstado && !f.dataReembolso) {
+                  setF(x => ({ ...x, reembolsado: true, dataReembolso: new Date().toISOString().slice(0,10) }));
+                } else {
+                  set("reembolsado", novoEstado);
+                }
+              }}
+                style={{ width:44,height:24,borderRadius:99,background:f.reembolsado?GRN:LN,cursor:"pointer",position:"relative",transition:TRANS,flexShrink:0 }}>
+                <div style={{ width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:f.reembolsado?22:2,transition:TRANS,boxShadow:"0 1px 3px rgba(0,0,0,0.15)" }}/>
+              </div>
+            </div>
+            {f.reembolsado && (
+              <Field label="Data do reembolso">
+                <Input type="date" value={f.dataReembolso||""} onChange={e=>set("dataReembolso",e.target.value)}/>
+              </Field>
+            )}
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }
@@ -1350,7 +1391,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   });
   const tabRefs = useRef({});
   const [tab, setTab] = useQueryState("caixa_tab", "dash", {
-    parse: (v) => ["dash","lancamentos","dre","indicadores","reembolsos"].includes(v) ? v : null,
+    parse: (v) => ["dash","lancamentos","dre","indicadores"].includes(v) ? v : null,
   });
   const [period, setPeriod] = useQueryState("caixa_periodo", defaultPeriod(), {
     serialize: serializePeriod,
@@ -1504,7 +1545,6 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const TABS = [
     { id:"dash",        label:"Dashboard" },
     { id:"lancamentos", label:"Lançamentos" },
-    { id:"reembolsos",  label:"Reembolsos" },
     { id:"dre",         label:"DRE" },
     { id:"indicadores", label:"Indicadores" },
     { id:"ia",          label:"Consulta IA", hidden:true },
@@ -1628,17 +1668,6 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       {/* Dashboard */}
       <div id="tabpanel-dash" role="tabpanel" aria-labelledby="tab-dash" tabIndex={0} hidden={tab!=="dash"}>
         {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} activePeriod={period} valuesHidden={valuesHidden}/>}
-      </div>
-
-      {/* Reembolsos Pessoais */}
-      <div id="tabpanel-reembolsos" role="tabpanel" aria-labelledby="tab-reembolsos" tabIndex={0} hidden={tab !== "reembolsos"}>
-      {tab === "reembolsos" && (
-        <ReembolsosPessoaisView
-          transactions={transactions}
-          saveTx={saveTx}
-          toast={toast}
-        />
-      )}
       </div>
 
       {/* Lançamentos por mês */}
@@ -1771,6 +1800,11 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
                         {tx.installmentNum&&tx.installmentTotal&&<span style={{color:BLU,fontWeight:700,fontSize:ds.font.size.xs,padding:"1px 6px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}20`}}>{tx.installmentNum}/{tx.installmentTotal}x</span>}
                         {tx.parcelaAtual&&tx.parcelaTotal&&<span style={{color:AMB,fontWeight:700}}>· {tx.parcelaAtual}/{tx.parcelaTotal}x</span>}
+                        {tx.reembolsavel && (
+                          tx.reembolsado
+                            ? <span style={{color:GRN,fontWeight:700,fontSize:ds.font.size.xs,padding:"1px 8px",borderRadius:99,background:`${GRN}12`,border:`1px solid ${GRN}30`}} title={tx.dataReembolso?`Reembolsado em ${fmtDate(tx.dataReembolso)}`:"Reembolsado"}>✓ Reembolsado</span>
+                            : <span style={{color:AMB,fontWeight:700,fontSize:ds.font.size.xs,padding:"1px 8px",borderRadius:99,background:`${AMB}12`,border:`1px solid ${AMB}30`}} title="Reembolsável - aguardando reembolso">↩ Reembolsável</span>
+                        )}
                         {(tx.nfLink||tx.nfFile)&&<span style={{color:BLU}}>· NF</span>}
                       </div>
                       {tx.notes&&<div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>{tx.notes}</div>}

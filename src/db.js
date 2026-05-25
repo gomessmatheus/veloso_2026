@@ -322,32 +322,3 @@ export async function appendFxHistory(uid, record) {
     await setDoc(ref, { uid, records, updatedAt: new Date().toISOString() })
   } catch (err) { dbErr('appendFxHistory', err) }
 }
-
-
-// ─── Reembolsos Pessoais ──────────────────────────────────
-// Coleção para controlar gastos da empresa pagos no cartão pessoal
-// e seus respectivos reembolsos, evitando duplicatas e esquecimentos.
-export async function loadReembolsos() {
-  try {
-    const snap = await getDocs(collection(db, 'reembolsos_pessoais'))
-    return snap.docs.map(d => d.data().data).filter(Boolean)
-  } catch (err) { dbErr('loadReembolsos', err); return [] }
-}
-
-export function subscribeReembolsos(onChange) {
-  return onSnapshot(
-    collection(db, 'reembolsos_pessoais'),
-    (snap) => onChange(snap.docs.map(d => d.data().data).filter(Boolean)),
-    (err) => dbErr('subscribeReembolsos', err),
-  )
-}
-
-export async function syncReembolsos(items, _previousIds = [], changedIds) {
-  try {
-    await syncCollection('reembolsos_pessoais', items, _previousIds, () => ({}), changedIds)
-  } catch (err) { dbErr('syncReembolsos', err); throw err }
-}
-
-export async function deleteReembolso(id) {
-  return deleteItem('reembolsos_pessoais', id)
-}

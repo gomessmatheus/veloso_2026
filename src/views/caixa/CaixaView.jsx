@@ -1815,6 +1815,15 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
                       </div>
                     </div>
                     <div style={{ display:"flex",gap:4,flexShrink:0 }}>
+                      {tx.reembolsavel && !tx.reembolsado && (
+                        <button onClick={()=>{ const today=new Date().toISOString().slice(0,10); saveTx(transactions.map(t=>t.id===tx.id?{...t,reembolsado:true,dataReembolso:t.dataReembolso||today}:t)); toast?.("Marcado como reembolsado","success"); }}
+                          title="Marcar como reembolsado"
+                          style={{ display:"flex",alignItems:"center",gap:4,padding:"4px 9px",fontSize:11,fontWeight:700,cursor:"pointer",borderRadius:6,background:`${GRN}10`,border:`1px solid ${GRN}40`,color:GRN,fontFamily:"inherit",whiteSpace:"nowrap" }}
+                          onMouseEnter={e=>{e.currentTarget.style.background=`${GRN}1c`;e.currentTarget.style.borderColor=GRN;}}
+                          onMouseLeave={e=>{e.currentTarget.style.background=`${GRN}10`;e.currentTarget.style.borderColor=`${GRN}40`;}}>
+                          ✓ Reembolsado
+                        </button>
+                      )}
                       <DsIconButton size="sm" variant="ghost" ariaLabel="Editar lançamento" onClick={()=>setTxModal(tx)}
                         icon={<DsIcon name="edit" size={13} color={ds.color.neutral[500]}/>}/>
                       <DsIconButton size="sm" variant="ghost" ariaLabel="Excluir lançamento" onClick={()=>{if(confirm("Excluir?")) saveTx(transactions.filter(t=>t.id!==tx.id));}}

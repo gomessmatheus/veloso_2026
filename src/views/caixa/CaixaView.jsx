@@ -17,6 +17,7 @@ import {
   loadCaixaTx, subscribeCaixaTx, syncCaixaTx, getSetting, setSetting, deleteItem,
 } from "../../db.js";
 import CaixaGate from "./CaixaGate.jsx";
+import ReembolsosPessoaisView from "./ReembolsosPessoaisView.jsx";
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard, Modal as DsModal, Toggle as DsToggle, Select as DsSelect } from "../../ui/index.js";
 import {
   aggregate, monthlyBreakdown, burnRate as calcBurnRate,
@@ -1349,7 +1350,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   });
   const tabRefs = useRef({});
   const [tab, setTab] = useQueryState("caixa_tab", "dash", {
-    parse: (v) => ["dash","lancamentos","dre","indicadores"].includes(v) ? v : null,
+    parse: (v) => ["dash","lancamentos","dre","indicadores","reembolsos"].includes(v) ? v : null,
   });
   const [period, setPeriod] = useQueryState("caixa_periodo", defaultPeriod(), {
     serialize: serializePeriod,
@@ -1503,6 +1504,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const TABS = [
     { id:"dash",        label:"Dashboard" },
     { id:"lancamentos", label:"Lançamentos" },
+    { id:"reembolsos",  label:"Reembolsos" },
     { id:"dre",         label:"DRE" },
     { id:"indicadores", label:"Indicadores" },
     { id:"ia",          label:"Consulta IA", hidden:true },
@@ -1626,6 +1628,17 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       {/* Dashboard */}
       <div id="tabpanel-dash" role="tabpanel" aria-labelledby="tab-dash" tabIndex={0} hidden={tab!=="dash"}>
         {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} activePeriod={period} valuesHidden={valuesHidden}/>}
+      </div>
+
+      {/* Reembolsos Pessoais */}
+      <div id="tabpanel-reembolsos" role="tabpanel" aria-labelledby="tab-reembolsos" tabIndex={0} hidden={tab !== "reembolsos"}>
+      {tab === "reembolsos" && (
+        <ReembolsosPessoaisView
+          transactions={transactions}
+          saveTx={saveTx}
+          toast={toast}
+        />
+      )}
       </div>
 
       {/* Lançamentos por mês */}

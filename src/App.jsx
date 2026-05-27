@@ -2377,6 +2377,23 @@ function ContractDetail({ contract: c, contracts, posts, deliverables, saveC, sa
   });
 };
 
+const handleContractFile = (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    const fileData = { id: uid(), name: file.name, size: file.size, type: file.type, data: ev.target.result, uploadedAt: new Date().toISOString() };
+    await saveC(contracts.map(x => x.id === c.id ? {...x, contractFile: fileData} : x));
+    toast?.("📎 Contrato anexado", "success");
+  };
+  reader.readAsDataURL(file);
+};
+
+const removeContractFile = async () => {
+  await saveC(contracts.map(x => x.id === c.id ? {...x, contractFile: null} : x));
+  toast?.("Contrato removido", "success");
+};
+
 const removeBriefingFile = async (fileId) => {
   const updated = (briefingFiles || []).filter(f => f.id !== fileId);
   setBriefingFiles(updated);
@@ -2598,6 +2615,31 @@ Responda APENAS com o JSON.` }]
               })}
             </div>
           )}
+          {/* ── Arquivo do Contrato ── */}
+          <div style={{ ...G, padding:"18px 20px", marginBottom:0, marginTop:0 }}>
+            <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:14 }}>Arquivo do Contrato</div>
+            {c.contractFile && (
+              <div style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:B2,borderRadius:8,border:`1px solid ${LN}` }}>
+                <span style={{ fontSize:20 }}>
+                  {c.contractFile.type?.includes('pdf') ? '📄' : c.contractFile.type?.includes('image') ? '🖼️' : c.contractFile.type?.includes('word') || c.contractFile.name?.endsWith('.docx') ? '📝' : '📎'}
+                </span>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ fontSize:12,fontWeight:600,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{c.contractFile.name}</div>
+                  <div style={{ fontSize:ds.font.size.xs,color:TX3 }}>{new Date(c.contractFile.uploadedAt).toLocaleDateString("pt-BR")} · {(c.contractFile.size/1024).toFixed(0)} KB</div>
+                </div>
+                <a href={c.contractFile.data} download={c.contractFile.name} style={{ padding:"6px 10px",fontSize:ds.font.size.xs,fontWeight:700,color:BLU,background:`${BLU}12`,border:`1px solid ${BLU}30`,borderRadius:6,textDecoration:"none",flexShrink:0 }}>↓ Baixar</a>
+                <button onClick={removeContractFile} style={{ padding:"6px 8px",fontSize:11,background:"none",border:`1px solid ${LN}`,borderRadius:6,cursor:"pointer",color:TX2 }}>×</button>
+              </div>
+            )}
+            {!c.contractFile && (
+              <label style={{ display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:"20px",background:B2,borderRadius:8,border:`2px dashed ${LN}`,cursor:"pointer" }}>
+                <span style={{ fontSize:22 }}>📎</span>
+                <span style={{ fontSize:12,fontWeight:600,color:TX }}>Clique para anexar o contrato</span>
+                <span style={{ fontSize:11,color:TX3 }}>PDF, DOCX, imagens ou qualquer arquivo</span>
+                <input type="file" style={{ display:"none" }} onChange={handleContractFile}/>
+              </label>
+            )}
+          </div>
         </div>
       )}
 

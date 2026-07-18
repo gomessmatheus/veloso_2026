@@ -2,7 +2,7 @@
  * db.js — Firebase Firestore data layer
  *
  * Collections:
- *   contracts, posts, deliverables, caixa_tx, settings, presence, brands
+ *   contracts, posts, deliverables, caixa_tx, caixa_projects, settings, presence, brands
  *
  * OTIMIZAÇÕES (cota Firestore):
  *   - settings: removido onSnapshot → uma leitura getDocs no boot
@@ -125,6 +125,24 @@ export async function syncCaixaTx(items, previousIds = [], changedIds) {
   try {
     await syncCollection('caixa_tx', items, previousIds, () => ({}), changedIds)
   } catch (err) { dbErr('syncCaixaTx', err); throw err }
+}
+
+// ─── Caixa Projects (centros de custo) ────────────────────
+export async function loadProjects() {
+  try {
+    const snap = await getDocs(collection(db, 'caixa_projects'))
+    return snap.docs.map(d => d.data().data).filter(Boolean)
+  } catch (err) { dbErr('loadProjects', err); return [] }
+}
+
+export async function syncProjects(items, previousIds = [], changedIds) {
+  try {
+    await syncCollection('caixa_projects', items, previousIds, () => ({}), changedIds)
+  } catch (err) { dbErr('syncProjects', err); throw err }
+}
+
+export async function deleteProject(id) {
+  return deleteItem('caixa_projects', id)
 }
 
 // ─── Brands ───────────────────────────────────────────────

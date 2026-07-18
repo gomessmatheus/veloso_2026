@@ -15,8 +15,14 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useCaixaSession } from "../../lib/caixaSession.js";
 import {
   loadCaixaTx, subscribeCaixaTx, syncCaixaTx, getSetting, setSetting, deleteItem,
+  loadProjects, syncProjects, deleteProject,
 } from "../../db.js";
 import CaixaGate from "./CaixaGate.jsx";
+import ProjectsTab from "./ProjectsTab.jsx";
+import {
+  projectAggregateTx, settleReimbursement,
+  PROJECT_CATEGORY, REIMBURSEMENT_CATEGORY,
+} from "../../lib/projects.js";
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard, Modal as DsModal, Toggle as DsToggle, Select as DsSelect } from "../../ui/index.js";
 import {
   aggregate, monthlyBreakdown, burnRate as calcBurnRate,
@@ -139,7 +145,7 @@ const TX_TYPES = [
 
 const EXPENSE_CATS = {
   entrada:    ["Recebimento de Contrato","Receita Meta (Facebook/Instagram)","Receita YouTube","Receita TikTok","Receita Kwai","Rendimento Financeiro","Reembolso","Outros Ingressos"],
-  saida:      ["Produção de Conteúdo","Equipamento","Passagem Aérea","Hospedagem","Alimentação","Viagem / Outros","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Aluguel / Condomínio","Obra / Reformas","Utilidades (Luz, Água, Internet)","Transporte / Estacionamento","Combustível","Uber / Táxi / App","Outros"],
+  saida:      ["Produção de Conteúdo","Equipamento","Passagem Aérea","Hospedagem","Alimentação","Viagem / Outros","Software / SaaS","Marketing","Pessoal / RH","Contabilidade","Móveis e Eletrodomésticos","Material de Escritório","Material de Limpeza","Aluguel / Condomínio","Obra / Reformas","Utilidades (Luz, Água, Internet)","Transporte / Estacionamento","Combustível","Uber / Táxi / App","Reembolso de Projeto","Outros"],
   dividendos: ["Distribuição de Lucros","Pro-labore","Outros Dividendos"],
   imposto:    ["ISS","PIS/COFINS","IRPJ","CSLL","Simples Nacional","Outros Impostos"],
   transferencia:["Entre Contas"],
@@ -176,6 +182,8 @@ const DRE_MAP = {
   "Transporte / Estacionamento":       "desp_op",
   "Combustível":                        "desp_op",
   "Uber / Táxi / App":                 "desp_op",
+  "Projeto / Centro de Custo":         "desp_op",
+  "Reembolso de Projeto":              "desp_op",
   "Utilidades (Luz, Água, Internet)": "desp_adm",
   "Outros":                           "desp_adm",
   // Impostos sobre receita (deduções)
@@ -1317,6 +1325,12 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const syncTimer  = useRef(null);
   const pendingSync = useRef(null); // last list awaiting debounced sync
 
+  // ── Projetos / centros de custo ─────────────────────────
+  const [projects, setProjects] = useState(() => lsLoad("caixa_projects", []));
+  const prevProjIds     = useRef([]);
+  const projSyncTimer   = useRef(null);
+  const pendingProjSync = useRef(null);
+
   // Carrega e mescla dados do Firebase com localStorage
   // Estratégia: merge por ID — Firebase + localStorage, item mais recente vence.
   // Isso evita perda de dados quando:
@@ -1378,6 +1392,28 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // ── Projetos: carga com merge por ID (mesma estratégia de caixa_tx) ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const remote = await loadProjects();
+      if (cancelled) return;
+      const local = lsLoad("caixa_projects", []);
+      const ts = (p) => p.updatedAt || p.createdAt || "";
+      const map = new Map();
+      for (const p of (remote || [])) map.set(p.id, p);
+      for (const p of local) {
+        const existing = map.get(p.id);
+        if (!existing || ts(p) > ts(existing)) map.set(p.id, p);
+      }
+      const merged = [...map.values()];
+      setProjects(merged);
+      prevProjIds.current = merged.map(p => p.id);
+      lsSave("caixa_projects", merged);
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [txModal, setTxModal] = useState(null);
   const [showExport, setShowExport] = useState(false);
   const [aiMessages, setAiMessages] = useState([]);
@@ -1391,8 +1427,9 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   });
   const tabRefs = useRef({});
   const [tab, setTab] = useQueryState("caixa_tab", "dash", {
-    parse: (v) => ["dash","lancamentos","dre","indicadores"].includes(v) ? v : null,
+    parse: (v) => ["dash","lancamentos","projetos","dre","indicadores"].includes(v) ? v : null,
   });
+  const [projId, setProjId] = useQueryState("caixa_proj", "");
   const [period, setPeriod] = useQueryState("caixa_periodo", defaultPeriod(), {
     serialize: serializePeriod,
     parse: (s) => parsePeriod(s) ?? defaultPeriod(),
@@ -1444,6 +1481,72 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     };
   }, [flushSync]);
 
+  // ── Projetos: persistência (mesmo padrão de saveTx) ──────
+  const flushProjSync = useCallback(async (stamped) => {
+    try {
+      await syncProjects(stamped, prevProjIds.current);
+      prevProjIds.current = stamped.map(p => p.id);
+    } catch (e) {
+      console.error("[Caixa] flushProjSync falhou:", e);
+      toast?.("Falha ao sincronizar projetos. Dados salvos localmente.", "error");
+    }
+  }, [toast]);
+
+  const saveProject = useCallback((proj) => {
+    const now = new Date().toISOString();
+    const stamped = { ...proj, createdAt: proj.createdAt || now, updatedAt: now };
+    setProjects(prev => {
+      const exists = prev.some(p => p.id === stamped.id);
+      const list = exists ? prev.map(p => p.id === stamped.id ? stamped : p) : [...prev, stamped];
+      lsSave("caixa_projects", list);
+      pendingProjSync.current = list;
+      return list;
+    });
+    clearTimeout(projSyncTimer.current);
+    projSyncTimer.current = setTimeout(() => {
+      if (pendingProjSync.current) flushProjSync(pendingProjSync.current);
+    }, 1500);
+  }, [flushProjSync]);
+
+  const removeProject = useCallback((id) => {
+    setProjects(prev => {
+      const list = prev.filter(p => p.id !== id);
+      lsSave("caixa_projects", list);
+      prevProjIds.current = list.map(p => p.id);
+      return list;
+    });
+    deleteProject(id).catch(e => {
+      console.error("[Caixa] removeProject:", e);
+      toast?.("Falha ao excluir projeto do banco. Removido localmente.", "error");
+    });
+  }, [toast]);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(projSyncTimer.current);
+      if (pendingProjSync.current) flushProjSync(pendingProjSync.current);
+    };
+  }, [flushProjSync]);
+
+  // ── Pagar reembolso: marca gastos como reembolsados e cria a saída real ──
+  const createReimbursementTx = useCallback((project, person, dateIso) => {
+    const { project: updated, totalBRL, count } = settleReimbursement(project, person, dateIso);
+    if (totalBRL <= 0) return;
+    saveProject(updated);
+    const tx = {
+      id: uid(),
+      type: "saida",
+      date: dateIso,
+      description: `Reembolso ${person} — ${project.name}`,
+      category: REIMBURSEMENT_CATEGORY,
+      amount: totalBRL,
+      projectId: project.id,
+      notes: `Reembolso de ${count} gasto${count > 1 ? "s" : ""} do projeto`,
+    };
+    saveTx([...transactions, tx]);
+    toast?.(`Reembolso de ${person} registrado como saída no caixa`, "success");
+  }, [saveProject, saveTx, transactions, toast]);
+
   const updateBase = async (val, date) => {
     setBaseBalance(Number(val)||0);
     setBaseDate(date);
@@ -1492,14 +1595,23 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   }, []);
 
   // Transações realizadas (passado + hoje)
+  // ── Transações sintéticas dos projetos ──────────────────
+  // Gastos pagos pela Empresa viram 1 linha agregada por projeto/mês.
+  // Não são persistidas em caixa_tx — apenas calculadas para exibição/agregados.
+  const projectTx = useMemo(() => projectAggregateTx(projects), [projects]);
+  const allTx = useMemo(
+    () => projectTx.length ? [...transactions, ...projectTx] : transactions,
+    [transactions, projectTx]
+  );
+
   const realizedTx = useMemo(
-    () => transactions.filter(t => t.date && t.date <= _today),
-    [transactions, _today]
+    () => allTx.filter(t => t.date && t.date <= _today),
+    [allTx, _today]
   );
   // Transações futuras (ainda não vencidas)
   const futureTx = useMemo(
-    () => transactions.filter(t => t.date && t.date > _today),
-    [transactions, _today]
+    () => allTx.filter(t => t.date && t.date > _today),
+    [allTx, _today]
   );
 
   // Saldo atual = base + fluxo realizado
@@ -1516,8 +1628,8 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
   // ── Period-based filtering ───────────────────────────────
   const periodTx = useMemo(() =>
-    transactions.filter(t => t.date >= period.from && t.date <= period.to),
-    [transactions, period.from, period.to]
+    allTx.filter(t => t.date >= period.from && t.date <= period.to),
+    [allTx, period.from, period.to]
   );
   const monthTx = useMemo(() =>
     periodTx
@@ -1545,6 +1657,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   const TABS = [
     { id:"dash",        label:"Dashboard" },
     { id:"lancamentos", label:"Lançamentos" },
+    { id:"projetos",    label:"Projetos" },
     { id:"dre",         label:"DRE" },
     { id:"indicadores", label:"Indicadores" },
     { id:"ia",          label:"Consulta IA", hidden:true },
@@ -1667,7 +1780,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
 
       {/* Dashboard */}
       <div id="tabpanel-dash" role="tabpanel" aria-labelledby="tab-dash" tabIndex={0} hidden={tab!=="dash"}>
-        {tab==="dash" && <CaixaDash transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} activePeriod={period} valuesHidden={valuesHidden}/>}
+        {tab==="dash" && <CaixaDash transactions={allTx} baseBalance={baseBalance} saldoTotal={saldoTotal} activePeriod={period} valuesHidden={valuesHidden}/>}
       </div>
 
       {/* Lançamentos por mês */}
@@ -1786,6 +1899,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
             <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
               {monthTx.map(tx=>{
                 const tc = txColor(tx.type);
+                const isAgg = !!tx.isProjectAggregate;
                 return (
                   <div key={tx.id} style={{ ...G,padding:"12px 16px",display:"flex",alignItems:"center",gap:14 }}>
                     <div style={{ width:36,height:36,borderRadius:ds.radius.md,background:tc+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
@@ -1795,7 +1909,8 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
                       <div style={{ fontWeight:600,fontSize:13,color:TX,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{tx.description}</div>
                       <div style={{ fontSize:11,color:TX2,display:"flex",gap:8,marginTop:2,flexWrap:"wrap" }}>
                         <span>{fmtDate(tx.date)}</span>
-                        {tx.category&&<span>· {tx.category}</span>}
+                        {isAgg&&<span style={{color:BLU,fontWeight:700,fontSize:ds.font.size.xs,padding:"1px 8px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}25`}} title="Linha agregada — soma dos gastos do projeto pagos pela empresa neste mês">🗂 {tx.aggregateCount} gasto{tx.aggregateCount>1?"s":""} do projeto</span>}
+                        {!isAgg&&tx.category&&<span>· {tx.category}</span>}
                         {tx.beneficiario&&<span style={{fontWeight:600,color:"#7C3AED"}}>· {tx.beneficiario}</span>}
                         {tx.contractId&&<span style={{color:TX3}}>· {contracts.find(c=>c.id===tx.contractId)?.company}</span>}
                         {tx.installmentNum&&tx.installmentTotal&&<span style={{color:BLU,fontWeight:700,fontSize:ds.font.size.xs,padding:"1px 6px",borderRadius:99,background:`${BLU}12`,border:`1px solid ${BLU}20`}}>{tx.installmentNum}/{tx.installmentTotal}x</span>}
@@ -1815,7 +1930,13 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
                       </div>
                     </div>
                     <div style={{ display:"flex",gap:4,flexShrink:0 }}>
-                      {tx.reembolsavel && !tx.reembolsado && (
+                      {isAgg && (
+                        <button onClick={()=>{ setProjId(tx.projectId); setTab("projetos"); }}
+                          style={{ padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",borderRadius:6,background:`${BLU}10`,border:`1px solid ${BLU}40`,color:BLU,fontFamily:"inherit",whiteSpace:"nowrap" }}>
+                          Ver projeto ›
+                        </button>
+                      )}
+                      {!isAgg && tx.reembolsavel && !tx.reembolsado && (
                         <button onClick={()=>{ const today=new Date().toISOString().slice(0,10); saveTx(transactions.map(t=>t.id===tx.id?{...t,reembolsado:true,dataReembolso:t.dataReembolso||today}:t)); toast?.("Marcado como reembolsado","success"); }}
                           title="Marcar como reembolsado"
                           style={{ display:"flex",alignItems:"center",gap:4,padding:"4px 9px",fontSize:11,fontWeight:700,cursor:"pointer",borderRadius:6,background:`${GRN}10`,border:`1px solid ${GRN}40`,color:GRN,fontFamily:"inherit",whiteSpace:"nowrap" }}
@@ -1824,10 +1945,12 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
                           ✓ Reembolsado
                         </button>
                       )}
-                      <DsIconButton size="sm" variant="ghost" ariaLabel="Editar lançamento" onClick={()=>setTxModal(tx)}
-                        icon={<DsIcon name="edit" size={13} color={ds.color.neutral[500]}/>}/>
-                      <DsIconButton size="sm" variant="ghost" ariaLabel="Excluir lançamento" onClick={()=>{if(confirm("Excluir?")) saveTx(transactions.filter(t=>t.id!==tx.id));}}
-                        icon={<DsIcon name="x" size={13} color={ds.color.danger[500]}/>}/>
+                      {!isAgg && <>
+                        <DsIconButton size="sm" variant="ghost" ariaLabel="Editar lançamento" onClick={()=>setTxModal(tx)}
+                          icon={<DsIcon name="edit" size={13} color={ds.color.neutral[500]}/>}/>
+                        <DsIconButton size="sm" variant="ghost" ariaLabel="Excluir lançamento" onClick={()=>{if(confirm("Excluir?")) saveTx(transactions.filter(t=>t.id!==tx.id));}}
+                          icon={<DsIcon name="x" size={13} color={ds.color.danger[500]}/>}/>
+                      </>}
                     </div>
                   </div>
                 );
@@ -1838,18 +1961,34 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       )}
       </div>{/* /tabpanel-lancamentos */}
 
+      {/* Projetos / Centros de Custo */}
+      <div id="tabpanel-projetos" role="tabpanel" aria-labelledby="tab-projetos" tabIndex={0} hidden={tab!=="projetos"}>
+        {tab==="projetos" && (
+          <ProjectsTab
+            projects={projects}
+            onSaveProject={saveProject}
+            onDeleteProject={removeProject}
+            onCreateReimbursementTx={createReimbursementTx}
+            selectedId={projId || null}
+            onSelect={(id)=>setProjId(id || "")}
+            valuesHidden={valuesHidden}
+            toast={toast}
+          />
+        )}
+      </div>{/* /tabpanel-projetos */}
+
       <div id="tabpanel-indicadores" role="tabpanel" aria-labelledby="tab-indicadores" tabIndex={0} hidden={tab!=="indicadores"}>
-        {tab==="indicadores" && <IndicadoresFinanceiros transactions={transactions} baseBalance={baseBalance} saldoTotal={saldoTotal} contracts={contracts} year={dreYear} setYear={setDreYear} valuesHidden={valuesHidden}/>}
+        {tab==="indicadores" && <IndicadoresFinanceiros transactions={allTx} baseBalance={baseBalance} saldoTotal={saldoTotal} contracts={contracts} year={dreYear} setYear={setDreYear} valuesHidden={valuesHidden}/>}
       </div>
 
       {/* IA Financeira */}
       {tab==="ia" && (() => {
-        const totalEnt2 = transactions.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
-        const totalSai2 = transactions.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
-        const totalDiv2 = transactions.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const totalEnt2 = allTx.filter(t=>t.type==="entrada").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const totalSai2 = allTx.filter(t=>t.type==="saida"||t.type==="imposto").reduce((s,t)=>s+(Number(t.amount)||0),0);
+        const totalDiv2 = allTx.filter(t=>t.type==="dividendos").reduce((s,t)=>s+(Number(t.amount)||0),0);
         const lucro2 = totalEnt2 - totalSai2 - totalDiv2;
-        const catBreakdown = Object.entries(transactions.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>`${k}: R$${v.toLocaleString("pt-BR")}`).join(", ");
-        const ctx = `Empresa: Stand/Veloso Produções. Saldo: R$${saldoTotal.toLocaleString("pt-BR")}. Entradas: R$${totalEnt2.toLocaleString("pt-BR")}. Saídas: R$${totalSai2.toLocaleString("pt-BR")}. Dividendos: R$${totalDiv2.toLocaleString("pt-BR")}. Lucro líquido: R$${lucro2.toLocaleString("pt-BR")}. Contratos ativos: ${contracts.length}. Top despesas: ${catBreakdown||"nenhuma"}. Lançamentos: ${transactions.length}.`;
+        const catBreakdown = Object.entries(allTx.filter(t=>t.type==="saida"&&t.category).reduce((acc,t)=>{acc[t.category]=(acc[t.category]||0)+(Number(t.amount)||0);return acc;},{})).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>`${k}: R$${v.toLocaleString("pt-BR")}`).join(", ");
+        const ctx = `Empresa: Stand/Veloso Produções. Saldo: R$${saldoTotal.toLocaleString("pt-BR")}. Entradas: R$${totalEnt2.toLocaleString("pt-BR")}. Saídas: R$${totalSai2.toLocaleString("pt-BR")}. Dividendos: R$${totalDiv2.toLocaleString("pt-BR")}. Lucro líquido: R$${lucro2.toLocaleString("pt-BR")}. Contratos ativos: ${contracts.length}. Top despesas: ${catBreakdown||"nenhuma"}. Lançamentos: ${allTx.length}.`;
 
         const sendMsg = async () => {
           if (!aiInput.trim()) return;
@@ -1935,7 +2074,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
               </div>
             ))}
           </div>
-          <DREView transactions={transactions} year={dreYear} valuesHidden={valuesHidden}/>
+          <DREView transactions={allTx} year={dreYear} valuesHidden={valuesHidden}/>
         </div>
       )}
 

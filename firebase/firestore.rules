@@ -74,6 +74,11 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
+    // ─── Caixa projects (centros de custo) ────────────────────
+    match /caixa_projects/{projectId} {
+      allow read, write: if isAuth();
+    }
+
     // ─── Settings ─────────────────────────────────────────────
     // DEPRECADOS — leitura e escrita bloqueadas:
     match /settings/eurRate {

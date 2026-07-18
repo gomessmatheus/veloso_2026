@@ -63,54 +63,6 @@ function addMonths(date, n) {
   return d;
 }
 
-/** Número de dias úteis em um mês (aprox. — exclui sáb/dom) */
-function weekdaysInMonth(yearMonth) {
-  const [y, m] = yearMonth.split("-").map(Number);
-  const days = new Date(y, m, 0).getDate();
-  let count = 0;
-  for (let d = 1; d <= days; d++) {
-    const dow = new Date(y, m - 1, d).getDay();
-    if (dow !== 0 && dow !== 6) count++;
-  }
-  return count;
-}
-
-// ─── Distribuição de entregáveis sem data ────────────────────────────────────
-/**
- * Distribui reels/tiktoks sem data ao longo dos meses disponíveis
- * dentro do prazo do contrato (ou próximos 3 meses se sem prazo).
- * Retorna Map<"YYYY-MM", number>.
- */
-function distributeUndated({ contract, undatedCount, today }) {
-  const result = new Map();
-  if (undatedCount <= 0) return result;
-
-  const start = today;
-  let end;
-  if (contract.contractDeadline) {
-    end = new Date(contract.contractDeadline + "T12:00:00");
-    if (end < start) end = addMonths(start, 3);
-  } else {
-    end = addMonths(start, 3); // sem prazo → janela de 3 meses
-  }
-
-  const months = [];
-  let cur = new Date(start.getFullYear(), start.getMonth(), 1);
-  const endYM = dateToYM(end);
-  while (dateToYM(cur) <= endYM) {
-    months.push(dateToYM(cur));
-    cur = addMonths(cur, 1);
-  }
-  if (months.length === 0) return result;
-
-  const weights = months.map(m => weekdaysInMonth(m));
-  const totalW  = weights.reduce((a, b) => a + b, 0);
-  months.forEach((m, i) => {
-    result.set(m, (undatedCount * weights[i]) / totalW);
-  });
-  return result;
-}
-
 // ─── Tipos para JSDoc ────────────────────────────────────────────────────────
 /**
  * @typedef {Object} AdSlotsMonth
@@ -136,29 +88,28 @@ function distributeUndated({ contract, undatedCount, today }) {
  * Calcula slots de produção disponíveis para os próximos N meses.
  * Por padrão retorna 3 meses (mês atual + 2 próximos).
  *
+ * SIMPLIFICADO: entregáveis SEM data de postagem não são mais distribuídos
+ * "estimativamente" pelos meses (era confuso) — são contados à parte em
+ * `undated` para exibição como aviso ("N sem data").
+ *
  * @param {{ deliverables: object[], contracts: object[] }} data
  * @param {number} [months=3]
  * @param {Date}   [today]
- * @returns {AdSlotsMonth[]}
+ * @returns {{ months: AdSlotsMonth[], undated: { count: number, byContract: AdSlotsBreakdown[] } }}
  */
 export function calcAdSlots({ deliverables = [], contracts = [] }, months = 3, today = new Date()) {
   const todayYM       = dateToYM(today);
   const activeContracts = contracts.filter(c => !c.archived);
 
-  // Mapa: "YYYY-MM" → { [contractId]: { company, count, estimated } }
+  // Mapa: "YYYY-MM" → { [contractId]: { company, count } }
   const slotMap = {};
-
-  const ensureMonth = (ym) => { if (!slotMap[ym]) slotMap[ym] = {}; };
-
-  const addSlot = (ym, contractId, company, amount, estimated) => {
-    ensureMonth(ym);
-    if (!slotMap[ym][contractId]) {
-      slotMap[ym][contractId] = { company, count: 0, estimated };
-    }
-    slotMap[ym][contractId].count += amount;
-    // Se ao menos 1 item tem data confirmada, marca como confirmado
-    if (!estimated) slotMap[ym][contractId].estimated = false;
+  const addSlot = (ym, contractId, company) => {
+    if (!slotMap[ym]) slotMap[ym] = {};
+    if (!slotMap[ym][contractId]) slotMap[ym][contractId] = { company, count: 0 };
+    slotMap[ym][contractId].count += 1;
   };
+
+  const undatedByContract = new Map();
 
   for (const contract of activeContracts) {
     // Apenas reels e tiktoks — stories/links/reposts não ocupam slot (P1)
@@ -168,22 +119,14 @@ export function calcAdSlots({ deliverables = [], contracts = [] }, months = 3, t
            isSlotType(d)
     );
 
-    const withDate    = cDelivs.filter(d => d.plannedPostDate && d.plannedPostDate.length >= 7);
-    const withoutDate = cDelivs.filter(d => !d.plannedPostDate || d.plannedPostDate.length < 7);
-
-    // (a) Com data → contribui direto ao mês
-    for (const d of withDate) {
+    for (const d of cDelivs) {
       const ym = toYearMonth(d.plannedPostDate);
-      if (ym && ym >= todayYM) {
-        addSlot(ym, contract.id, contract.company, 1, false);
-      }
-    }
-
-    // (b) Sem data → distribui estimado dentro do prazo
-    const distMap = distributeUndated({ contract, undatedCount: withoutDate.length, today });
-    for (const [ym, frac] of distMap.entries()) {
-      if (ym >= todayYM) {
-        addSlot(ym, contract.id, contract.company, frac, true);
+      if (ym) {
+        if (ym >= todayYM) addSlot(ym, contract.id, contract.company);
+      } else {
+        const cur = undatedByContract.get(contract.id) || { contractId: contract.id, company: contract.company, count: 0 };
+        cur.count += 1;
+        undatedByContract.set(contract.id, cur);
       }
     }
   }
@@ -195,13 +138,11 @@ export function calcAdSlots({ deliverables = [], contracts = [] }, months = 3, t
     const ym  = dateToYM(d);
     const cap = capacityForMonth(ym); // P2 + P3
 
-    const contractEntries = slotMap[ym] ? Object.entries(slotMap[ym]) : [];
-    const breakdown = contractEntries.map(([cid, info]) => ({
-      contractId: cid,
-      company:    info.company,
-      count:      info.count,
-      estimated:  info.estimated,
-    }));
+    const breakdown = slotMap[ym]
+      ? Object.entries(slotMap[ym]).map(([cid, info]) => ({
+          contractId: cid, company: info.company, count: info.count, estimated: false,
+        }))
+      : [];
 
     const committed = breakdown.reduce((s, b) => s + b.count, 0);
     const available = Math.max(0, cap - committed);
@@ -215,5 +156,9 @@ export function calcAdSlots({ deliverables = [], contracts = [] }, months = 3, t
     result.push({ month: ym, label, capacity: cap, committed, available, pctUsed, breakdown });
   }
 
-  return result;
+  const undatedList = [...undatedByContract.values()].sort((a, b) => b.count - a.count);
+  return {
+    months: result,
+    undated: { count: undatedList.reduce((s, u) => s + u.count, 0), byContract: undatedList },
+  };
 }

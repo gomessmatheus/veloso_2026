@@ -127,12 +127,7 @@ function MonthCard({ data, expanded, onToggle, isMobile = false }) {
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   padding: "4px 0", borderBottom: `1px solid ${LN}`,
                 }}>
-                  <span style={{ fontSize: 12, color: TX }}>
-                    {b.company}
-                    {b.estimated && (
-                      <span style={{ fontSize: 10, color: TX3, marginLeft: 4 }}>~estimado</span>
-                    )}
-                  </span>
+                  <span style={{ fontSize: 12, color: TX }}>{b.company}</span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: TX2 }}>
                     {Math.ceil(b.count)} posts
                   </span>
@@ -156,8 +151,9 @@ function MonthCard({ data, expanded, onToggle, isMobile = false }) {
  */
 export function AdSlotsCard({ deliverables = [], contracts = [], isMobile = false }) {
   const [expanded, setExpanded] = React.useState(null);
+  const [showUndated, setShowUndated] = React.useState(false);
 
-  const slots = React.useMemo(
+  const { months: slots, undated } = React.useMemo(
     () => calcAdSlots({ deliverables, contracts }, 3),
     [deliverables, contracts]
   );
@@ -196,10 +192,36 @@ export function AdSlotsCard({ deliverables = [], contracts = [], isMobile = fals
         />
       ))}
 
+      {/* Reels/TikToks sem data — fora do cálculo, exibidos como aviso */}
+      {undated.count > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <button onClick={() => setShowUndated(v => !v)}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none",
+                     cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: AMB }}>
+              ⚠ {undated.count} reel{undated.count > 1 ? "s" : ""}/tiktok{undated.count > 1 ? "s" : ""} sem data de postagem
+            </span>
+            <span style={{ fontSize: 10, color: TX3 }}>{showUndated ? "▲" : "▼"}</span>
+          </button>
+          {showUndated && (
+            <div style={{ marginTop: 6 }}>
+              {undated.byContract.map(u => (
+                <div key={u.contractId} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12 }}>
+                  <span style={{ color: TX }}>{u.company}</span>
+                  <span style={{ color: TX2, fontWeight: 600 }}>{u.count}</span>
+                </div>
+              ))}
+              <p style={{ margin: "4px 0 0", fontSize: 11, color: TX3 }}>
+                Defina a data de postagem para que entrem no cálculo do mês.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Rodapé explicativo */}
       <p style={{ margin: "10px 0 0", fontSize: 11, color: TX3, lineHeight: 1.5 }}>
-        Barras verdes = capacity &gt;= 30% livre · amarelo = 10-30% · vermelho = quase lotado.
-        Posts sem data são distribuídos estimativamente dentro do prazo de cada contrato.
+        Capacidade de produção: {slots[0]?.capacity ?? 26} reels+tiktoks/mês. Só entram no cálculo entregáveis com data definida.
       </p>
     </div>
   );

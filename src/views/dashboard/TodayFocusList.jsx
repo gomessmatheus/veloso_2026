@@ -50,13 +50,12 @@ function RelativeDate({ days }) {
   return <span style={{ color:ds.color.neutral[500] }}>em {days}d</span>;
 }
 
-function FocusItem({ d, idx, contract, today, isMobile, onOpenItem, onActionClick }) {
+function FocusItem({ d, contract, today, isMobile, onOpenItem, onActionClick }) {
   const days       = daysBetween(today, d.plannedPostDate);
   const brandColor = contract?.color || ds.color.neutral[400];
   const stageLabel = STAGE_LABELS[d.stage] || d.stage;
   const stageColor = STAGE_COLORS[d.stage] || ds.color.neutral[500];
   const nextAction = (isMobile ? NEXT_ACTION_SHORT[d.stage] : NEXT_ACTION[d.stage]) || NEXT_ACTION[d.stage];
-  const isTop      = idx < 3;
 
   return (
     <div onClick={() => onOpenItem(d)}
@@ -66,19 +65,6 @@ function FocusItem({ d, idx, contract, today, isMobile, onOpenItem, onActionClic
         cursor:"pointer", transition:`background ${ds.motion.fast}` }}
       onMouseEnter={e => e.currentTarget.style.background = ds.color.neutral[50]}
       onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-      {/* Priority number — top 3 destacados em vermelho */}
-      <div style={{
-        width:24, height:24, borderRadius:"50%",
-        background: isTop ? ds.color.brand[500] : "transparent",
-        border: isTop ? "none" : `1px solid ${ds.color.neutral[200]}`,
-        color: isTop ? ds.color.neutral[0] : ds.color.neutral[500],
-        display:"flex", alignItems:"center", justifyContent:"center",
-        fontSize: ds.font.size.xs, fontWeight: ds.font.weight.semibold,
-        fontVariantNumeric:"tabular-nums",
-        flexShrink:0, marginLeft: ds.space[1],
-      }}>
-        {idx + 1}
-      </div>
       {/* Brand dot */}
       <div style={{ width:8, height:8, borderRadius:"50%", background:brandColor,
         flexShrink:0 }} title={contract?.company || ""}/>
@@ -128,10 +114,20 @@ function FocusItem({ d, idx, contract, today, isMobile, onOpenItem, onActionClic
   );
 }
 
-export function TodayFocusList({ items, contracts, today, isMobile, hasWeekItems,
+// Cabeçalhos dos grupos do foco (ids vindos de groupFocus em lib/priority.js)
+const GROUP_META = {
+  atrasados:  { icon:"🔴", color: ds.color.danger[500]  },
+  hoje:       { icon:"📌", color: ds.color.warning[500] },
+  aguardando: { icon:"⏳", color: "#D97706"              },
+  semana:     { icon:"📆", color: ds.color.info[500]     },
+  semData:    { icon:"❔", color: ds.color.neutral[400]  },
+};
+
+export function TodayFocusList({ groups = [], contracts, today, isMobile, hasWeekItems,
   onOpenItem, onNavigate, onActionClick }) {
   const DAYS_PT = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
   const todayLabel = `HOJE, ${DAYS_PT[today.getDay()].toUpperCase()} ${today.getDate()}/${today.getMonth()+1}`;
+  const total = groups.reduce((s, g) => s + g.items.length, 0);
 
   return (
     <div style={{ ...G, padding: isMobile ? ds.space[4] : `${ds.space[5]} ${ds.space[6]}`,
@@ -141,28 +137,38 @@ export function TodayFocusList({ items, contracts, today, isMobile, hasWeekItems
           color: ds.color.neutral[400], textTransform:"uppercase" }}>
           {todayLabel}
         </div>
-        {items.length > 0 && (
-          <div style={{ fontSize: ds.font.size.xs, color: ds.color.neutral[400], marginTop: 2 }}>
-            Em ordem de prioridade — atrasados e à espera de você primeiro
-          </div>
-        )}
       </div>
-      {items.length === 0 ? (
+      {total === 0 ? (
         <EmptyFocus hasWeekItems={hasWeekItems} onNavigate={onNavigate}/>
       ) : (
         <div>
-          {items.map((d, idx) => (
-            <FocusItem key={d.id} d={d} idx={idx}
-              contract={contracts.find(c => c.id === d.contractId)}
-              today={today} isMobile={isMobile} onOpenItem={onOpenItem} onActionClick={onActionClick}/>
-          ))}
-          {items.length === 7 && (
-            <div style={{ fontSize: ds.font.size.xs, color: ds.color.info[500],
-              marginTop: ds.space[3], cursor:"pointer", textAlign:"right" }}
-              onClick={() => onNavigate("acompanhamento")}>
-              Ver todos no pipeline →
-            </div>
-          )}
+          {groups.map(g => {
+            const meta = GROUP_META[g.id] || { icon:"•", color: ds.color.neutral[500] };
+            return (
+              <div key={g.id} style={{ marginBottom: ds.space[2] }}>
+                <div style={{ display:"flex", alignItems:"center", gap: ds.space[2],
+                  padding:`${ds.space[2]} 0 ${ds.space[1]}` }}>
+                  <span style={{ fontSize: ds.font.size.xs }}>{meta.icon}</span>
+                  <span style={{ fontSize: ds.font.size.xs, fontWeight: ds.font.weight.semibold,
+                    letterSpacing:"0.08em", textTransform:"uppercase", color: meta.color }}>
+                    {g.label}
+                  </span>
+                  <span style={{ fontSize: ds.font.size.xs, color: ds.color.neutral[400] }}>({g.items.length})</span>
+                  <div style={{ flex:1, height:1, background: ds.color.neutral[100] }}/>
+                </div>
+                {g.items.map(d => (
+                  <FocusItem key={d.id} d={d}
+                    contract={contracts.find(c => c.id === d.contractId)}
+                    today={today} isMobile={isMobile} onOpenItem={onOpenItem} onActionClick={onActionClick}/>
+                ))}
+              </div>
+            );
+          })}
+          <div style={{ fontSize: ds.font.size.xs, color: ds.color.info[500],
+            marginTop: ds.space[2], cursor:"pointer", textAlign:"right" }}
+            onClick={() => onNavigate("acompanhamento")}>
+            Ver lista completa →
+          </div>
         </div>
       )}
     </div>

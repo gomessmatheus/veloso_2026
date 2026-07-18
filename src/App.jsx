@@ -24,7 +24,11 @@ import { CurrencyRateBadge }                       from './ui/CurrencyRateBadge.
 
 // ─── Dashboard libs & sub-components ──────────────────────
 import { startOfWeek as sowLib, endOfWeek as eowLib, weekDays, isInCurrentWeek, daysBetween, toDateStr } from "./lib/dates.js";
-import { topPriorityItems } from "./lib/priority.js";
+import { groupFocus } from "./lib/priority.js";
+import {
+  CHECK_STEPS, toggleCheck, effectiveChecks, checklistProgress, nextStep,
+  overdueSteps, stepDeadline as checklistStepDeadline, migratePosts,
+} from "./lib/checklist.js";
 import { detectRiskSignals } from "./lib/riskSignals.js";
 import { WeekHeader }     from "./views/dashboard/WeekHeader.jsx";
 import { TodayFocusList } from "./views/dashboard/TodayFocusList.jsx";
@@ -314,25 +318,6 @@ const PRODUCTION_RULES = {
   maxPerWeek: 2,
 };
 
-// Valida se um entregável respeita as regras
-function validateDeliverable(d) {
-  if (!d?.plannedPostDate) return [];
-  const warnings = [];
-  STAGES.filter(s => s.minDays > 0 && s.id !== "postagem" && s.id !== "done").forEach(s => {
-    const deadline = d.stageDateOverrides?.[s.id] || addDays(d.plannedPostDate, s.days);
-    if (!deadline) return;
-    const prev = STAGES[STAGES.findIndex(x=>x.id===s.id) - 1];
-    if (!prev) return;
-    const prevDeadline = d.stageDateOverrides?.[prev.id] || addDays(d.plannedPostDate, prev.days);
-    if (!prevDeadline) return;
-    const gap = Math.round((new Date(deadline) - new Date(prevDeadline)) / 86400000);
-    if (gap < s.minDays) {
-      warnings.push({ stage: s.id, label: s.label, got: gap, need: s.minDays, rule: s.rule });
-    }
-  });
-  return warnings;
-}
-
 const STAGE_IDS = STAGES.map(s => s.id);
 
 function addDays(dateStr, n) {
@@ -344,84 +329,6 @@ function addDays(dateStr, n) {
     return d.toISOString().substr(0, 10);
   } catch { return null; }
 }
-
-function calcStageDates(postDate) {
-  if (!postDate) return {};
-  const dates = {};
-  STAGES.forEach(s => { dates[s.id] = addDays(postDate, s.days); });
-  return dates;
-}
-
-function stageDeadline(deliverable, stageId) {
-  if (!deliverable) return null;
-  if (deliverable.stageDateOverrides?.[stageId]) return deliverable.stageDateOverrides[stageId];
-  if (!deliverable.plannedPostDate) return null;
-  const stage = STAGES.find(s => s.id === stageId);
-  if (!stage) return null;
-  return addDays(deliverable.plannedPostDate, stage.days);
-}
-
-// ─── Slot Calculator (para agentes) ──────────────────────
-function calcAvailableSlots(deliverables, contracts, weeksAhead = 8) {
-  const today = new Date();
-  const slots = [];
-  for (let w = 0; w < weeksAhead; w++) {
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() + w * 7);
-    const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
-
-    const weekDels = deliverables.filter(d => {
-      if (!d.plannedPostDate || d.stage === "done") return false;
-      const ds = new Date(d.plannedPostDate);
-      const diff = Math.round((ds - weekStart) / 86400000);
-      return diff >= 0 && diff < 7;
-    });
-
-    // All deliverables linked to contracts = publis (reels + TikToks that are feed posts)
-    const publiDels = weekDels.filter(d => d.contractId && (d.type==="reel"||d.type==="tiktok"||d.type==="post"||d.type==="youtube"||d.type==="short"));
-    const publiCount = publiDels.length;
-
-    // Travel days
-    let travelDays = 0;
-    contracts.forEach(c => {
-      if (!c.hasTravel || !c.travelDates?.length) return;
-      c.travelDates.filter(td => td.date).forEach(td => {
-        const tdDate = new Date(td.date);
-        const diff = Math.round((tdDate - weekStart) / 86400000);
-        if (diff >= 0 && diff < 7) travelDays++;
-      });
-    });
-
-    const lucasAvailable = Math.max(0, 5 - travelDays);
-    const lucasUsed = weekDels.length * PRODUCTION_RULES.lucasDaysPerDeliverable;
-    const lucasRemaining = Math.max(0, Math.floor((lucasAvailable - lucasUsed) / PRODUCTION_RULES.lucasDaysPerDeliverable));
-
-    // Publi slots remaining — this is the real bottleneck
-    const publiSlotsRemaining = Math.max(0, PRODUCTION_RULES.maxPubliPerWeek - publiCount);
-    const publiOverIdeal = publiCount > PRODUCTION_RULES.idealPubliPerWeek;
-    const publiOverMax   = publiCount >= PRODUCTION_RULES.maxPubliPerWeek;
-
-    // Status based on publi count (primary constraint)
-    let status = "ok";
-    if (publiOverMax || lucasRemaining === 0) status = "full";
-    else if (publiOverIdeal || lucasRemaining <= 1) status = "tight";
-
-    slots.push({
-      weekStart: weekStart.toISOString().substr(0, 10),
-      weekEnd:   weekEnd.toISOString().substr(0, 10),
-      label: weekStart.toLocaleDateString("pt-BR", { day:"numeric", month:"short" }),
-      scheduled: weekDels.length,
-      publiCount, publiSlotsRemaining, publiOverIdeal, publiOverMax,
-      lucasAvailable, lucasUsed, lucasRemaining: Math.min(lucasRemaining, publiSlotsRemaining),
-      travelDays,
-      status,
-      deliverables: publiDels.map(d => d.title),
-    });
-  }
-  return slots;
-}
-
-
 
 // ─── CSS ──────────────────────────────────────────────────
 const G  = { background:ds.color.neutral[0], border:ds.border.thin, borderRadius:ds.radius.xl, boxShadow:ds.shadow.sm };
@@ -1223,9 +1130,9 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
   // Chip d: at-risk count = HIGH signals count
   const atRisk = useMemo(() => signals.filter(s => s.severity === "HIGH").length, [signals]);
 
-  // ── Focus list ───────────────────────────────────────────
-  const focusList = useMemo(
-    () => topPriorityItems(allDeliverables, 7, today),
+  // ── Focus list — grupos acionáveis (Atrasados / Hoje / Aguardando / Semana) ──
+  const focusGroups = useMemo(
+    () => groupFocus(allDeliverables, today),
     [allDeliverables, today],
   );
 
@@ -1306,7 +1213,7 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
         alignItems:          "start",
       }}>
         <TodayFocusList
-          items={focusList}
+          groups={focusGroups}
           contracts={contracts}
           today={today}
           isMobile={isMobile}
@@ -1357,258 +1264,144 @@ function Dashboard({ contracts, posts, deliverables: dashDeliverables = [], stat
   );
 }
 
-// ─── Acompanhamento (Pipeline de Produção) ────────────────
-function DeliverableCard({ item, contracts, onEdit, stageId }) {
-  const [hov, setHov] = useState(false);
-  const contract = contracts.find(c => c.id === item.contractId);
-  const dl = stageDeadline(item, stageId);
-  const daysUntil = dl ? daysLeft(dl) : null;
-  const TYPE_LABEL = { reel:"Reel", story:"Story", link:"Link", tiktok:"TikTok", post:"Reel" };
-  const isDone = item.stage === "done";
-  const isLate = !isDone && !item.publishedAt && !item.postLink && daysUntil !== null && daysUntil < 0;
-  const isUrgent = daysUntil !== null && daysUntil >= 0 && daysUntil <= 1;
-  const exceptions = useMemo(() => validateDeliverable(item), [item]);
+// ─── Acompanhamento (Checklist de Produção) ───────────────
+// Substitui o kanban de 9 colunas: cada entregável é uma linha com
+// checkboxes de etapa (lógica em src/lib/checklist.js).
+const TYPE_LABEL_PROD = { reel:"Reel", post:"Reel", story:"Story", link:"Link", tiktok:"TikTok", youtube:"YouTube", short:"Short", repost:"Repost" };
 
+function localTodayIso() {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+}
+
+const isDelivDone = (d) => {
+  const p = checklistProgress(effectiveChecks(d));
+  return p.done === p.total;
+};
+
+function CheckChip({ step, checked, isNext, overdue, deadline, onToggle }) {
+  const bg = checked ? "#DCFCE7" : overdue ? "#FFF1F2" : isNext ? "#EFF6FF" : B2;
+  const bd = checked ? "#86EFAC" : overdue ? "#FCA5A5" : isNext ? "#93C5FD" : LN;
+  const fg = checked ? "#15803D" : overdue ? RED : isNext ? "#1D4ED8" : TX3;
+  const title = `${step.label}${deadline ? ` · prazo ${fmtDate(deadline)}` : ""}${checked ? " · concluído" : overdue ? " · atrasado" : ""}`;
   return (
-    <div
-      onClick={() => onEdit(item)}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        background: isLate ? "#FFF1F2" : B1,
-        border: `1px solid ${isLate ? "#FCA5A5" : isUrgent ? "#FCD34D" : hov ? LN2 : LN}`,
-        borderRadius: 8, padding: "10px 12px", cursor: "pointer",
-        boxShadow: hov ? "0 4px 12px rgba(0,0,0,0.09)" : "0 1px 3px rgba(0,0,0,0.05)",
-        transform: hov ? "translateY(-1px)" : "none",
-        transition: TRANS, userSelect: "none",
-      }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: isLate ? RED : TX, marginBottom: 6, lineHeight: 1.3 }}>{item.title}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-        {contract && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: contract.color, display: "inline-block" }} />
-            {contract.company.split("/")[0].trim()}
-          </span>
-        )}
-        <span style={{ fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2 }}>{TYPE_LABEL[item.type] || item.type}</span>
-        {(item.revisionCount > 0) && (
-          <span title={item.revisionNote ? `Ajuste: ${item.revisionNote}` : "Ajuste solicitado"}
-            style={{ fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99,
-                     background: "#FEF3C7", color: "#B45309",
-                     fontWeight: 700, border: "1px solid #FDE68A" }}>
-            ✏️ Rev.{item.revisionCount}
-          </span>
-        )}
-        {item.plannedPostDate && (
-          <span style={{ fontSize:ds.font.size.xs, padding: "2px 7px", borderRadius: 99, background: B3, color: TX2, marginLeft: "auto" }}>
-            📅 {fmtDate(item.plannedPostDate)}
-          </span>
-        )}
-      </div>
-      {dl && stageId !== "done" && (
-        <div style={{ marginTop: 6, fontSize:ds.font.size.xs, fontWeight: 600, color: isLate ? RED : isUrgent ? AMB : TX3 }}>
-          {isLate ? `${Math.abs(daysUntil)}d atrasado` : daysUntil === 0 ? "Hoje" : `${daysUntil}d`}
-          {item.stageDateOverrides?.[stageId] ? " (manual)" : ""}
-        </div>
-      )}
-      {item.responsible?.[stageId] && (
-        <div style={{ marginTop: 4, fontSize:ds.font.size.xs, color: TX3 }}>👤 {item.responsible[stageId]}</div>
-      )}
-      {item.stage === "ajuste" && item.revisionNote && (
-        <div style={{ marginTop:5, fontSize:ds.font.size.xs, color:"#92400E",
-                      background:"#FFFBEB", borderRadius:4, padding:"3px 7px",
-                      border:"1px solid #FDE68A", lineHeight:1.4 }}>
-          ✏️ {item.revisionNote}
-        </div>
-      )}
-      {item.stage === "ajuste" && item.ajusteBackTo && (
-        <div style={{ marginTop:3, fontSize:ds.font.size.xs, color:TX3 }}>
-          → volta para <strong style={{color:TX2}}>{item.ajusteBackTo==="ap_final"?"Ap. Final":"Edição"}</strong>
-        </div>
-      )}
-      {exceptions.length > 0 && (
-        <div title={exceptions.map(e=>`${e.label}: ${e.got}d disponíveis (mín. ${e.need}d)`).join(" · ")}
-          style={{ marginTop:4, fontSize:ds.font.size.xs, fontWeight:700, color:"#EA580C", background:"rgba(234,88,12,.1)", borderRadius:4, padding:"1px 6px", display:"inline-block", cursor:"help" }}>
-          ⚠️ {exceptions.length} exceção{exceptions.length>1?"ões":""}
-        </div>
-      )}
-    </div>
+    <button onClick={e => { e.stopPropagation(); onToggle(); }} title={title} aria-label={title} aria-pressed={checked}
+      style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"4px 8px", borderRadius:6,
+               background:bg, border:`1.5px solid ${bd}`, color:fg, fontSize:10, fontWeight:700,
+               cursor:"pointer", fontFamily:"inherit", lineHeight:1.4, transition:"all .12s", whiteSpace:"nowrap" }}>
+      <span aria-hidden="true">{checked ? "✓" : "○"}</span>{step.short}
+    </button>
   );
 }
 
-function PipelineColumn({ stage, items, contracts, onEdit, onDrop, onReorder }) {
-  const [dragOver, setDragOver]     = useState(false);
-  const [dragOverItem, setDragOverItem] = useState(null); // {id, before}
-  const [draggingId, setDraggingId] = useState(null);
-
-  const lateCount = stage.id === "done" ? 0 : items.filter(item => {
-    if (item.publishedAt || item.postLink) return false;
-    const dl = stageDeadline(item, stage.id);
-    return dl && daysLeft(dl) < 0;
-  }).length;
+function ChecklistRow({ item, contracts, onEdit, onToggle }) {
+  const contract = contracts.find(c => c.id === item.contractId);
+  const checks = effectiveChecks(item);
+  const prog = checklistProgress(checks);
+  const next = nextStep(checks);
+  const today = localTodayIso();
+  const late = overdueSteps(item, today);
+  const lateIds = new Set(late.map(l => l.id));
+  const done = prog.done === prog.total;
+  const dLate = !done && item.plannedPostDate && item.plannedPostDate < today;
 
   return (
-    <div
-      style={{
-        background: dragOver ? `rgba(200,16,46,0.04)` : B2,
-        border: `1.5px solid ${dragOver ? RED : LN}`,
-        borderRadius: 10, overflow: "hidden", minWidth: 160,
-        transition: "all 0.18s ease",
-      }}
-      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false); }}
-      onDrop={e => {
-        e.preventDefault(); setDragOver(false); setDragOverItem(null);
-        const id = e.dataTransfer.getData("text/plain");
-        const fromStage = e.dataTransfer.getData("from-stage");
-        // Only move stage if dropped on the column (not on a card)
-        if (fromStage !== stage.id) onDrop(id, stage.id);
-      }}>
-      <div style={{ padding: "10px 12px", borderBottom: `1px solid ${LN}`, background: B1, display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: TX, flex: 1 }}>{stage.label}</span>
-        {lateCount > 0 && (
-          <span style={{ fontSize:ds.font.size.xs, fontWeight: 700, background: "#FFF1F2", color: RED, padding: "2px 6px", borderRadius: 99, border: "1px solid #FCA5A5" }}>{lateCount} atrasado{lateCount>1?"s":""}</span>
-        )}
-        <span style={{ fontSize:ds.font.size.xs, fontWeight: 700, background: B3, color: TX2, padding: "2px 7px", borderRadius: 99 }}>{items.length}</span>
+    <div id={`card-${item.id}`} onClick={() => onEdit(item)}
+      style={{ background:B1, border:`1px solid ${(!done && (lateIds.size || dLate)) ? "#FCA5A5" : LN}`, borderRadius:8,
+               padding:"10px 14px", cursor:"pointer", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap",
+               opacity:done?0.7:1, transition:"border-color .15s" }}>
+      <div style={{ flex:"1 1 200px", minWidth:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+          {contract && <span style={{ width:6, height:6, borderRadius:"50%", background:contract.color, flexShrink:0, display:"inline-block" }}/>}
+          <span style={{ fontSize:12, fontWeight:600, color:done?TX3:TX, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", textDecoration:done?"line-through":"none" }}>{item.title}</span>
+        </div>
+        <div style={{ fontSize:ds.font.size.xs, color:TX2, display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+          <span>{TYPE_LABEL_PROD[item.type] || item.type}</span>
+          {item.plannedPostDate && <span style={{ color:dLate?RED:TX2, fontWeight:dLate?700:400 }}>📅 {fmtDate(item.plannedPostDate)}{dLate?" · atrasado":""}</span>}
+          {item.owner && <span>👤 {item.owner}</span>}
+          {item.revisionCount > 0 && <span style={{ color:"#B45309", fontWeight:700 }} title={item.revisionNote||"Revisões solicitadas"}>✏️ Rev.{item.revisionCount}</span>}
+          {!done && late.length > 0 && <span style={{ color:RED, fontWeight:700 }}>⚠ {late[0].label} há {late[0].daysLate}d</span>}
+        </div>
       </div>
-      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 0, minHeight: 80 }}>
-        {items.map(item => (
-          <div key={item.id} id={`card-${item.id}`}
-            draggable
-            onDragStart={e => {
-              e.dataTransfer.setData("text/plain", item.id);
-              e.dataTransfer.setData("from-stage", stage.id);
-              e.dataTransfer.effectAllowed = "move";
-              setDraggingId(item.id);
-            }}
-            onDragEnd={() => { setDraggingId(null); setDragOverItem(null); }}
-            onDragOver={e => {
-              e.preventDefault(); e.stopPropagation();
-              if (draggingId && draggingId !== item.id) {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const before = e.clientY < rect.top + rect.height / 2;
-                setDragOverItem({ id: item.id, before });
-              }
-            }}
-            onDrop={e => {
-              e.preventDefault(); e.stopPropagation();
-              const id = e.dataTransfer.getData("text/plain");
-              const fromStage = e.dataTransfer.getData("from-stage");
-              setDragOverItem(null);
-              if (fromStage === stage.id && id !== item.id && onReorder) {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const before = e.clientY < rect.top + rect.height / 2;
-                onReorder(id, item.id, before);
-              } else if (fromStage !== stage.id) {
-                onDrop(id, stage.id);
-              }
-            }}
-            style={{ marginBottom: 6, opacity: draggingId === item.id ? 0.4 : 1, transition: "opacity .15s" }}>
-            {/* Drop indicator */}
-            {dragOverItem?.id === item.id && dragOverItem.before && (
-              <div style={{ height: 2, background: RED, borderRadius: 1, marginBottom: 4 }}/>
-            )}
-            <DeliverableCard item={item} contracts={contracts} onEdit={onEdit} stageId={stage.id}/>
-            {dragOverItem?.id === item.id && !dragOverItem.before && (
-              <div style={{ height: 2, background: RED, borderRadius: 1, marginTop: 4 }}/>
-            )}
-          </div>
+      <div style={{ display:"flex", gap:4, flexWrap:"wrap" }} onClick={e=>e.stopPropagation()}>
+        {CHECK_STEPS.map(s => (
+          <CheckChip key={s.id} step={s} checked={!!checks[s.id]} isNext={next?.id===s.id}
+            overdue={lateIds.has(s.id)} deadline={checklistStepDeadline(item.plannedPostDate, s.id)}
+            onToggle={() => onToggle(item, s.id)}/>
         ))}
       </div>
-    </div>
-  );
-}
-
-
-// ─── AjusteModal — captura motivo do ajuste ao mover card ─────────
-function AjusteModal({ onConfirm, onCancel }) {
-  const [note, setNote]   = useState("");
-  const [backTo, setBackTo] = useState("ap_final");
-  const inputRef = useRef(null);
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 60); }, []);
-  return (
-    <div onClick={e=>{if(e.target===e.currentTarget)onCancel();}}
-      style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:600,
-               display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
-      <div style={{ background:B1,borderRadius:12,width:"100%",maxWidth:440,
-                    boxShadow:"0 24px 60px rgba(0,0,0,.16)",overflow:"hidden" }}>
-        {/* Header */}
-        <div style={{ padding:"20px 22px 14px",borderBottom:`1px solid ${LN}` }}>
-          <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-            <span style={{ width:28,height:28,borderRadius:"50%",background:"#FEF3C7",
-                           display:"inline-flex",alignItems:"center",justifyContent:"center",
-                           fontSize:14 }}>✏️</span>
-            <span style={{ fontWeight:700,fontSize:15,color:TX }}>Solicitar ajuste</span>
-          </div>
-          <p style={{ fontSize:12,color:TX2,margin:"6px 0 0" }}>
-            O conteúdo voltará para revisão. Descreva o que precisa mudar.
-          </p>
-        </div>
-        {/* Body */}
-        <div style={{ padding:"16px 22px 20px" }}>
-          {/* Revision note */}
-          <div style={{ marginBottom:14 }}>
-            <label style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,
-                            textTransform:"uppercase",letterSpacing:".08em",display:"block",marginBottom:6 }}>
-              O que precisa ser ajustado?
-            </label>
-            <textarea
-              ref={inputRef}
-              value={note}
-              onChange={e=>setNote(e.target.value)}
-              placeholder="Ex: Trocar trilha, encurtar 10s no início, ajustar legenda…"
-              rows={3}
-              style={{ width:"100%",padding:"9px 12px",fontSize:13,background:B2,
-                       border:`1px solid ${LN}`,borderRadius:8,color:TX,
-                       fontFamily:"inherit",resize:"none",outline:"none",boxSizing:"border-box" }}
-            />
-          </div>
-          {/* Back-to selection */}
-          <div>
-            <label style={{ fontSize:ds.font.size.xs,fontWeight:700,color:TX2,
-                            textTransform:"uppercase",letterSpacing:".08em",display:"block",marginBottom:8 }}>
-              Após o ajuste, retornar para:
-            </label>
-            <div style={{ display:"flex",gap:8 }}>
-              {[
-                { id:"ap_final", label:"Ap. Final",   sub:"Só precisa re-aprovar",  icon:"✅" },
-                { id:"edicao",   label:"Edição",       sub:"Precisa re-editar",       icon:"🎬" },
-              ].map(opt => (
-                <button key={opt.id} onClick={()=>setBackTo(opt.id)}
-                  style={{ flex:1,padding:"10px 12px",borderRadius:8,cursor:"pointer",
-                           fontFamily:"inherit",textAlign:"left",transition:"all .12s",
-                           background:backTo===opt.id?"#FEF3C7":"none",
-                           border:`1.5px solid ${backTo===opt.id?"#F59E0B":LN}`,
-                           color:TX }}>
-                  <div style={{ fontSize:16,marginBottom:2 }}>{opt.icon}</div>
-                  <div style={{ fontSize:12,fontWeight:700 }}>{opt.label}</div>
-                  <div style={{ fontSize:11,color:TX2 }}>{opt.sub}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        {/* Footer */}
-        <div style={{ display:"flex",justifyContent:"flex-end",gap:8,
-                      padding:"12px 22px",borderTop:`1px solid ${LN}`,background:B2 }}>
-          <button onClick={onCancel}
-            style={{ padding:"7px 16px",fontSize:12,cursor:"pointer",borderRadius:6,
-                     background:"none",border:`1px solid ${LN}`,color:TX2,fontFamily:"inherit" }}>
-            Cancelar
-          </button>
-          <button onClick={()=>onConfirm({ note: note.trim(), backTo })}
-            style={{ padding:"7px 18px",fontSize:12,fontWeight:700,cursor:"pointer",
-                     borderRadius:6,background:"#F59E0B",border:"none",
-                     color:"white",fontFamily:"inherit" }}>
-            Enviar para Ajuste
-          </button>
+      <div style={{ width:64, flexShrink:0, textAlign:"right" }}>
+        <div style={{ fontSize:11, fontWeight:700, color:done?"#15803D":TX2 }}>{done ? "✓ Feito" : `${prog.done}/${prog.total}`}</div>
+        <div style={{ height:3, background:LN, borderRadius:2, marginTop:3, overflow:"hidden" }}>
+          <div style={{ height:3, width:`${prog.pct}%`, background:done?"#22C55E":prog.pct>=50?"#3B82F6":AMB, borderRadius:2, transition:"width .2s" }}/>
         </div>
       </div>
     </div>
   );
 }
 
-function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF, role, brands=[] }) {
+function ChecklistBoard({ items, contracts, onEdit, onToggle }) {
+  const [showDone, setShowDone] = useState(false);
+  const active = items.filter(d => !isDelivDone(d));
+  const doneItems = items.filter(isDelivDone)
+    .sort((a,b) => (b.publishedAt||b.plannedPostDate||"").localeCompare(a.publishedAt||a.plannedPostDate||""));
+
+  // Agrupa por contrato; grupos ordenados pela data de postagem mais próxima
+  const byContract = new Map();
+  active.forEach(d => {
+    const k = d.contractId || "_none";
+    if (!byContract.has(k)) byContract.set(k, []);
+    byContract.get(k).push(d);
+  });
+  byContract.forEach(list => list.sort((a,b) => (a.plannedPostDate||"9999").localeCompare(b.plannedPostDate||"9999")));
+  const groups = [...byContract.entries()]
+    .sort((a,b) => (a[1][0].plannedPostDate||"9999").localeCompare(b[1][0].plannedPostDate||"9999"));
+
+  if (!items.length) return (
+    <div style={{ textAlign:"center", padding:"48px 0", color:TX3, fontSize:12 }}>
+      Nenhum entregável com esses filtros.
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+      {groups.map(([cid, list]) => {
+        const contract = contracts.find(c => c.id === cid);
+        return (
+          <div key={cid}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+              {contract && <span style={{ width:8, height:8, borderRadius:"50%", background:contract.color, display:"inline-block" }}/>}
+              <span style={{ fontSize:12, fontWeight:700, color:TX }}>{contract ? contract.company : "Sem contrato"}</span>
+              <span style={{ fontSize:ds.font.size.xs, fontWeight:700, background:B3, color:TX2, padding:"1px 8px", borderRadius:99 }}>{list.length}</span>
+              <div style={{ flex:1, height:1, background:LN }}/>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {list.map(d => <ChecklistRow key={d.id} item={d} contracts={contracts} onEdit={onEdit} onToggle={onToggle}/>)}
+            </div>
+          </div>
+        );
+      })}
+
+      {doneItems.length > 0 && (
+        <div>
+          <button onClick={() => setShowDone(v=>!v)}
+            style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none",
+                     cursor:"pointer", fontFamily:"inherit", padding:"4px 0", marginBottom:showDone?8:0 }}>
+            <span style={{ fontSize:12, fontWeight:700, color:TX3 }}>{showDone?"▾":"▸"} Concluídos ({doneItems.length})</span>
+            <div style={{ flex:1, height:1, background:LN }}/>
+          </button>
+          {showDone && (
+            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              {doneItems.map(d => <ChecklistRow key={d.id} item={d} contracts={contracts} onEdit={onEdit} onToggle={onToggle}/>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, calEvents, calMonth, setCal, calFilter, setCalF, role, brands=[] }) {
   const isMobile = useIsMobile();
   const setDeliverables = saveDeliverables || (() => {});
   const [view, setView]   = useState("calendar");
@@ -1642,50 +1435,12 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
     }
   }, []);
 
-  const [ajusteModal, setAjusteModal] = useState(null); // {itemId}
-
-  const moveStage = (itemId, newStage) => {
-    if (newStage === "ajuste") {
-      setAjusteModal({ itemId });
-      return; // wait for AjusteModal confirmation
-    }
-    const del = deliverables.find(d => d.id === itemId);
-    // When leaving ajuste, go to the stored backTo destination
-    const resolvedStage = (del?.stage === "ajuste" && del?.ajusteBackTo && newStage === "ajuste")
-      ? del.ajusteBackTo
-      : newStage;
-    save(deliverables.map(d => d.id === itemId ? { ...d, stage: resolvedStage } : d));
-    toast?.(`Movido para ${STAGES.find(s=>s.id===resolvedStage)?.label}`, "info");
-  };
-
-  const confirmAjuste = ({ note, backTo }) => {
-    const { itemId } = ajusteModal;
-    save(deliverables.map(d => d.id === itemId ? {
-      ...d,
-      stage:          "ajuste",
-      revisionCount:  (d.revisionCount || 0) + 1,
-      revisionNote:   note,
-      ajusteBackTo:   backTo,
-    } : d));
-    toast?.("Enviado para Ajuste ✏️", "info");
-    setAjusteModal(null);
-  };
-
-  // Reorder cards within same column
-  const reorderWithin = (fromId, toId, before) => {
-    const stage = deliverables.find(d=>d.id===fromId)?.stage;
-    if (!stage) return;
-    const stageItems = deliverables
-      .filter(d=>d.stage===stage)
-      .sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
-    const from = stageItems.find(d=>d.id===fromId);
-    const rest = stageItems.filter(d=>d.id!==fromId);
-    const toIdx = rest.findIndex(d=>d.id===toId);
-    if (toIdx<0) return;
-    const insertAt = before ? toIdx : toIdx+1;
-    rest.splice(insertAt,0,from);
-    const updated = rest.map((d,i)=>({...d,sortOrder:i*10}));
-    save(deliverables.map(d=>{const u=updated.find(x=>x.id===d.id);return u||d;}));
+  // Marca/desmarca uma etapa do checklist (deriva stage automaticamente)
+  const toggleStep = (item, stepId) => {
+    const today = localTodayIso();
+    const updated = toggleCheck(item, stepId, today);
+    save(deliverables.map(d => d.id === item.id ? updated : d));
+    if (stepId === "postado" && updated.checks?.postado) toast?.("Entregue 🎉", "success");
   };
 
   const filtered = deliverables
@@ -1754,7 +1509,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
           </p>
         </div>
         <div style={{ display: "flex", background: B2, border: `1px solid ${LN}`, borderRadius: 6, overflow: "hidden" }}>
-          {[["pipeline","Pipeline"],["calendar","Calendário"]].map(([v,l]) => (
+          {[["pipeline","Lista"],["calendar","Calendário"]].map(([v,l]) => (
             <div key={v} onClick={() => setView(v)}
               style={{ padding: "5px 12px", fontSize:ds.font.size.xs, fontWeight: 700, cursor: "pointer", transition: TRANS, color: view===v?TX:TX2, background: view===v?B3:"transparent" }}>{l}</div>
           ))}
@@ -1777,25 +1532,9 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
         <Btn onClick={() => setNewOpen(true)} variant="primary" size="sm" icon={Plus}>Novo entregável</Btn>
       </div>
 
-      {/* Pipeline view */}
+      {/* Lista com checklist por entregável */}
       {view === "pipeline" && (
-        <div style={{ overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling:"touch" }}>
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${STAGES.length}, minmax(160px, 1fr))`, gap: 8, minWidth: 1200 }}>
-            {STAGES.map(stage => (
-              <PipelineColumn
-                key={stage.id}
-                stage={stage}
-                items={filtered
-                  .filter(d => (d.stage || "briefing") === stage.id)
-                  .sort((a,b)=>(a.sortOrder??9999)-(b.sortOrder??9999))}
-                contracts={contracts}
-                onEdit={setEditItem}
-                onDrop={moveStage}
-                onReorder={reorderWithin}
-              />
-            ))}
-          </div>
-        </div>
+        <ChecklistBoard items={filtered} contracts={contracts} onEdit={setEditItem} onToggle={toggleStep}/>
       )}
 
       {/* Calendar view */}
@@ -1804,19 +1543,13 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
       )}
 
       {/* Modals */}
-      {ajusteModal && (
-        <AjusteModal
-          onConfirm={confirmAjuste}
-          onCancel={() => setAjusteModal(null)}
-        />
-      )}
       {quickDate && (
         <QuickPostModal
           date={quickDate}
           contracts={contracts}
           onClose={()=>setQuickDate(null)}
           onSave={item=>{
-            save([...deliverables,{...item,id:uid(),stage:"briefing",createdAt:new Date().toISOString()}]);
+            save([...deliverables,{...item,id:uid(),stage:"roteiro",checks:{},createdAt:new Date().toISOString()}]);
             toast?.("✓ Post criado","success");
             setQuickDate(null);
           }}
@@ -1834,7 +1567,7 @@ function Acompanhamento({ contracts, posts, deliverables=[], saveDeliverables, c
               save(deliverables.map(d => d.id === item.id ? item : d));
               toast?.("Entregável atualizado", "success");
             } else {
-              save([...deliverables, { ...item, id: uid(), stage: "briefing", createdAt: new Date().toISOString() }]);
+              save([...deliverables, { ...item, id: uid(), checks: item.checks || {}, createdAt: new Date().toISOString() }]);
               toast?.("✓ Entregável criado", "success");
             }
             setNewOpen(false); setEditItem(null); setPrefillDate("");
@@ -1988,7 +1721,7 @@ function QuickPostModal({ date, contracts, onClose, onSave }) {
 
 function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSave, prefillDate="", allDeliverables=[], brands=[] }) {
   const isEdit = !!item;
-  const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: prefillDate||"", stage: "briefing", responsible: {}, stageDateOverrides: {}, notes: "", roteiro: "", networks: [], networkMetrics: {} });
+  const [f, setF] = useState(item || { contractId: contracts[0]?.id || "", title: "", type: "reel", plannedPostDate: prefillDate||"", stage: "roteiro", checks: {}, owner: "", notes: "", roteiro: "", networks: [], networkMetrics: {} });
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
   const [modalTab, setModalTab] = useState("info");
   const [openNet, setOpenNet] = useState(null);
@@ -2002,7 +1735,6 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
   };
   const setMetric = (net,field,val) => setF(x=>({...x,networkMetrics:{...(x.networkMetrics||{}),[net]:{...(x.networkMetrics?.[net]||{}),[field]:val}}}));
   const getMetric = (net,field) => f.networkMetrics?.[net]?.[field] || "";
-  const stageDates = f.plannedPostDate ? calcStageDates(f.plannedPostDate) : {};
 
   // ── Conflict detection ──────────────────────────────────
   const conflicts = useMemo(() => {
@@ -2089,20 +1821,35 @@ function DeliverableModal({ item, contracts, onClose, onSave, onDelete, onAutoSa
           <Field label="Contrato"><Select value={f.contractId} onChange={e=>set("contractId",e.target.value)}>{contracts.map(c=><option key={c.id} value={c.id}>{c.company}</option>)}</Select></Field>
           <Field label="Tipo"><Select value={f.type} onChange={e=>set("type",e.target.value)}><option value="reel">Reel / Post Feed</option><option value="story">Story</option><option value="tiktok">TikTok</option><option value="link">Link Comunidade</option><option value="youtube">YouTube</option><option value="short">Shorts</option></Select></Field>
           <Field label="Título" full><Input value={f.title} onChange={e=>set("title",e.target.value)} placeholder="ex: Reel Amazon Copa #1"/></Field>
-          <Field label="Etapa"><Select value={f.stage||"briefing"} onChange={e=>set("stage",e.target.value)}>{STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</Select></Field>
           <Field label="Data Postagem (D)"><Input type="date" value={f.plannedPostDate} onChange={e=>set("plannedPostDate",e.target.value)}/></Field>
+          <Field label="Responsável (opcional)"><Input value={f.owner||""} onChange={e=>set("owner",e.target.value)} placeholder="ex: Lucas, Leandro"/></Field>
         </div>
-        {f.plannedPostDate&&(<><SRule>Cronograma automático</SRule>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-            {STAGES.filter(s=>s.id!=="done").map(s=>{const auto=stageDates[s.id];const override=f.stageDateOverrides?.[s.id];const dl=daysLeft(override||auto);const exc=validateDeliverable(f).find(e=>e.stage===s.id);return(<div key={s.id} style={{background:exc?`rgba(234,88,12,.06)`:B2,border:`1px solid ${exc?"rgba(234,88,12,.3)":LN}`,borderRadius:8,padding:"10px 12px"}}>
-              <div style={{fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>{s.label}{exc&&<span title={exc.rule} style={{fontSize:ds.font.size.xs,cursor:"help"}}>⚠️</span>}</div>
-              <div style={{fontSize:12,fontWeight:600,color:dl!==null&&dl<0?RED:TX,marginBottom:4}}>{fmtDate(override||auto)}</div>
-              {dl!==null&&<div style={{fontSize:ds.font.size.xs,color:dl<0?RED:dl<=1?AMB:TX3,marginBottom:5}}>{dl<0?`${Math.abs(dl)}d atrás`:dl===0?"Hoje":`${dl}d`}</div>}
-              {exc&&<div style={{fontSize:ds.font.size.xs,color:"#EA580C",fontWeight:600,marginBottom:4}}>{exc.got}d / mín. {exc.need}d</div>}
-              <div style={{fontSize:ds.font.size.xs,color:TX3,marginBottom:4,fontStyle:"italic"}}>{s.rule}</div>
-              <input type="date" value={f.stageDateOverrides?.[s.id]||""} onChange={e=>setF(x=>({...x,stageDateOverrides:{...(x.stageDateOverrides||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:ds.font.size.xs,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX3,fontFamily:"inherit",outline:"none"}}/>
-              <input value={f.responsible?.[s.id]||""} placeholder="Responsável" onChange={e=>setF(x=>({...x,responsible:{...(x.responsible||{}),[s.id]:e.target.value}}))} style={{width:"100%",padding:"3px 5px",fontSize:ds.font.size.xs,background:B1,border:`1px solid ${LN}`,borderRadius:4,color:TX,fontFamily:"inherit",outline:"none",marginTop:4}}/>
-            </div>);})}</div></>)}
+        <SRule>Checklist de produção</SRule>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {(() => {
+            const checks = effectiveChecks(f);
+            const next = nextStep(checks);
+            const today = new Date().toISOString().slice(0,10);
+            return CHECK_STEPS.map(s => {
+              const checked = !!checks[s.id];
+              const deadline = checklistStepDeadline(f.plannedPostDate, s.id);
+              const late = !checked && deadline && deadline < today;
+              const checkedAt = typeof checks[s.id] === "string" ? checks[s.id] : null;
+              return (
+                <label key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",
+                  background:checked?"rgba(34,197,94,.06)":late?"rgba(200,16,46,.05)":next?.id===s.id?"rgba(37,99,235,.05)":B2,
+                  border:`1px solid ${checked?"rgba(34,197,94,.35)":late?"rgba(200,16,46,.3)":next?.id===s.id?"rgba(37,99,235,.3)":LN}`}}>
+                  <input type="checkbox" checked={checked} onChange={()=>setF(x=>toggleCheck(x, s.id, today))}
+                    style={{width:16,height:16,accentColor:"#16A34A",cursor:"pointer",flexShrink:0}}/>
+                  <span style={{fontSize:12,fontWeight:600,color:checked?"#15803D":TX,flex:1,textDecoration:checked?"line-through":"none"}}>{s.label}</span>
+                  {checkedAt&&<span style={{fontSize:ds.font.size.xs,color:TX3}}>feito em {fmtDate(checkedAt)}</span>}
+                  {!checked&&deadline&&<span style={{fontSize:ds.font.size.xs,fontWeight:late?700:400,color:late?RED:TX3}}>{late?"atrasado · ":""}prazo {fmtDate(deadline)}</span>}
+                </label>
+              );
+            });
+          })()}
+          {f.revisionCount>0&&<div style={{fontSize:ds.font.size.xs,color:"#B45309",marginTop:2}}>✏️ {f.revisionCount} revis{f.revisionCount>1?"ões":"ão"} solicitada{f.revisionCount>1?"s":""} (aprovação desmarcada)</div>}
+        </div>
         {(f.stage==="postagem"||f.stage==="done")&&(<><SRule>Publicação</SRule>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <Field label="Link"><Input value={f.postLink||""} onChange={e=>set("postLink",e.target.value)} placeholder="https://instagram.com/p/..."/></Field>
@@ -2608,19 +2355,24 @@ Responda APENAS com o JSON.` }]
           {/* Pipeline summary */}
           {cDeliverables.length>0 && (
             <div style={{ ...G, padding:"16px 18px" }}>
-              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Pipeline de Produção</div>
+              <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:12 }}>Produção (checklist)</div>
               {cDeliverables.map(d => {
-                const stage = STAGES.find(s=>s.id===d.stage);
-                const dl2 = d.plannedPostDate&&stage ? daysLeft(addDays(d.plannedPostDate,stage.days)) : null;
-                const isDone = d.stage==="done";
-                const isLate = !isDone&&!d.publishedAt&&!d.postLink&&dl2!==null&&dl2<0;
+                const checks = effectiveChecks(d);
+                const prog = checklistProgress(checks);
+                const next = nextStep(checks);
+                const isDone = prog.done === prog.total;
+                const todayLoc = new Date().toISOString().slice(0,10);
+                const isLate = !isDone && d.plannedPostDate && d.plannedPostDate < todayLoc;
                 return (
                   <div key={d.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"8px 0",borderBottom:`1px solid ${LN}` }}>
                     <div style={{ width:6,height:6,borderRadius:"50%",background:isDone?GRN:isLate?RED:AMB,flexShrink:0 }}/>
-                    <span style={{ fontSize:12,fontWeight:500,color:isLate?RED:TX,flex:1 }}>{d.title}</span>
-                    <Badge color={isDone?GRN:isLate?RED:TX2}>{stage?.label||d.stage}</Badge>
-                    {d.plannedPostDate&&<span style={{fontSize:ds.font.size.xs,color:TX2}}>post {fmtDate(d.plannedPostDate)}</span>}
-                    {isDone?<span style={{fontSize:ds.font.size.xs,fontWeight:700,color:GRN}}>✓ Entregue</span>:dl2!==null&&<span style={{fontSize:ds.font.size.xs,fontWeight:700,color:dlColor(dl2)}}>{dl2<0?`${Math.abs(dl2)}d atraso`:`${dl2}d`}</span>}
+                    <span style={{ fontSize:12,fontWeight:500,color:isLate?RED:TX,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{d.title}</span>
+                    <div style={{ width:56,height:4,background:LN,borderRadius:2,overflow:"hidden",flexShrink:0 }}>
+                      <div style={{ height:4,width:`${prog.pct}%`,background:isDone?GRN:prog.pct>=50?BLU:AMB,borderRadius:2 }}/>
+                    </div>
+                    <span style={{ fontSize:ds.font.size.xs,fontWeight:700,color:isDone?GRN:TX2,flexShrink:0 }}>{isDone?"✓":`${prog.done}/${prog.total}`}</span>
+                    {!isDone&&next&&<Badge color={isLate?RED:TX2}>{next.label}</Badge>}
+                    {d.plannedPostDate&&<span style={{fontSize:ds.font.size.xs,color:isLate?RED:TX2,flexShrink:0}}>post {fmtDate(d.plannedPostDate)}</span>}
                   </div>
                 );
               })}
@@ -2669,7 +2421,9 @@ Responda APENAS com o JSON.` }]
                     <div><Badge color={TX2}>{stage?.label}</Badge></div>
                     <div style={{ color:TX2 }}>{d.plannedPostDate?fmtDate(d.plannedPostDate):"—"}</div>
                     <div>{d.postLink?<a href={d.postLink} target="_blank" rel="noreferrer" style={{color:RED,fontSize:11}}>↗ Ver post</a>:<span style={{color:TX3,fontSize:11}}>Sem link</span>}</div>
-                    <div style={{ color:d.views>0?TX:TX3 }}>{d.views>0?`${Number(d.views).toLocaleString("pt-BR")} views`:"—"}</div>
+                    {(() => { const v = sumNetworkMetrics(d, "views"); return (
+                      <div style={{ color:v>0?TX:TX3 }}>{v>0?`${v.toLocaleString("pt-BR")} views`:"—"}</div>
+                    ); })()}
                   </div>
                 );
               })}
@@ -7424,11 +7178,30 @@ function AppContent() {
         const userRole = USER_ROLES[user.email] || await getUserRole(user.email);
         setRole(userRole);
         setUserName(ROLE_NAMES[user.email] || user.email.split("@")[0]);
-        const ic=cs.length>0?cs:SEED; const ip=ps.length>0?ps:SEED_POSTS; const id=ds||[]; const ib=bs||[];
-        setC(ic); setP(ip); setD(id); setBrands(ib);
-        prevCIds.current=ic.map(c=>c.id); prevPIds.current=ip.map(p=>p.id); prevDIds.current=id.map(d=>d.id); prevBIds.current=ib.map(b=>b.id);
+        const ic=cs.length>0?cs:SEED; const id=ds||[]; const ib=bs||[];
+
+        // ── Migração one-time: posts (modelo legado) → deliverables ─────────
+        // Unifica os dois modelos: cada post vira um deliverable concluído
+        // (ou aguardando postagem). Os docs originais em `posts` permanecem
+        // no Firestore como backup, mas somem da UI (posts fica []).
+        let effD = id;
+        try {
+          const migFlag = await getSetting("posts_migrated_v1");
+          if (!migFlag) {
+            const nowIso = new Date().toISOString();
+            const newDelivs = migratePosts(ps || [], id, nowIso);
+            if (newDelivs.length > 0) {
+              effD = [...id, ...newDelivs];
+              await syncDeliverables(effD, id.map(d=>d.id), new Set(newDelivs.map(d=>d.id)));
+              console.log(`[migração] ${newDelivs.length} posts convertidos em deliverables`);
+            }
+            await setSetting("posts_migrated_v1", { at: nowIso, migrated: newDelivs.length });
+          }
+        } catch(e) { console.error("[migração posts→deliverables]", e); }
+
+        setC(ic); setP([]); setD(effD); setBrands(ib);
+        prevCIds.current=ic.map(c=>c.id); prevPIds.current=(ps||[]).map(p=>p.id); prevDIds.current=effD.map(d=>d.id); prevBIds.current=ib.map(b=>b.id);
         if(cs.length===0) await syncContracts(ic,[]);
-        if(ps.length===0&&SEED_POSTS.length>0) await syncPosts(ip,[]);
         setSyncStatus("ok");
         // Run brand migration once — idempotent, guarded by localStorage flag
         runBrandsMigration({
@@ -7437,11 +7210,12 @@ function AppContent() {
           saveContracts: async c => { setC(c);      await syncContracts(c, ic.map(x=>x.id)); },
           uid,
         }).catch(e => console.error('[brands] migration failed', e));
-      } catch(err) { console.error(err); setSyncStatus("error"); setC(SEED); setP(SEED_POSTS); }
+      } catch(err) { console.error(err); setSyncStatus("error"); setC(SEED); setP([]); }
       try {
         unsub = subscribeToChanges({
           onContracts:    cs => { setC(cs);  prevCIds.current = cs.map(c => c.id); setSyncStatus("ok"); },
-          onPosts:        ps => { setP(ps);  prevPIds.current = ps.map(p => p.id); },
+          // posts: modelo legado migrado para deliverables — ignora updates remotos
+          onPosts:        ps => { prevPIds.current = ps.map(p => p.id); },
           onDeliverables: ds => { setD(ds);  prevDIds.current = ds.map(d => d.id); },
           onError: (_source, _err) => { setSyncStatus("error"); },
         });
@@ -7687,7 +7461,9 @@ function AppContent() {
         {modal && (
           <div>
             {modal.type==="contract"&&<ContractModal modal={{...modal,saveDeliverables:saveD,existingDeliverables:deliverables}} setModal={setModal} contracts={contracts} saveC={saveC} brands={brands}/>}
-            {modal.type==="post"    &&<PostModal modal={modal} setModal={setModal} contracts={contracts} posts={posts} saveP={saveP}/>}
+            {modal.type==="post"    &&<DeliverableModal item={null} contracts={contracts} allDeliverables={deliverables} brands={brands}
+              onClose={()=>setModal(null)}
+              onSave={item=>{ saveD([...deliverables, { ...item, id: uid(), checks: item.checks || {}, createdAt: new Date().toISOString() }]); setModal(null); }}/>}
           </div>
         )}
         {showInvite && <UserInviteModal onClose={()=>setShowInvite(false)}/>}

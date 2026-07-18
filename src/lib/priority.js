@@ -101,3 +101,65 @@ export function topPriorityItems(deliverables, limit = 7, today = new Date()) {
     .sort((a, b) => b._score - a._score)
     .slice(0, limit);
 }
+
+/**
+ * "Foco de hoje" em grupos autoexplicativos (substitui o score numérico
+ * na exibição — priorityScore continua disponível para ordenação interna).
+ *
+ * Grupos, em ordem (cada item entra apenas no primeiro que casar):
+ *   atrasados  — data de postagem já passou
+ *   hoje       — posta hoje
+ *   aguardando — bola com a marca (ap_roteiro / ap_final)
+ *   semana     — posta nos próximos 7 dias
+ *   semData    — em produção mas sem data de postagem definida
+ *
+ * @param {object[]} deliverables
+ * @param {Date} [today]
+ * @returns {Array<{id:string,label:string,items:object[]}>} só grupos não vazios
+ */
+export function groupFocus(deliverables, today = new Date()) {
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const todayIso = iso(t);
+  const weekEnd = new Date(t); weekEnd.setDate(weekEnd.getDate() + 7);
+  const weekEndIso = iso(weekEnd);
+
+  const buckets = {
+    atrasados:  [],
+    hoje:       [],
+    aguardando: [],
+    semana:     [],
+    semData:    [],
+  };
+
+  for (const d of deliverables) {
+    if (!d || d.stage === "done") continue;
+    const date = d.plannedPostDate || null;
+    if (!date) {
+      if (AWAITING_APPROVAL.has(d.stage)) buckets.aguardando.push(d);
+      else buckets.semData.push(d);
+    } else if (date < todayIso) {
+      buckets.atrasados.push(d);
+    } else if (date === todayIso) {
+      buckets.hoje.push(d);
+    } else if (AWAITING_APPROVAL.has(d.stage)) {
+      buckets.aguardando.push(d);
+    } else if (date <= weekEndIso) {
+      buckets.semana.push(d);
+    }
+  }
+
+  const byDate = (a, b) => (a.plannedPostDate || "9999").localeCompare(b.plannedPostDate || "9999");
+  Object.values(buckets).forEach(list => list.sort(byDate));
+
+  const META = [
+    { id: "atrasados",  label: "Atrasados" },
+    { id: "hoje",       label: "Posta hoje" },
+    { id: "aguardando", label: "Aguardando marca" },
+    { id: "semana",     label: "Esta semana" },
+    { id: "semData",    label: "Sem data definida" },
+  ];
+  return META
+    .filter(m => buckets[m.id].length > 0)
+    .map(m => ({ ...m, items: buckets[m.id] }));
+}

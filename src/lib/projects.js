@@ -167,6 +167,57 @@ export function projectAggregateTx(projects) {
 }
 
 /**
+ * Gastos agrupados por categoria, ordenados do maior para o menor.
+ * @param {object} project
+ * @returns {Array<{category:string, totalBRL:number, totalUSD:number,
+ *                  count:number, pct:number}>} pct = % do total do projeto
+ */
+export function categoryBreakdown(project) {
+  const list = Array.isArray(project?.expenses) ? project.expenses : [];
+  const byCat = new Map();
+  let grand = 0;
+  for (const e of list) {
+    const cat = e.category || "Sem categoria";
+    const brl = expenseBRL(e);
+    grand += brl;
+    if (!byCat.has(cat)) byCat.set(cat, { category: cat, totalBRL: 0, totalUSD: 0, count: 0 });
+    const c = byCat.get(cat);
+    c.totalBRL = round2(c.totalBRL + brl);
+    if (e.currency === "USD") c.totalUSD = round2(c.totalUSD + toAmount(e.amount));
+    c.count += 1;
+  }
+  return [...byCat.values()]
+    .sort((a, b) => b.totalBRL - a.totalBRL)
+    .map((c) => ({ ...c, pct: grand > 0 ? Math.round((c.totalBRL / grand) * 1000) / 10 : 0 }));
+}
+
+/**
+ * Evolução mensal do gasto do projeto (todas as origens de pagamento).
+ * @param {object} project
+ * @returns {Array<{ym:string, label:string, totalBRL:number, count:number}>}
+ *          ordenado cronologicamente; meses sem gasto não aparecem.
+ */
+export function monthlySpend(project) {
+  const MONTHS_PT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const list = Array.isArray(project?.expenses) ? project.expenses : [];
+  const byMonth = new Map();
+  for (const e of list) {
+    if (!e.date || typeof e.date !== "string" || e.date.length < 7) continue;
+    const ym = e.date.slice(0, 7);
+    if (!byMonth.has(ym)) byMonth.set(ym, { ym, totalBRL: 0, count: 0 });
+    const m = byMonth.get(ym);
+    m.totalBRL = round2(m.totalBRL + expenseBRL(e));
+    m.count += 1;
+  }
+  return [...byMonth.values()]
+    .sort((a, b) => a.ym.localeCompare(b.ym))
+    .map((m) => {
+      const [y, mo] = m.ym.split("-");
+      return { ...m, label: `${MONTHS_PT[parseInt(mo, 10) - 1]}/${y.slice(2)}` };
+    });
+}
+
+/**
  * Marca como reembolsados os gastos pendentes de uma pessoa e devolve o
  * projeto atualizado + o valor total. NÃO cria a transação de caixa — o
  * chamador decide (para poder escolher data/descrição).

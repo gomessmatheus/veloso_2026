@@ -16,6 +16,7 @@ import { useState, useMemo } from "react";
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon } from "../../ui/index.js";
 import {
   PROJECT_PAYERS, expenseBRL, projectTotals, reimbursementSummary,
+  categoryBreakdown, monthlySpend,
 } from "../../lib/projects.js";
 import { readCache, fetchRates } from "../../lib/fx.js";
 
@@ -255,6 +256,67 @@ function SettleModal({ project, person, totalBRL, count, onClose, onConfirm }) {
 }
 
 // ─── Detalhe do projeto ───────────────────────────────────
+// ─── Dash de análise do projeto ───────────────────────────
+function ProjectAnalytics({ project, hid }) {
+  const cats   = useMemo(() => categoryBreakdown(project), [project]);
+  const months = useMemo(() => monthlySpend(project), [project]);
+  if (!cats.length) return null;
+
+  const maxCat   = cats[0]?.totalBRL || 1;
+  const maxMonth = Math.max(...months.map(m => m.totalBRL), 1);
+  // Mesma paleta do card "Saídas por Categoria" do Caixa: saturação ∝ valor
+  const barColor = (v) => `hsl(355,${Math.round(30 + (v / maxCat) * 45)}%,45%)`;
+
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:10, marginBottom:16 }}>
+      {/* Por categoria */}
+      <div style={{ ...G, padding:"16px 20px" }}>
+        <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:12 }}>Gastos por Categoria</div>
+        {cats.map(c => (
+          <div key={c.category} style={{ marginBottom:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", fontSize:12, marginBottom:4, gap:8 }}>
+              <span style={{ color:TX, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {c.category} <span style={{ color:TX3, fontSize:ds.font.size.xs }}>({c.count})</span>
+              </span>
+              <span style={{ flexShrink:0 }}>
+                <strong style={{ color:TX }}>{hid(fmtBRL(c.totalBRL))}</strong>
+                <span style={{ color:TX3, fontSize:ds.font.size.xs, marginLeft:6 }}>{c.pct}%</span>
+              </span>
+            </div>
+            <div style={{ height:5, background:LN, borderRadius:3, overflow:"hidden" }}>
+              <div title={`${c.pct}% do total do projeto${c.totalUSD>0?` · inclui ${fmtUSD(c.totalUSD)}`:""}`}
+                style={{ height:5, borderRadius:3, background:barColor(c.totalBRL), width:`${(c.totalBRL/maxCat)*100}%`, transition:"width .3s" }}/>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Por mês */}
+      {months.length > 0 && (
+        <div style={{ ...G, padding:"16px 20px", display:"flex", flexDirection:"column" }}>
+          <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:12 }}>Gasto por Mês</div>
+          <div style={{ display:"flex", alignItems:"flex-end", gap:10, flex:1, minHeight:120, paddingTop:18 }}>
+            {months.map(m => (
+              <div key={m.ym} title={`${m.label} · ${fmtBRL(m.totalBRL)} · ${m.count} gasto${m.count>1?"s":""}`}
+                style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, minWidth:34, maxWidth:88 }}>
+                <span style={{ fontSize:ds.font.size.xs, fontWeight:700, color:TX2, whiteSpace:"nowrap" }}>{hid(fmtBRL(m.totalBRL))}</span>
+                <div style={{ width:"100%", height:96, display:"flex", alignItems:"flex-end" }}>
+                  <div style={{ width:"100%", height:`${Math.max(6,(m.totalBRL/maxMonth)*100)}%`, background:`linear-gradient(180deg, ${RED}CC, ${RED})`, borderRadius:"6px 6px 2px 2px", transition:"height .3s" }}/>
+                </div>
+                <span style={{ fontSize:ds.font.size.xs, color:TX3 }}>{m.label}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:10 }}>
+            Média: <strong style={{ color:TX2 }}>{hid(fmtBRL(Math.round(months.reduce((s,m)=>s+m.totalBRL,0)/months.length)))}</strong>/mês
+            {months.length>1 && <> · {months.length} meses</>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursementTx, valuesHidden, toast }) {
   const [expModal, setExpModal] = useState(null);   // null | {} | expense
   const [editProj, setEditProj] = useState(false);
@@ -348,6 +410,9 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
           ))}
         </div>
       )}
+
+      {/* Análise: categorias + evolução mensal */}
+      {expenses.length > 0 && <ProjectAnalytics project={project} hid={hid}/>}
 
       {/* Lista de gastos */}
       {expenses.length === 0 ? (

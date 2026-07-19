@@ -104,7 +104,7 @@ export function WeekTimeline({ today, days, deliverables, contracts, isMobile,
   return (
     <div style={{ ...G, padding: isMobile ? ds.space[4] : `${ds.space[5]} ${ds.space[6]}` }}>
       <div style={{ marginBottom: ds.space[3] }}>
-        <div style={{ fontSize:9, fontWeight: ds.font.weight.semibold, letterSpacing:"0.12em",
+        <div style={{ fontSize:ds.font.size.xs, fontWeight: ds.font.weight.semibold, letterSpacing:"0.12em",
           color: ds.color.neutral[400], textTransform:"uppercase" }}>
           Linha do tempo da semana
         </div>

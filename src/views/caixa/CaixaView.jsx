@@ -749,7 +749,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:12 }}>
             <div>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Compromissos futuros · Parcelamentos</div>
-              <div style={{ fontSize:22,fontWeight:800,color:RED }}>{valuesHidden ? "••••••" : (fmtMoney(totalFutureDebt))}</div>
+              <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:800,color:RED }}>{valuesHidden ? "••••••" : (fmtMoney(totalFutureDebt))}</div>
               <div style={{ fontSize:11,color:TX3,marginTop:2 }}>total comprometido em parcelas futuras</div>
             </div>
             <DsIcon name="calendar" size={20} color={ds.color.neutral[400]}/>
@@ -822,7 +822,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
             {/* Liquidez */}
             <div title="Liquidez = Saldo atual ÷ Despesa mensal média. Atenção < 3x · Regular 3–6x · Excelente > 6x." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${liquidez===null?LN:kpiColor(liquidez,3,1.5)}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Liquidez</div>
-              <div style={{ fontSize:22,fontWeight:700,color:liquidez===null?TX3:kpiColor(liquidez,3,1.5) }}>
+              <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:liquidez===null?TX3:kpiColor(liquidez,3,1.5) }}>
                 {liquidez===null?"—":`${fmt1(liquidez)}x`}
               </div>
               <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>meses de runway</div>
@@ -834,7 +834,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
             {/* Margem de Lucro */}
             <div title="Margem Líquida = Lucro Líquido ÷ Receita. Atenção < 10% · Regular 10–20% · Excelente > 20%." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${margemLucro===null?LN:kpiColor(margemLucro,30,10)}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Margem Líquida</div>
-              <div style={{ fontSize:22,fontWeight:700,color:margemLucro===null?TX3:kpiColor(margemLucro,30,10) }}>
+              <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:margemLucro===null?TX3:kpiColor(margemLucro,30,10) }}>
                 {margemLucro===null?"—":`${fmt1(margemLucro)}%`}
               </div>
               <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>lucro ÷ receita</div>
@@ -846,7 +846,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
             {/* ROI Operacional */}
             <div title="ROI Operacional = (Receita − Custos) ÷ Custos. Atenção < 50% · Regular 50–100% · Excelente > 100%." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${roi===null?LN:kpiColor(roi,50,20)}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>ROI Operacional</div>
-              <div style={{ fontSize:22,fontWeight:700,color:roi===null?TX3:kpiColor(roi,50,20) }}>
+              <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:roi===null?TX3:kpiColor(roi,50,20) }}>
                 {roi===null?"—":`${fmt1(roi)}%`}
               </div>
               <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>retorno sobre custos</div>
@@ -858,7 +858,7 @@ function CaixaDash({ transactions, baseBalance, saldoTotal, activePeriod, values
             {/* Burn Rate */}
             <div title="Burn Rate = média de saídas mensais (meses com movimento). Quanto menor, melhor para runway." style={{ ...G,padding:"14px 16px",borderTop:`3px solid ${BLU}` }}>
               <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Burn Rate</div>
-              <div style={{ fontSize:22,fontWeight:700,color:TX }}>{valuesHidden ? "••••••" : (fmtMoney(burnRate))}</div>
+              <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:TX }}>{valuesHidden ? "••••••" : (fmtMoney(burnRate))}</div>
               <div style={{ fontSize:ds.font.size.xs,color:TX2,marginTop:3 }}>saídas/mês (média)</div>
               <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>base {monthlyData.length} meses</div>
             </div>
@@ -1115,7 +1115,7 @@ function IndicadoresFinanceiros({ transactions, baseBalance, saldoTotal, contrac
                   {ind.good===true&&<span style={{ fontSize:ds.font.size.xs,color:GRN,flexShrink:0,marginLeft:6 }}>✓</span>}
                   {ind.good===false&&<span style={{ fontSize:ds.font.size.xs,color:RED,flexShrink:0,marginLeft:6 }}>⚠</span>}
                 </div>
-                <div style={{ fontSize:20,fontWeight:700,color:ind.color,lineHeight:1,marginBottom:4 }}>{ind.value}</div>
+                <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:20,fontWeight:700,color:ind.color,lineHeight:1,marginBottom:4 }}>{ind.value}</div>
                 <div style={{ fontSize:ds.font.size.xs,color:TX3,lineHeight:1.4 }}>{ind.desc}</div>
               </div>
             ))}
@@ -1668,7 +1668,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     <div style={{ padding:"24px 28px", maxWidth:"min(1280px, calc(100% - 48px))" }}>
       <div style={{ marginBottom:20 }}>
         <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:4 }}>
-          <h1 style={{ fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
+          <h1 style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:TX,letterSpacing:"-.02em" }}>Controle Financeiro</h1>
           <span style={{ fontSize:ds.font.size.xs,padding:"3px 8px",borderRadius:99,background:`${RED}15`,color:RED,fontWeight:700 }}>ADMIN</span>
           {/* Sync status chip — Task 4 */}
           {(() => {
@@ -1711,7 +1711,7 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${saldoTotal>=0?TX:RED}` }}>
           <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saldo Total</div>
-          <div style={{ fontSize:22,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{valuesHidden ? "••••••" : fmtMoney(saldoTotal)}</div>
+          <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:saldoTotal>=0?TX:RED }}>{valuesHidden ? "••••••" : fmtMoney(saldoTotal)}</div>
           <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>
             base + realizados
             {futureSaidas>0&&<span style={{ color:AMB,marginLeft:6 }}>· −{valuesHidden ? "••••••" : fmtMoney(futureSaidas)} comprometido</span>}
@@ -1719,17 +1719,17 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${GRN}` }}>
           <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Entradas realizadas</div>
-          <div style={{ fontSize:22,fontWeight:700,color:GRN }}>{valuesHidden ? "••••••" : fmtMoney(totalEntradas)}</div>
+          <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:GRN }}>{valuesHidden ? "••••••" : fmtMoney(totalEntradas)}</div>
           {futureEntradas>0&&<div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:2 }}>+{valuesHidden ? "••••••" : fmtMoney(futureEntradas)} a receber</div>}
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid ${RED}` }}>
           <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Saídas realizadas</div>
-          <div style={{ fontSize:22,fontWeight:700,color:RED }}>{valuesHidden ? "••••••" : fmtMoney(totalSaidas)}</div>
+          <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:RED }}>{valuesHidden ? "••••••" : fmtMoney(totalSaidas)}</div>
           {futureSaidas>0&&<div style={{ fontSize:ds.font.size.xs,color:AMB,marginTop:2 }}>{valuesHidden ? "••••••" : fmtMoney(futureSaidas)} agendado</div>}
         </div>
         <div style={{ ...G,padding:"16px 18px",borderLeft:`3px solid #7C3AED` }}>
           <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:4 }}>Dividendos realizados</div>
-          <div style={{ fontSize:22,fontWeight:700,color:"#7C3AED" }}>{valuesHidden ? "••••••" : fmtMoney(totalDividendos)}</div>
+          <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22,fontWeight:700,color:"#7C3AED" }}>{valuesHidden ? "••••••" : fmtMoney(totalDividendos)}</div>
         </div>
       </div>
 
@@ -2114,7 +2114,7 @@ function SaldoBaseEditor({ baseBalance, baseDate, onSave, valuesHidden }) {
       <div style={{ flex:1 }}>
         <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX2,marginBottom:2 }}>Saldo Base (ponto de partida)</div>
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:16,fontWeight:700,color:TX }}>{fmtMoney(Number(baseBalance)||0)}</span>
+          <span style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:16,fontWeight:700,color:TX }}>{fmtMoney(Number(baseBalance)||0)}</span>
           {baseDate&&<span style={{ fontSize:11,color:TX2 }}>em {formatDate(baseDate)}</span>}
           {!baseDate&&<span style={{ fontSize:11,color:TX3 }}>não definido</span>}
         </div>

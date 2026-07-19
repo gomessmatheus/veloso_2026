@@ -300,22 +300,22 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:10, marginBottom:16 }}>
         <div style={{ ...G, padding:"14px 16px", borderLeft:`3px solid ${RED}` }}>
           <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:4 }}>Custo Total</div>
-          <div style={{ fontSize:20, fontWeight:800, color:RED }}>{hid(fmtBRL(totals.totalBRL))}</div>
+          <div style={{ fontFamily:ds.font.display, letterSpacing:"-0.02em", fontSize:20, fontWeight:800, color:RED }}>{hid(fmtBRL(totals.totalBRL))}</div>
           {totals.totalUSD > 0 && <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:2 }}>{hid(fmtUSD(totals.totalUSD))} em gastos USD</div>}
         </div>
         <div style={{ ...G, padding:"14px 16px", borderLeft:`3px solid ${TX}` }}>
           <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:4 }}>Pago pela Empresa</div>
-          <div style={{ fontSize:20, fontWeight:800, color:TX }}>{hid(fmtBRL(totals.companyBRL))}</div>
+          <div style={{ fontFamily:ds.font.display, letterSpacing:"-0.02em", fontSize:20, fontWeight:800, color:TX }}>{hid(fmtBRL(totals.companyBRL))}</div>
           <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:2 }}>entra no caixa como linha agregada</div>
         </div>
         <div style={{ ...G, padding:"14px 16px", borderLeft:`3px solid ${AMB}` }}>
           <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:4 }}>Reembolso Pendente</div>
-          <div style={{ fontSize:20, fontWeight:800, color:totals.pendingBRL>0?AMB:TX3 }}>{hid(fmtBRL(totals.pendingBRL))}</div>
+          <div style={{ fontFamily:ds.font.display, letterSpacing:"-0.02em", fontSize:20, fontWeight:800, color:totals.pendingBRL>0?AMB:TX3 }}>{hid(fmtBRL(totals.pendingBRL))}</div>
           <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:2 }}>pago em cartão pessoal</div>
         </div>
         <div style={{ ...G, padding:"14px 16px", borderLeft:`3px solid ${GRN}` }}>
           <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:4 }}>Reembolsado</div>
-          <div style={{ fontSize:20, fontWeight:800, color:totals.reimbursedBRL>0?GRN:TX3 }}>{hid(fmtBRL(totals.reimbursedBRL))}</div>
+          <div style={{ fontFamily:ds.font.display, letterSpacing:"-0.02em", fontSize:20, fontWeight:800, color:totals.reimbursedBRL>0?GRN:TX3 }}>{hid(fmtBRL(totals.reimbursedBRL))}</div>
           <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:2 }}>{totals.count} gasto{totals.count!==1?"s":""} no projeto</div>
         </div>
       </div>
@@ -480,7 +480,7 @@ export default function ProjectsTab({ projects, onSaveProject, onDeleteProject, 
                   </span>
                 </div>
                 {p.description && <div style={{ fontSize:11, color:TX2, marginBottom:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.description}</div>}
-                <div style={{ fontSize:20, fontWeight:800, color:RED, marginBottom:2 }}>{hid(fmtBRL(t.totalBRL))}</div>
+                <div style={{ fontFamily:ds.font.display, letterSpacing:"-0.02em", fontSize:20, fontWeight:800, color:RED, marginBottom:2 }}>{hid(fmtBRL(t.totalBRL))}</div>
                 <div style={{ fontSize:11, color:TX3 }}>
                   {t.count} gasto{t.count!==1?"s":""}
                   {t.totalUSD > 0 && <> · {hid(fmtUSD(t.totalUSD))} em USD</>}

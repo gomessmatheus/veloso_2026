@@ -2341,7 +2341,7 @@ Responda APENAS com o JSON.` }]
             ].map((k,i) => (
               <div key={i} style={{ ...G, padding: isMob ? "12px 14px" : "16px 18px" }}>
                 <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",color:TX2,marginBottom:6 }}>{k.label}</div>
-                <div style={{ fontSize: isMob ? 16 : 20, fontWeight:700,color:k.accent||TX,lineHeight:1 }}>{k.value}</div>
+                <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize: isMob ? 16 : 20, fontWeight:700,color:k.accent||TX,lineHeight:1 }}>{k.value}</div>
                 {k.sub&&<div style={{fontSize:ds.font.size.xs,color:TX2,marginTop:4}}>{k.sub}</div>}
               </div>
             ))}
@@ -3420,7 +3420,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
 
           return (
             <div key={c.id} onClick={()=>setSelectedId(c.id)}
-              style={{ background:B1, border:`1px solid ${LN}`, borderRadius:14, overflow:"hidden", cursor:"pointer", transition:"all .18s", boxShadow:"0 1px 4px rgba(0,0,0,0.05)", opacity:c.archived?.75:1 }}
+              style={{ background:B1, border:ds.border.thin, borderRadius:ds.radius.xl, overflow:"hidden", cursor:"pointer", transition:"all .18s", boxShadow:ds.shadow.sm, opacity:c.archived?.75:1 }}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=c.color;e.currentTarget.style.boxShadow=`0 4px 16px ${c.color}20`;}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor=LN;e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)";}}>
               <div style={{ height:4, background:`linear-gradient(90deg, ${c.color}, ${c.color}80)` }}/>
@@ -3489,7 +3489,7 @@ function Contratos({ contracts, posts, deliverables=[], saveC, saveP, saveDelive
       </div>
 
       <div className="table-scroll">
-      <div style={{ border:`1px solid ${LN}`, borderRadius:12, overflow:"hidden", background:B1, boxShadow:"0 1px 4px rgba(0,0,0,0.06)", minWidth:1040 }}>
+      <div style={{ border:ds.border.thin, borderRadius:ds.radius.xl, overflow:"hidden", background:B1, boxShadow:ds.shadow.sm, minWidth:1040 }}>
         <div style={{ display:"grid", gridTemplateColumns:"4px minmax(160px,1fr) 150px 120px 140px 132px 78px 78px 78px 84px", background:B2, borderBottom:`1px solid ${LN}`, padding:"11px 0" }}>
           {["","Empresa","Valor","Prazo","Pagamento","Progresso","Posts","Stories","Links",""].map((h,i)=>(
             <div key={i} style={{ padding:"0 12px", fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX2, textAlign:i>=6&&i<=8?"center":"left" }}>{h}</div>
@@ -3762,7 +3762,7 @@ function CalendarView({ contracts, deliverables=[], saveDeliverables, onEditDeli
       </div>
 
       {/* ── Grid ── */}
-      <div style={{border:`1px solid ${LN}`,borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.05)"}}>
+      <div style={{border:ds.border.thin,borderRadius:ds.radius.xl,overflow:"hidden",background:B1,boxShadow:ds.shadow.sm}}>
         {/* Day headers — minmax(0,1fr) impede que conteúdo longo (eventos) alargue colunas */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,minmax(0,1fr))",gap:"1px",background:B2,borderBottom:`1px solid ${LN}`}}>
           {DAY_LABELS.map((d,i)=>(
@@ -4602,12 +4602,12 @@ Escreva em tom profissional, destacando os pontos positivos e o ROI. Máx 3 fras
           <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", opacity:.85, marginBottom:8 }}>Relatório de Performance</div>
           <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
             <div>
-              <div style={{ fontSize:26, fontWeight:800, letterSpacing:"-.02em", lineHeight:1.1 }}>{c.company}</div>
+              <div style={{ fontFamily:ds.font.display, fontSize:26, fontWeight:800, letterSpacing:"-.02em", lineHeight:1.1 }}>{c.company}</div>
               <div style={{ fontSize:12, opacity:.9, marginTop:5 }}>Parceria com @veloso.lucas_ · {today}</div>
             </div>
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:ds.font.size.xs, opacity:.85, textTransform:"uppercase", letterSpacing:".08em" }}>Investimento</div>
-              <div style={{ fontSize:24, fontWeight:800 }}>{fmtMoney(contractValue, c.currency)}</div>
+              <div style={{ fontFamily:ds.font.display, fontSize:24, fontWeight:800 }}>{fmtMoney(contractValue, c.currency)}</div>
               {c.currency!=="BRL"&&<div style={{ fontSize:11, opacity:.85 }}>≈ {fmtMoney(contractBRL)}</div>}
             </div>
           </div>
@@ -4820,7 +4820,7 @@ function MediaKit({ contracts=[], posts=[], deliverables=[], brands=[], navigate
   const Stat = ({ label, value, sub, color }) => (
     <div style={{ background:B1, border:`1px solid ${LN}`, borderRadius:10, padding:"16px", textAlign:"center", breakInside:"avoid" }}>
       <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", color:TX2, marginBottom:8 }}>{label}</div>
-      <div style={{ fontSize:22, fontWeight:800, color:color||TX, lineHeight:1.1, letterSpacing:"-.01em" }}>{value}</div>
+      <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22, fontWeight:800, color:color||TX, lineHeight:1.1, letterSpacing:"-.01em" }}>{value}</div>
       {sub && <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:4 }}>{sub}</div>}
     </div>
   );
@@ -4854,19 +4854,19 @@ function MediaKit({ contracts=[], posts=[], deliverables=[], brands=[], navigate
       <style>{`@media print { body * { visibility:hidden; } .mk-print, .mk-print * { visibility:visible; -webkit-print-color-adjust:exact; print-color-adjust:exact; } .mk-print { position:absolute;left:0;top:0;width:100%; } }`}</style>
 
       <div className="mk-print">
-        <div style={{ background:`linear-gradient(135deg, ${RED}, ${RED}cc)`, borderRadius:12, padding:"24px", marginBottom:20, color:"#fff", display:"flex", alignItems:"center", gap:18 }}>
+        <div style={{ background:`linear-gradient(135deg, ${RED}, ${RED}cc)`, borderRadius:16, padding:"24px", marginBottom:20, color:"#fff", display:"flex", alignItems:"center", gap:18 }}>
           {p.photo
             ? <img src={p.photo} alt="" style={{ width:84, height:84, borderRadius:"50%", objectFit:"cover", border:"3px solid rgba(255,255,255,.55)", flexShrink:0 }}/>
             : <div style={{ width:84, height:84, borderRadius:"50%", background:"rgba(255,255,255,.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, fontWeight:800, flexShrink:0 }}>{(p.name||"?").charAt(0).toUpperCase()}</div>}
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".14em", textTransform:"uppercase", opacity:.85, marginBottom:4 }}>Mídia Kit</div>
-            <div style={{ fontSize:26, fontWeight:800, letterSpacing:"-.02em", lineHeight:1.1 }}>{p.name||"Seu nome"}</div>
+            <div style={{ fontFamily:ds.font.display, fontSize:26, fontWeight:800, letterSpacing:"-.02em", lineHeight:1.1 }}>{p.name||"Seu nome"}</div>
             <div style={{ fontSize:13, opacity:.9, marginTop:3 }}>{[p.handle, p.niche].filter(Boolean).join(" · ")}</div>
           </div>
           {totalFollowers>0 && (
             <div style={{ textAlign:"right", flexShrink:0 }}>
               <div style={{ fontSize:ds.font.size.xs, opacity:.85, textTransform:"uppercase", letterSpacing:".08em" }}>Audiência total</div>
-              <div style={{ fontSize:26, fontWeight:800 }}>{fmtN(totalFollowers)}</div>
+              <div style={{ fontFamily:ds.font.display, fontSize:26, fontWeight:800 }}>{fmtN(totalFollowers)}</div>
             </div>
           )}
         </div>
@@ -5251,7 +5251,7 @@ function ChannelHealth({ posts=[], deliverables=[], navigateTo }) {
           )}
           {chart.length===1 && (
             <div style={{ textAlign:"center", padding:"20px 0" }}>
-              <div style={{ fontSize:28, fontWeight:800, color:TX, letterSpacing:"-.02em" }}>{fmtN(chart[0].total)}</div>
+              <div style={{ fontFamily:ds.font.display, fontSize:28, fontWeight:800, color:TX, letterSpacing:"-.02em" }}>{fmtN(chart[0].total)}</div>
               <div style={{ fontSize:12, color:TX2, marginTop:4 }}>seguidores em {fmtDateLong(chart[0].key)}</div>
               <div style={{ fontSize:12, color:TX3, marginTop:10 }}>Atualize quando puder para ver a evolução.</div>
             </div>
@@ -5588,9 +5588,10 @@ function MobileNav({ view, setView, role, userName, deliverables, contracts }) {
 
   return (
     <div style={{ position:'fixed', bottom:0, left:0, right:0,
-      background:ds.color.neutral[0], borderTop:ds.border.thin,
+      background:"rgba(255,255,255,0.82)", backdropFilter:"blur(16px) saturate(180%)", WebkitBackdropFilter:"blur(16px) saturate(180%)",
+      borderTop:ds.border.thin,
       display:'flex', alignItems:'stretch', zIndex:ds.z.sticky,
-      boxShadow:`0 -1px 0 ${ds.color.neutral[200]}, 0 -4px 16px rgba(15,23,42,0.06)`,
+      boxShadow:`0 -4px 24px rgba(15,23,42,0.06)`,
       paddingBottom:'env(safe-area-inset-bottom,0px)', minHeight:58 }}>
       {NAV_MOB.map(item => {
         const active = view === item.id;
@@ -5839,7 +5840,7 @@ function ComercialOverview({ contracts=[], brands=[], rates, navigateTo }) {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
             {porEstagio.map(s => (
               <div key={s.id} style={{ background:B2, borderRadius:8, padding:"10px 8px", textAlign:"center" }}>
-                <div style={{ fontSize:22, fontWeight:800, color:TX, lineHeight:1 }}>{s.count}</div>
+                <div style={{ fontFamily:ds.font.display,letterSpacing:"-0.02em",fontSize:22, fontWeight:800, color:TX, lineHeight:1 }}>{s.count}</div>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginTop:7 }}>
                   <span style={{ width:7, height:7, borderRadius:"50%", background:s.color, flexShrink:0 }}/>
                   <span style={{ fontSize:ds.font.size.xs, color:TX2, fontWeight:600 }}>{s.label}</span>
@@ -5942,7 +5943,7 @@ function Financeiro({ contracts, posts, deliverables, rates, toggleNF, toggleCom
         ].map((k,i) => (
           <div key={i} style={{ ...G, padding: isMobile?"12px 14px":"16px 18px", flexShrink:0, minWidth:isMobile?140:undefined, flex:isMobile?"none":"1" }}>
             <div style={{ fontSize:ds.font.size.xs,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:TX3,marginBottom:6 }}>{k.label}</div>
-            <div style={{ fontSize:isMobile?18:22,fontWeight:800,color:k.accent||TX,lineHeight:1,letterSpacing:"-.02em" }}>{k.value}</div>
+            <div style={{ fontFamily:ds.font.display,fontSize:isMobile?18:22,fontWeight:800,color:k.accent||TX,lineHeight:1,letterSpacing:"-.02em" }}>{k.value}</div>
             <div style={{ fontSize:ds.font.size.xs,color:TX3,marginTop:4 }}>{k.sub}</div>
           </div>
         ))}
@@ -6351,7 +6352,7 @@ function CotacoesView() {
                 <Overline>{item.label}</Overline>
                 <Sparkline values={item.spark} color={item.color} width={56} height={20}/>
               </div>
-              <div style={{ fontSize:ds.font.size['3xl'], fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>
+              <div style={{ fontFamily:ds.font.display, fontSize:ds.font.size['3xl'], fontWeight:ds.font.weight.bold, color:ds.color.neutral[900], fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em' }}>
                 {formatRate(item.value)}
               </div>
               <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:ds.space[1] }}>

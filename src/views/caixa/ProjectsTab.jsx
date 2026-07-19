@@ -257,7 +257,8 @@ function SettleModal({ project, person, totalBRL, count, onClose, onConfirm }) {
 
 // ─── Detalhe do projeto ───────────────────────────────────
 // ─── Dash de análise do projeto ───────────────────────────
-function ProjectAnalytics({ project, hid }) {
+// Clicar numa barra de categoria filtra a lista de gastos (toggle).
+function ProjectAnalytics({ project, hid, activeCat, onSelectCat }) {
   const cats   = useMemo(() => categoryBreakdown(project), [project]);
   const months = useMemo(() => monthlySpend(project), [project]);
   if (!cats.length) return null;
@@ -271,24 +272,33 @@ function ProjectAnalytics({ project, hid }) {
     <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:10, marginBottom:16 }}>
       {/* Por categoria */}
       <div style={{ ...G, padding:"16px 20px" }}>
-        <div style={{ fontSize:12, fontWeight:700, color:TX, marginBottom:12 }}>Gastos por Categoria</div>
-        {cats.map(c => (
-          <div key={c.category} style={{ marginBottom:10 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", fontSize:12, marginBottom:4, gap:8 }}>
-              <span style={{ color:TX, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                {c.category} <span style={{ color:TX3, fontSize:ds.font.size.xs }}>({c.count})</span>
-              </span>
-              <span style={{ flexShrink:0 }}>
-                <strong style={{ color:TX }}>{hid(fmtBRL(c.totalBRL))}</strong>
-                <span style={{ color:TX3, fontSize:ds.font.size.xs, marginLeft:6 }}>{c.pct}%</span>
-              </span>
+        <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:8, marginBottom:12 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:TX }}>Gastos por Categoria</div>
+          <div style={{ fontSize:ds.font.size.xs, color:TX3 }}>{activeCat ? "clique para limpar" : "clique para filtrar a lista"}</div>
+        </div>
+        {cats.map(c => {
+          const active = activeCat === c.category;
+          const dimmed = activeCat && !active;
+          return (
+            <div key={c.category} onClick={()=>onSelectCat?.(active ? null : c.category)}
+              title={active ? "Limpar filtro" : `Filtrar lista por ${c.category}`}
+              style={{ marginBottom:10, cursor:"pointer", opacity:dimmed?0.4:1, transition:"opacity .15s" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", fontSize:12, marginBottom:4, gap:8 }}>
+                <span style={{ color:TX, fontWeight:active?700:400, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {active ? "▸ " : ""}{c.category} <span style={{ color:TX3, fontSize:ds.font.size.xs }}>({c.count})</span>
+                </span>
+                <span style={{ flexShrink:0 }}>
+                  <strong style={{ color:TX }}>{hid(fmtBRL(c.totalBRL))}</strong>
+                  <span style={{ color:TX3, fontSize:ds.font.size.xs, marginLeft:6 }}>{c.pct}%</span>
+                </span>
+              </div>
+              <div style={{ height:5, background:LN, borderRadius:3, overflow:"hidden" }}>
+                <div title={`${c.pct}% do total do projeto${c.totalUSD>0?` · inclui ${fmtUSD(c.totalUSD)}`:""}`}
+                  style={{ height:5, borderRadius:3, background:barColor(c.totalBRL), width:`${(c.totalBRL/maxCat)*100}%`, transition:"width .3s" }}/>
+              </div>
             </div>
-            <div style={{ height:5, background:LN, borderRadius:3, overflow:"hidden" }}>
-              <div title={`${c.pct}% do total do projeto${c.totalUSD>0?` · inclui ${fmtUSD(c.totalUSD)}`:""}`}
-                style={{ height:5, borderRadius:3, background:barColor(c.totalBRL), width:`${(c.totalBRL/maxCat)*100}%`, transition:"width .3s" }}/>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Por mês */}
@@ -329,6 +339,23 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
     () => [...(project.expenses||[])].sort((a,b) => (b.date||"").localeCompare(a.date||"")),
     [project.expenses]
   );
+
+  // ── Filtros da lista de gastos ──────────────────────────
+  const [expSearch, setExpSearch]     = useState("");
+  const [expPayer, setExpPayer]       = useState("all");   // all | Empresa | Matheus | Lucas
+  const [expCat, setExpCat]           = useState(null);    // null = todas (setado também pelo clique na barra)
+  const [expCurrency, setExpCurrency] = useState("all");   // all | BRL | USD
+
+  const filteredExpenses = useMemo(() =>
+    expenses
+      .filter(e => !expSearch || e.description?.toLowerCase().includes(expSearch.toLowerCase()) || e.notes?.toLowerCase().includes(expSearch.toLowerCase()))
+      .filter(e => expPayer==="all" || (e.paidBy||"Empresa")===expPayer)
+      .filter(e => !expCat || (e.category||"Sem categoria")===expCat)
+      .filter(e => expCurrency==="all" || (e.currency||"BRL")===expCurrency),
+    [expenses, expSearch, expPayer, expCat, expCurrency]
+  );
+  const hasExpFilter = expSearch!=="" || expPayer!=="all" || !!expCat || expCurrency!=="all";
+  const clearExpFilters = () => { setExpSearch(""); setExpPayer("all"); setExpCat(null); setExpCurrency("all"); };
 
   const saveExpense = (exp) => {
     const list = project.expenses || [];
@@ -412,7 +439,45 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
       )}
 
       {/* Análise: categorias + evolução mensal */}
-      {expenses.length > 0 && <ProjectAnalytics project={project} hid={hid}/>}
+      {expenses.length > 0 && <ProjectAnalytics project={project} hid={hid} activeCat={expCat} onSelectCat={setExpCat}/>}
+
+      {/* Filtros da lista de gastos */}
+      {expenses.length > 0 && (
+        <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
+          <input value={expSearch} onChange={e=>setExpSearch(e.target.value)} placeholder="Buscar gasto..."
+            style={{ flex:1, minWidth:150, padding:"7px 12px", fontSize:12, background:B1, border:`1px solid ${LN}`, borderRadius:8, color:TX, fontFamily:"inherit", outline:"none" }}/>
+          <div style={{ display:"flex", gap:4 }}>
+            {["all", ...PROJECT_PAYERS].map(p => (
+              <button key={p} onClick={()=>setExpPayer(p)}
+                style={{ padding:"5px 11px", fontSize:11, fontWeight:expPayer===p?700:400, cursor:"pointer", borderRadius:99, fontFamily:"inherit",
+                  border:`1px solid ${expPayer===p?TX:LN}`, background:expPayer===p?TX:"none", color:expPayer===p?"#fff":TX2, transition:TRANS, whiteSpace:"nowrap" }}>
+                {p==="all"?"Todos":p}
+              </button>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:4 }}>
+            {[["all","R$+US$"],["BRL","R$"],["USD","US$"]].map(([v,l]) => (
+              <button key={v} onClick={()=>setExpCurrency(v)}
+                style={{ padding:"5px 10px", fontSize:11, fontWeight:expCurrency===v?700:400, cursor:"pointer", borderRadius:99, fontFamily:"inherit",
+                  border:`1px solid ${expCurrency===v?BLU:LN}`, background:expCurrency===v?`${BLU}12`:"none", color:expCurrency===v?BLU:TX2, transition:TRANS }}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {expenses.length > 0 && hasExpFilter && (
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, fontSize:12, color:TX2 }}>
+          <span>Mostrando <strong style={{ color:TX }}>{filteredExpenses.length}</strong> de {expenses.length} gastos
+            {expCat && <> · categoria <strong style={{ color:TX }}>{expCat}</strong></>}
+            {filteredExpenses.length > 0 && <> · total <strong style={{ color:RED }}>{hid(fmtBRL(filteredExpenses.reduce((s,e)=>s+expenseBRL(e),0)))}</strong></>}
+          </span>
+          <button onClick={clearExpFilters}
+            style={{ background:"none", border:`1px solid ${LN}`, borderRadius:99, padding:"3px 10px", fontSize:11, fontWeight:600, cursor:"pointer", color:TX2, fontFamily:"inherit" }}>
+            × Limpar
+          </button>
+        </div>
+      )}
 
       {/* Lista de gastos */}
       {expenses.length === 0 ? (
@@ -420,9 +485,13 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
           Nenhum gasto neste projeto.
           <br/><DsButton variant="primary" size="sm" style={{ marginTop:12 }} onClick={()=>setExpModal({})}>+ Adicionar gasto</DsButton>
         </div>
+      ) : filteredExpenses.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"32px 0", color:TX3, fontSize:12 }}>
+          Nenhum gasto com esses filtros.
+        </div>
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-          {expenses.map(e => {
+          {filteredExpenses.map(e => {
             const brl = expenseBRL(e);
             const personal = e.paidBy && e.paidBy !== "Empresa";
             return (
@@ -487,6 +556,8 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
 // ─── Lista de projetos ────────────────────────────────────
 export default function ProjectsTab({ projects, onSaveProject, onDeleteProject, onCreateReimbursementTx, selectedId, onSelect, valuesHidden, toast }) {
   const [newProj, setNewProj] = useState(false);
+  const [projSearch, setProjSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all | ativo | encerrado
   const hid = (v) => valuesHidden ? "••••••" : v;
 
   const selected = projects.find(p => p.id === selectedId) || null;
@@ -501,14 +572,17 @@ export default function ProjectsTab({ projects, onSaveProject, onDeleteProject, 
     );
   }
 
-  const sorted = [...projects].sort((a, b) => {
-    if ((a.status==="encerrado") !== (b.status==="encerrado")) return a.status==="encerrado" ? 1 : -1;
-    return (b.updatedAt||"").localeCompare(a.updatedAt||"");
-  });
+  const sorted = [...projects]
+    .filter(p => statusFilter==="all" || (statusFilter==="encerrado" ? p.status==="encerrado" : p.status!=="encerrado"))
+    .filter(p => !projSearch || p.name?.toLowerCase().includes(projSearch.toLowerCase()) || p.description?.toLowerCase().includes(projSearch.toLowerCase()))
+    .sort((a, b) => {
+      if ((a.status==="encerrado") !== (b.status==="encerrado")) return a.status==="encerrado" ? 1 : -1;
+      return (b.updatedAt||"").localeCompare(a.updatedAt||"");
+    });
 
   return (
     <div>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:16, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:12, flexWrap:"wrap" }}>
         <div>
           <div style={{ fontSize:14, fontWeight:700, color:TX }}>Centros de Custo</div>
           <div style={{ fontSize:11, color:TX2, marginTop:2 }}>
@@ -518,7 +592,31 @@ export default function ProjectsTab({ projects, onSaveProject, onDeleteProject, 
         <DsButton variant="primary" size="sm" onClick={()=>setNewProj(true)} leftIcon={<DsIcon name="plus" size={13} color={ds.color.neutral[0]}/>}>Novo projeto</DsButton>
       </div>
 
-      {sorted.length === 0 ? (
+      {/* Filtros da lista de projetos */}
+      {projects.length > 0 && (
+        <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+          <input value={projSearch} onChange={e=>setProjSearch(e.target.value)} placeholder="Buscar projeto..."
+            style={{ flex:1, minWidth:160, maxWidth:300, padding:"7px 12px", fontSize:12, background:B1, border:`1px solid ${LN}`, borderRadius:8, color:TX, fontFamily:"inherit", outline:"none" }}/>
+          <div style={{ display:"flex", gap:4 }}>
+            {[["all","Todos"],["ativo","Ativos"],["encerrado","Encerrados"]].map(([v,l]) => (
+              <button key={v} onClick={()=>setStatusFilter(v)}
+                style={{ padding:"5px 12px", fontSize:11, fontWeight:statusFilter===v?700:400, cursor:"pointer", borderRadius:99, fontFamily:"inherit",
+                  border:`1px solid ${statusFilter===v?TX:LN}`, background:statusFilter===v?TX:"none", color:statusFilter===v?"#fff":TX2, transition:TRANS }}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {(projSearch!==""||statusFilter!=="all") && (
+            <span style={{ fontSize:11, color:TX3 }}>{sorted.length} de {projects.length}</span>
+          )}
+        </div>
+      )}
+
+      {sorted.length === 0 && projects.length > 0 ? (
+        <div style={{ textAlign:"center", padding:"40px 0", color:TX3, fontSize:12 }}>
+          Nenhum projeto com esses filtros.
+        </div>
+      ) : sorted.length === 0 ? (
         <div style={{ textAlign:"center", padding:"56px 0", color:TX3 }}>
           <div style={{ fontSize:28, marginBottom:10 }}>🗂</div>
           <div style={{ fontSize:13, fontWeight:600, color:TX2, marginBottom:6 }}>Nenhum projeto ainda</div>

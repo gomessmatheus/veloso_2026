@@ -1340,8 +1340,9 @@ function ChecklistRow({ item, contracts, onEdit, onToggle }) {
   );
 }
 
-function ChecklistBoard({ items, contracts, onEdit, onToggle }) {
+function ChecklistBoard({ items, contracts, onEdit, onToggle, forceShowDone = false }) {
   const [showDone, setShowDone] = useState(false);
+  const doneOpen = showDone || forceShowDone;
   const active = items.filter(d => !isDelivDone(d));
   const doneItems = items.filter(isDelivDone)
     .sort((a,b) => (b.publishedAt||b.plannedPostDate||"").localeCompare(a.publishedAt||a.plannedPostDate||""));
@@ -1384,13 +1385,13 @@ function ChecklistBoard({ items, contracts, onEdit, onToggle }) {
 
       {doneItems.length > 0 && (
         <div>
-          <button onClick={() => setShowDone(v=>!v)}
+          <button onClick={() => setShowDone(v=>!v)} disabled={forceShowDone}
             style={{ display:"flex", alignItems:"center", gap:8, width:"100%", background:"none", border:"none",
-                     cursor:"pointer", fontFamily:"inherit", padding:"4px 0", marginBottom:showDone?8:0 }}>
-            <span style={{ fontSize:12, fontWeight:700, color:TX3 }}>{showDone?"▾":"▸"} Concluídos ({doneItems.length})</span>
+                     cursor:forceShowDone?"default":"pointer", fontFamily:"inherit", padding:"4px 0", marginBottom:doneOpen?8:0 }}>
+            <span style={{ fontSize:12, fontWeight:700, color:TX3 }}>{doneOpen?"▾":"▸"} Concluídos ({doneItems.length})</span>
             <div style={{ flex:1, height:1, background:LN }}/>
           </button>
-          {showDone && (
+          {doneOpen && (
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
               {doneItems.map(d => <ChecklistRow key={d.id} item={d} contracts={contracts} onEdit={onEdit} onToggle={onToggle}/>)}
             </div>
@@ -1411,6 +1412,9 @@ export function Acompanhamento({ contracts, posts, deliverables=[], saveDelivera
   const [quickDate, setQuickDate]     = useState(null); // for QuickPostModal from calendar
   const [filter, setFilter]       = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [prodSearch, setProdSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all|atrasados|aguardando|producao|concluidos
+  const [ownerFilter, setOwnerFilter] = useState("all");
   const [dismissedConflicts, setDismissedConflicts] = useState(new Set());
   const toast = useToast();
 
@@ -1443,9 +1447,32 @@ export function Acompanhamento({ contracts, posts, deliverables=[], saveDelivera
     if (stepId === "postado" && updated.checks?.postado) toast?.("Entregue 🎉", "success");
   };
 
+  // Responsáveis existentes (para o filtro)
+  const owners = useMemo(
+    () => [...new Set(deliverables.map(d => d.owner).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),
+    [deliverables]
+  );
+
+  // Status derivado do checklist (mesma semântica dos grupos do Foco de hoje)
+  const statusOf = (d) => {
+    const checks = effectiveChecks(d);
+    const prog = checklistProgress(checks);
+    if (prog.done === prog.total) return "concluidos";
+    const today = localTodayIso();
+    if ((d.plannedPostDate && d.plannedPostDate < today) || overdueSteps(d, today).length > 0) return "atrasados";
+    const stage = d.stage || "roteiro";
+    if (stage === "ap_roteiro" || stage === "ap_final") return "aguardando";
+    return "producao";
+  };
+
   const filtered = deliverables
     .filter(d => filter === "all" || d.contractId === filter)
-    .filter(d => typeFilter === "all" || d.type === typeFilter);
+    .filter(d => typeFilter === "all" || d.type === typeFilter)
+    .filter(d => ownerFilter === "all" || d.owner === ownerFilter)
+    .filter(d => statusFilter === "all" || statusOf(d) === statusFilter)
+    .filter(d => !prodSearch || d.title?.toLowerCase().includes(prodSearch.toLowerCase()) || d.notes?.toLowerCase().includes(prodSearch.toLowerCase()));
+
+  const hasProdFilter = filter!=="all" || typeFilter!=="all" || ownerFilter!=="all" || statusFilter!=="all" || prodSearch!=="";
 
   // Conflict detection: same plannedPostDate
   const postDateCounts = {};
@@ -1532,9 +1559,43 @@ export function Acompanhamento({ contracts, posts, deliverables=[], saveDelivera
         <Btn onClick={() => setNewOpen(true)} variant="primary" size="sm" icon={Plus}>Novo entregável</Btn>
       </div>
 
+      {/* Filtros: busca · status · responsável (aplicam na Lista) */}
+      {view === "pipeline" && (
+        <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+          <input value={prodSearch} onChange={e=>setProdSearch(e.target.value)} placeholder="Buscar entregável..."
+            style={{ flex:1, minWidth:160, maxWidth:280, padding:"7px 12px", fontSize:12, background:B1, border:`1px solid ${LN}`, borderRadius:8, color:TX, fontFamily:"inherit", outline:"none" }}/>
+          <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+            {[["all","Todos"],["atrasados","🔴 Atrasados"],["aguardando","⏳ Aguardando marca"],["producao","🎬 Em produção"],["concluidos","✓ Concluídos"]].map(([v,l]) => (
+              <button key={v} onClick={()=>setStatusFilter(v)}
+                style={{ padding:"5px 12px", fontSize:11, fontWeight:statusFilter===v?700:400, cursor:"pointer", borderRadius:99, fontFamily:"inherit",
+                  border:`1px solid ${statusFilter===v?TX:LN}`, background:statusFilter===v?TX:"none", color:statusFilter===v?"#fff":TX2, transition:TRANS, whiteSpace:"nowrap" }}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {owners.length > 0 && (
+            <select value={ownerFilter} onChange={e=>setOwnerFilter(e.target.value)}
+              style={{ padding:"6px 10px", background:ownerFilter!=="all"?`${BLU}0A`:B1, border:`1px solid ${ownerFilter!=="all"?BLU+"50":LN}`, borderRadius:8, color:ownerFilter!=="all"?BLU:TX2, fontSize:11, fontFamily:"inherit", outline:"none" }}>
+              <option value="all">Todos responsáveis</option>
+              {owners.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          )}
+          {hasProdFilter && (
+            <span style={{ display:"inline-flex", alignItems:"center", gap:8, fontSize:11, color:TX2 }}>
+              {filtered.length} de {deliverables.length}
+              <button onClick={()=>{ setProdSearch(""); setStatusFilter("all"); setOwnerFilter("all"); setFilter("all"); setTypeFilter("all"); }}
+                style={{ background:"none", border:`1px solid ${LN}`, borderRadius:99, padding:"3px 10px", fontSize:11, fontWeight:600, cursor:"pointer", color:TX2, fontFamily:"inherit" }}>
+                × Limpar
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Lista com checklist por entregável */}
       {view === "pipeline" && (
-        <ChecklistBoard items={filtered} contracts={contracts} onEdit={setEditItem} onToggle={toggleStep}/>
+        <ChecklistBoard items={filtered} contracts={contracts} onEdit={setEditItem} onToggle={toggleStep}
+          forceShowDone={statusFilter==="concluidos"}/>
       )}
 
       {/* Calendar view */}

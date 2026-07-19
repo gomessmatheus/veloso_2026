@@ -1436,6 +1436,13 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
   });
   const [search, setSearch] = useQueryState("caixa_q", "");
   const [filterType2, setFilterType2] = useQueryState("caixa_tipo", "all");
+  const [filterCat, setFilterCat] = useQueryState("caixa_cat", "all");
+  const [filterReemb, setFilterReemb] = useQueryState("caixa_reemb", "all", {
+    parse: (v) => ["all","pendente","reembolsado"].includes(v) ? v : null,
+  });
+  const [sortBy, setSortBy] = useQueryState("caixa_ord", "data_desc", {
+    parse: (v) => ["data_desc","data_asc","valor_desc","valor_asc"].includes(v) ? v : null,
+  });
   // toast comes as a prop from ViewRenderer (bypasses lazy module context boundary)
   const toast = toastProp ?? null;
 
@@ -1631,14 +1638,34 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     allTx.filter(t => t.date >= period.from && t.date <= period.to),
     [allTx, period.from, period.to]
   );
+  // Categorias existentes nos lançamentos do período (para o select)
+  const periodCategories = useMemo(() =>
+    [...new Set(periodTx.map(t => t.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),
+    [periodTx]
+  );
+
+  const SORTERS = {
+    data_desc:  (a,b) => (b.date||"").localeCompare(a.date||""),
+    data_asc:   (a,b) => (a.date||"").localeCompare(b.date||""),
+    valor_desc: (a,b) => (Number(b.amount)||0) - (Number(a.amount)||0),
+    valor_asc:  (a,b) => (Number(a.amount)||0) - (Number(b.amount)||0),
+  };
+
   const monthTx = useMemo(() =>
     periodTx
       .filter(t => filterType2==="all" || t.type===filterType2)
+      .filter(t => filterCat==="all" || t.category===filterCat)
+      .filter(t => {
+        if (filterReemb==="all") return true;
+        if (filterReemb==="pendente")    return t.reembolsavel && !t.reembolsado;
+        if (filterReemb==="reembolsado") return t.reembolsavel && t.reembolsado;
+        return true;
+      })
       .filter(t => !search || t.description?.toLowerCase().includes(search.toLowerCase()) || t.category?.toLowerCase().includes(search.toLowerCase()) || t.notes?.toLowerCase().includes(search.toLowerCase()))
       .filter(t => !minVal || Number(t.amount) >= Number(minVal))
       .filter(t => !maxVal || Number(t.amount) <= Number(maxVal))
-      .sort((a,b) => b.date.localeCompare(a.date)),
-    [periodTx, filterType2, search, minVal, maxVal]
+      .sort(SORTERS[sortBy] || SORTERS.data_desc),
+    [periodTx, filterType2, filterCat, filterReemb, sortBy, search, minVal, maxVal]
   );
 
   const totalDoMes  = periodTx;
@@ -1813,6 +1840,28 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
               ))}
             </div>
           </div>
+          {/* Filtros secundários: categoria · reembolso · ordenação */}
+          <div style={{ display:"flex",gap:8,marginBottom:12,flexWrap:"wrap" }}>
+            <select value={filterCat} onChange={e=>setFilterCat(e.target.value)}
+              style={{ padding:"6px 10px",fontSize:12,background:filterCat!=="all"?`${BLU}0A`:B1,border:`1px solid ${filterCat!=="all"?BLU+"50":LN}`,borderRadius:8,color:filterCat!=="all"?BLU:TX2,fontFamily:"inherit",outline:"none",maxWidth:220 }}>
+              <option value="all">Todas as categorias</option>
+              {periodCategories.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={filterReemb} onChange={e=>setFilterReemb(e.target.value)}
+              style={{ padding:"6px 10px",fontSize:12,background:filterReemb!=="all"?`${AMB}0C`:B1,border:`1px solid ${filterReemb!=="all"?AMB+"60":LN}`,borderRadius:8,color:filterReemb!=="all"?AMB:TX2,fontFamily:"inherit",outline:"none" }}>
+              <option value="all">Reembolso: todos</option>
+              <option value="pendente">↩ A reembolsar</option>
+              <option value="reembolsado">✓ Reembolsados</option>
+            </select>
+            <div style={{ flex:1 }}/>
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
+              style={{ padding:"6px 10px",fontSize:12,background:B1,border:`1px solid ${LN}`,borderRadius:8,color:TX2,fontFamily:"inherit",outline:"none" }}>
+              <option value="data_desc">Mais recentes</option>
+              <option value="data_asc">Mais antigos</option>
+              <option value="valor_desc">Maior valor</option>
+              <option value="valor_asc">Menor valor</option>
+            </select>
+          </div>
           {/* ── Period nav ────────────────────────────────── */}
           <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
             {/* ‹ prev */}
@@ -1880,8 +1929,8 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
             <div role="status" aria-live="polite">
               Mostrando <strong style={{ color:TX }}>{monthTx.length}</strong> de {totalDoMes.length} lançamentos
             </div>
-            {(search!==""||minVal!==""||maxVal!==""||filterType2!=="all") && (
-              <button onClick={()=>{ setSearch(""); setMinVal(""); setMaxVal(""); setFilterType2("all"); }}
+            {(search!==""||minVal!==""||maxVal!==""||filterType2!=="all"||filterCat!=="all"||filterReemb!=="all") && (
+              <button onClick={()=>{ setSearch(""); setMinVal(""); setMaxVal(""); setFilterType2("all"); setFilterCat("all"); setFilterReemb("all"); }}
                 style={{ background:"none",border:`1px solid ${LN}`,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",color:TX2,transition:"all .15s" }}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=TX2}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=LN}>

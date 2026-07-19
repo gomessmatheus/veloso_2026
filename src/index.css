@@ -86,7 +86,39 @@
     box-sizing: border-box;
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    @apply text-foreground;
+    background: #F6F7F9;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3 {
+    font-family: 'Sora', 'Inter', system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 }
+
+/* ─── Utilitário: fonte display (títulos/números fora de h1-h3) ── */
+.font-display { font-family: 'Sora', 'Inter', system-ui, sans-serif; letter-spacing: -0.02em; }
+
+/* ─── Polimentos globais (migrados de globals.css, que era morto) ── */
+button, a, [role="button"] { cursor: pointer; }
+input, select, textarea { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+input[type="date"]::-webkit-calendar-picker-indicator { opacity: .5; }
+::placeholder { color: #A6AFBC; }
+a { color: #C8102E; }
+
+:focus-visible {
+  outline: 2px solid rgba(200, 16, 46, 0.45);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: rgba(15,23,42,.14); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(15,23,42,.26); }
+
+::selection { background: rgba(200,16,46,.14); }

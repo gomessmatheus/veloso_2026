@@ -66,9 +66,10 @@ export const theme = {
 
   // ── TYPOGRAPHY ───────────────────────────────────────────
   font: {
-    // TODO: carregar Inter. Por ora system-ui é o que renderiza.
-    sans: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
-    mono: '"JetBrains Mono", ui-monospace, monospace',
+    // Inter (corpo) e Sora (títulos/números) carregadas via <link> no index.html.
+    sans:    '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+    display: '"Sora", "Inter", system-ui, sans-serif',
+    mono:    '"JetBrains Mono", ui-monospace, monospace',
 
     size: {
       xs:   '11px',
@@ -82,7 +83,7 @@ export const theme = {
       '4xl':'36px',
       '5xl':'48px',
     },
-    weight: { regular: 400, medium: 500, semibold: 600 },
+    weight: { regular: 400, medium: 500, semibold: 600, bold: 700, extrabold: 800 },
     lineHeight: { tight: 1.2, normal: 1.4, relaxed: 1.55 },
     letterSpacing: {
       tight:    '-0.01em', // headings
@@ -111,28 +112,30 @@ export const theme = {
   },
 
   // ── RADIUS ───────────────────────────────────────────────
+  // Repaginação 2026-07: cantos mais generosos (clean & minimal).
   radius: {
     none: '0px',
-    sm:   '4px',   // chips, badges
-    md:   '6px',   // botões, inputs
-    lg:   '8px',   // cards
-    xl:   '12px',  // modais, painéis
+    sm:   '6px',   // chips, badges
+    md:   '8px',   // botões, inputs
+    lg:   '12px',  // cards
+    xl:   '16px',  // modais, painéis
     full: '999px', // pills, avatares
   },
 
   // ── ELEVATION ────────────────────────────────────────────
+  // Sombras em camadas, bem suaves — cartões "flutuam" sem borda pesada.
   shadow: {
     none:  'none',
-    xs:    '0 1px 2px rgba(15,23,42,0.06)',
-    sm:    '0 4px 8px rgba(15,23,42,0.06)',
-    md:    '0 12px 24px rgba(15,23,42,0.08)',
-    lg:    '0 24px 48px rgba(15,23,42,0.10)',
-    panel: '-12px 0 32px rgba(15,23,42,0.08)', // painel Copiloto
+    xs:    '0 1px 2px rgba(15,23,42,0.04)',
+    sm:    '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.05)',
+    md:    '0 2px 4px rgba(15,23,42,0.04), 0 16px 40px rgba(15,23,42,0.08)',
+    lg:    '0 4px 8px rgba(15,23,42,0.05), 0 28px 64px rgba(15,23,42,0.12)',
+    panel: '-12px 0 40px rgba(15,23,42,0.10)', // painel Copiloto
   },
 
   // ── BORDERS ──────────────────────────────────────────────
   border: {
-    thin:   '1px solid #E2E8F0',  // neutral.200
+    thin:   '1px solid #EBEFF4',  // mais leve que neutral.200 — quase invisível
     medium: '1px solid #CBD5E1',  // neutral.300
     focus:  '2px solid #C8102E',  // brand.500
   },

@@ -752,7 +752,7 @@ function LoginPage() {
 
       {/* Logo */}
       <div style={{ marginBottom:ds.space[10], textAlign:'center', position:'relative' }}>
-        <div style={{ fontSize:ds.font.size.sm, fontWeight:ds.font.weight.semibold, letterSpacing:'0.2em', textTransform:'uppercase', color:ds.color.neutral[900] }}>
+        <div style={{ fontFamily:ds.font.display, fontSize:ds.font.size.lg, fontWeight:ds.font.weight.extrabold, letterSpacing:'0.14em', textTransform:'uppercase', color:ds.color.neutral[900] }}>
           ENTRE<span style={{ color:ds.color.brand[500] }}>GAS</span>
         </div>
         <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:ds.space[2], letterSpacing:'0.04em' }}>
@@ -762,9 +762,9 @@ function LoginPage() {
 
       {/* Card */}
       <DsCard padding="lg" elevation="sm" bordered={false}
-        style={{ width:'100%', maxWidth:380, margin:`0 ${ds.space[3]}` }}>
+        style={{ width:'100%', maxWidth:380, margin:`0 ${ds.space[3]}`, position:'relative', borderRadius:ds.radius.xl }}>
         <div style={{ marginBottom:ds.space[6] }}>
-          <div style={{ fontSize:ds.font.size.xl, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:'-0.02em', marginBottom:ds.space[1] }}>
+          <div style={{ fontFamily:ds.font.display, fontSize:ds.font.size.xl, fontWeight:ds.font.weight.bold, color:ds.color.neutral[900], letterSpacing:'-0.02em', marginBottom:ds.space[1] }}>
             Entrar na plataforma
           </div>
           <div style={{ fontSize:ds.font.size.sm, color:ds.color.neutral[500] }}>
@@ -883,7 +883,7 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
     }}>
       {/* Logo */}
       <div style={{ padding:`${ds.space[5]} ${ds.space[4]}`, borderBottom:ds.border.thin, flexShrink:0 }}>
-        <div style={{ fontSize:ds.font.size.sm, fontWeight:ds.font.weight.semibold, letterSpacing:'0.16em', textTransform:'uppercase', color:ds.color.neutral[900] }}>
+        <div style={{ fontFamily:ds.font.display, fontSize:ds.font.size.md, fontWeight:ds.font.weight.extrabold, letterSpacing:'0.12em', textTransform:'uppercase', color:ds.color.neutral[900] }}>
           ENTRE<span style={{ color:ds.color.brand[500] }}>GAS</span>
         </div>
         <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:ds.space[1] }}>
@@ -932,8 +932,8 @@ function Sidebar({ view, setView, user, onSignOut, onInvite, onlineUsers, contra
                       borderRadius:ds.radius.md, cursor:'pointer', marginBottom:2, outline:'none',
                       fontSize:ds.font.size.sm,
                       fontWeight:active?ds.font.weight.semibold:ds.font.weight.regular,
-                      color:active?ds.color.brand[500]:ds.color.neutral[500],
-                      background:active?`${ds.color.brand[500]}0D`:'transparent', borderLeft:active?`2px solid ${ds.color.brand[500]}`:'2px solid transparent', marginLeft:`-${ds.space[2]}`, paddingLeft:ds.space[3],
+                      color:active?ds.color.neutral[900]:ds.color.neutral[500],
+                      background:active?ds.color.neutral[100]:'transparent',
                       transition:`background ${ds.motion.fast}, color ${ds.motion.fast}` }}
                     onMouseEnter={e=>{ if(!active){e.currentTarget.style.background=ds.color.neutral[50];e.currentTarget.style.color=ds.color.neutral[700];} }}
                     onMouseLeave={e=>{ if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.color=ds.color.neutral[500];} }}>
@@ -1019,7 +1019,7 @@ function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobil
       background:"rgba(255,255,255,0.72)", backdropFilter:"blur(16px) saturate(180%)", WebkitBackdropFilter:"blur(16px) saturate(180%)", flexShrink:0,
       position:'sticky', top:0, zIndex:ds.z.sticky, boxShadow:ds.shadow.xs }}>
       <div style={{ flex:1 }}>
-        <div style={{ fontWeight:ds.font.weight.semibold, fontSize:ds.font.size.sm, letterSpacing:'0.14em', textTransform:'uppercase', color:ds.color.neutral[900], lineHeight:1 }}>
+        <div style={{ fontFamily:ds.font.display, fontWeight:ds.font.weight.extrabold, fontSize:ds.font.size.sm, letterSpacing:'0.12em', textTransform:'uppercase', color:ds.color.neutral[900], lineHeight:1 }}>
           ENTRE<span style={{ color:ds.color.brand[500] }}>GAS</span>
         </div>
         {userName && <div style={{ fontSize:ds.font.size.xs, color:ds.color.neutral[400], marginTop:2 }}>{userName}</div>}
@@ -1040,7 +1040,7 @@ function TopBar({ view, onNewContract, onNewPost, onNewTask, syncStatus, isMobil
     <div style={{ height:48, background:"rgba(255,255,255,0.72)", backdropFilter:"blur(16px) saturate(180%)", WebkitBackdropFilter:"blur(16px) saturate(180%)", borderBottom:ds.border.thin,
       display:'flex', alignItems:'center', padding:`0 ${ds.space[5]}`, gap:ds.space[3],
       flexShrink:0, position:'sticky', top:0, zIndex:ds.z.sticky }}>
-      <div style={{ fontSize:ds.font.size.md, fontWeight:ds.font.weight.semibold, color:ds.color.neutral[900], letterSpacing:'-0.01em' }}>
+      <div style={{ fontFamily:ds.font.display, fontSize:ds.font.size.md, fontWeight:ds.font.weight.bold, color:ds.color.neutral[900], letterSpacing:'-0.02em' }}>
         {title}
       </div>
       <div style={{ flex:1 }}/>
@@ -7434,8 +7434,8 @@ function AppContent() {
   // App
   return (
     <ToastProvider>
-      <div style={{ display:"flex", minHeight:"100vh", background:"linear-gradient(150deg, #EEF1F9 0%, #F4F1F6 45%, #E9EFF6 100%)", fontFamily:ds.font.sans, fontSize:ds.font.size.base, color:ds.color.neutral[900] }}>
-        {/* Globals CSS is imported via src/styles/globals.css → main.jsx */}
+      <div style={{ display:"flex", minHeight:"100vh", background:"#F6F7F9", fontFamily:ds.font.sans, fontSize:ds.font.size.base, color:ds.color.neutral[900] }}>
+        {/* CSS global: src/index.css (fontes, reset, scrollbar) via main.jsx */}
         {!isMobile && <Sidebar view={view} setView={setView} user={user} onSignOut={()=>signOut(auth)} onInvite={()=>setShowInvite(true)} onlineUsers={onlineUsers} contracts={contracts} role={role} userName={userName} deliverables={deliverables}/>}
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <TopBar view={view}

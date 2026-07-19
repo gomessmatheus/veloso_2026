@@ -42,8 +42,8 @@ export function WeekHeader({ today, weekStart, weekEnd, weekDone, weekTotal,
 
       {/* Título */}
       <div style={{ marginBottom: ds.space[4] }}>
-        <div style={{ fontSize: isMobile ? ds.font.size.lg : ds.font.size.xl,
-          fontWeight: ds.font.weight.semibold, color: ds.color.neutral[900],
+        <div style={{ fontFamily: ds.font.display, fontSize: isMobile ? ds.font.size.lg : ds.font.size["2xl"],
+          fontWeight: ds.font.weight.bold, color: ds.color.neutral[900],
           letterSpacing: "-0.02em" }}>
           {weekLabel}
         </div>

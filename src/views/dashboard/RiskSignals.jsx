@@ -21,7 +21,7 @@ const RED  = "#C8102E";
 const GRN  = "#16A34A";
 const AMB  = "#D97706";
 const BLU  = "#2563EB";
-const G    = { background:"#FFFFFF", border:"1px solid #E2E8F0", borderRadius:12, boxShadow:"0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06)" };
+const G    = { background:"#FFFFFF", border:"1px solid #EBEFF4", borderRadius:16, boxShadow:"0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.05)" };
 const TRANS = "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)";
 
 const SEVERITY_BORDER = {

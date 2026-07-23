@@ -20,7 +20,7 @@ import {
 import CaixaGate from "./CaixaGate.jsx";
 import ProjectsTab from "./ProjectsTab.jsx";
 import {
-  projectAggregateTx, settleReimbursement,
+  projectAggregateTx,
   PROJECT_CATEGORY, REIMBURSEMENT_CATEGORY,
 } from "../../lib/projects.js";
 import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as DsIcon, Input as DsInput, Card as DsCard, Modal as DsModal, Toggle as DsToggle, Select as DsSelect } from "../../ui/index.js";
@@ -1535,11 +1535,11 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
     };
   }, [flushProjSync]);
 
-  // ── Pagar reembolso: marca gastos como reembolsados e cria a saída real ──
-  const createReimbursementTx = useCallback((project, person, dateIso) => {
-    const { project: updated, totalBRL, count } = settleReimbursement(project, person, dateIso);
-    if (totalBRL <= 0) return;
-    saveProject(updated);
+  // ── Pagar reembolso: recebe o projeto já liquidado pelo modal (por
+  //    gastos selecionados ou valor personalizado) e cria a saída real ──
+  const createReimbursementTx = useCallback(({ project, person, dateIso, totalBRL, note }) => {
+    if (!(totalBRL > 0)) return;
+    saveProject(project);
     const tx = {
       id: uid(),
       type: "saida",
@@ -1548,10 +1548,10 @@ export default function Caixa({ contracts, openCopilot, role = "admin", syncStat
       category: REIMBURSEMENT_CATEGORY,
       amount: totalBRL,
       projectId: project.id,
-      notes: `Reembolso de ${count} gasto${count > 1 ? "s" : ""} do projeto`,
+      notes: note || "Reembolso de gastos do projeto",
     };
     saveTx([...transactions, tx]);
-    toast?.(`Reembolso de ${person} registrado como saída no caixa`, "success");
+    toast?.(`Reembolso de ${fmtMoney(totalBRL)} para ${person} registrado no caixa`, "success");
   }, [saveProject, saveTx, transactions, toast]);
 
   const updateBase = async (val, date) => {

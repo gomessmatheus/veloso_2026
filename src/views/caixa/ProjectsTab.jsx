@@ -17,6 +17,7 @@ import { theme as ds, Button as DsButton, IconButton as DsIconButton, Icon as Ds
 import {
   PROJECT_PAYERS, expenseBRL, projectTotals, reimbursementSummary,
   categoryBreakdown, monthlySpend,
+  pendingOf, reimbursedOf, settleExpenses, allocateReimbursement,
 } from "../../lib/projects.js";
 import { readCache, fetchRates } from "../../lib/fx.js";
 
@@ -225,6 +226,41 @@ function ExpenseModal({ initial, onClose, onSave }) {
           )}
         </Field>
 
+        {/* Status do reembolso — permite corrigir manualmente (ex: desfazer engano) */}
+        {isEdit && f.paidBy !== "Empresa" && (
+          <div style={{ background:B2, border:`1px solid ${LN}`, borderRadius:8, padding:"12px 14px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+              <div>
+                <div style={{ fontSize:12, fontWeight:700, color:TX }}>Reembolso deste gasto</div>
+                <div style={{ fontSize:11, color:TX3, marginTop:2 }}>
+                  {f.reimbursed
+                    ? `Marcado como reembolsado${f.reimbursedAt?` em ${fmtDate(f.reimbursedAt)}`:""}`
+                    : (Number(f.reimbursedAmountBRL)||0) > 0
+                    ? `Parcialmente reembolsado: ${fmtBRL(Number(f.reimbursedAmountBRL)||0)}`
+                    : "Ainda não reembolsado"}
+                </div>
+              </div>
+              <button onClick={()=>{
+                setF(x=>{
+                  const { reimbursedAmountBRL, ...rest } = x; // remove parcial (undefined quebraria o Firestore)
+                  return (x.reimbursed || (Number(reimbursedAmountBRL)||0) > 0)
+                    ? { ...rest, reimbursed:false, reimbursedAt:null }
+                    : { ...rest, reimbursed:true, reimbursedAt:todayIso() };
+                });
+              }}
+                style={{ padding:"6px 12px", fontSize:11, fontWeight:700, cursor:"pointer", borderRadius:6, fontFamily:"inherit", whiteSpace:"nowrap",
+                  background:(f.reimbursed||(Number(f.reimbursedAmountBRL)||0)>0)?`${AMB}10`:`${GRN}10`,
+                  border:`1px solid ${(f.reimbursed||(Number(f.reimbursedAmountBRL)||0)>0)?AMB+"40":GRN+"40"}`,
+                  color:(f.reimbursed||(Number(f.reimbursedAmountBRL)||0)>0)?AMB:GRN }}>
+                {(f.reimbursed||(Number(f.reimbursedAmountBRL)||0)>0) ? "↩ Desfazer reembolso" : "✓ Marcar reembolsado"}
+              </button>
+            </div>
+            <div style={{ fontSize:ds.font.size.xs, color:TX3, marginTop:8 }}>
+              Corrigir aqui NÃO altera lançamentos de reembolso já criados no caixa — ajuste/exclua a saída na aba Lançamentos se necessário.
+            </div>
+          </div>
+        )}
+
         <Field label="Notas (opcional)">
           <input style={inputStyle} value={f.notes||""} onChange={e=>set("notes", e.target.value)} placeholder="Informações adicionais"/>
         </Field>
@@ -234,19 +270,149 @@ function ExpenseModal({ initial, onClose, onSave }) {
 }
 
 // ─── Modal: pagar reembolso ───────────────────────────────
-function SettleModal({ project, person, totalBRL, count, onClose, onConfirm }) {
+function SettleModal({ project, person, onClose, onConfirm }) {
+  const fmtFull = (v) => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v||0);
   const [date, setDate] = useState(todayIso());
+  const [mode, setMode] = useState("gastos"); // gastos | valor
+  const [amount, setAmount] = useState("");
+
+  // Gastos pendentes da pessoa, do mais antigo para o mais novo
+  const pending = useMemo(() =>
+    (project.expenses||[])
+      .filter(e => e.paidBy === person && pendingOf(e) > 0)
+      .sort((a,b) => (a.date||"9999").localeCompare(b.date||"9999")),
+    [project.expenses, person]
+  );
+  const totalPending = pending.reduce((s,e)=>s+pendingOf(e), 0);
+
+  const [selected, setSelected] = useState(() => new Set(pending.map(e=>e.id)));
+  const toggleSel = (id) => setSelected(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
+  });
+  const selectedTotal = pending.filter(e=>selected.has(e.id)).reduce((s,e)=>s+pendingOf(e), 0);
+
+  // Preview da alocação FIFO no modo valor
+  const amountNum = Math.min(Number(amount)||0, totalPending);
+  const preview = useMemo(() => {
+    if (mode!=="valor" || !(amountNum>0)) return [];
+    return allocateReimbursement(project, person, amountNum, date).applied;
+  }, [mode, amountNum, project, person, date]);
+
+  const effectiveTotal = mode==="gastos" ? selectedTotal : amountNum;
+  const canConfirm = effectiveTotal > 0;
+
+  const confirm = () => {
+    if (!canConfirm) return;
+    if (mode==="gastos") {
+      const { project: updated, totalBRL, count } = settleExpenses(project, [...selected], date);
+      onConfirm({ project: updated, person, dateIso: date, totalBRL,
+        note: `Reembolso de ${count} gasto${count>1?"s":""} do projeto` });
+    } else {
+      const { project: updated, totalBRL, applied } = allocateReimbursement(project, person, amountNum, date);
+      const partial = applied.find(a=>!a.fully);
+      onConfirm({ project: updated, person, dateIso: date, totalBRL,
+        note: `Reembolso parcial — cobre ${applied.filter(a=>a.fully).length} gasto(s)${partial?" + parte de 1":""}` });
+    }
+  };
+
   return (
-    <Modal title="Registrar Reembolso" onClose={onClose} width={420}
+    <Modal title={`Registrar Reembolso · ${person}`} onClose={onClose} width={540}
       footer={<>
         <DsButton variant="ghost" size="sm" onClick={onClose}>Cancelar</DsButton>
-        <DsButton variant="primary" size="sm" onClick={()=>onConfirm(date)}>Confirmar pagamento</DsButton>
+        <DsButton variant="primary" size="sm" onClick={confirm} disabled={!canConfirm}>
+          {canConfirm ? `Confirmar ${fmtFull(effectiveTotal)}` : "Confirmar pagamento"}
+        </DsButton>
       </>}>
-      <div style={{ fontSize:13, color:TX, lineHeight:1.6, marginBottom:14 }}>
-        Marcar <strong>{count} gasto{count>1?"s":""}</strong> de <strong>{person}</strong> no projeto <strong>{project.name}</strong> como reembolsado{count>1?"s":""}, no total de <strong style={{ color:RED }}>{new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(totalBRL)}</strong>.
+
+      {/* Modo */}
+      <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+        {[["gastos","Selecionar gastos"],["valor","Valor personalizado"]].map(([v,l]) => (
+          <button key={v} onClick={()=>setMode(v)}
+            style={{ flex:1, padding:"8px 12px", fontSize:12, fontWeight:mode===v?700:400, cursor:"pointer", borderRadius:8, fontFamily:"inherit",
+              border:`1.5px solid ${mode===v?TX:LN}`, background:mode===v?TX:"none", color:mode===v?"#fff":TX2, transition:TRANS }}>
+            {l}
+          </button>
+        ))}
       </div>
+
+      {mode==="gastos" && (
+        <>
+          <div style={{ fontSize:11, color:TX2, marginBottom:8 }}>
+            Desmarque o que ainda NÃO foi reembolsado. Pendente total: <strong style={{ color:AMB }}>{fmtFull(totalPending)}</strong>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:260, overflowY:"auto", marginBottom:14 }}>
+            {pending.map(e => {
+              const pend = pendingOf(e);
+              const partial = reimbursedOf(e) > 0;
+              const on = selected.has(e.id);
+              return (
+                <label key={e.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", borderRadius:8, cursor:"pointer",
+                  background:on?"rgba(34,197,94,.05)":B2, border:`1px solid ${on?"rgba(34,197,94,.3)":LN}` }}>
+                  <input type="checkbox" checked={on} onChange={()=>toggleSel(e.id)}
+                    style={{ width:15, height:15, accentColor:GRN, cursor:"pointer", flexShrink:0 }}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:TX, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.description}</div>
+                    <div style={{ fontSize:ds.font.size.xs, color:TX2 }}>
+                      {fmtDate(e.date)}{e.category?` · ${e.category}`:""}
+                      {partial && <span style={{ color:AMB }}> · já pago {fmtFull(reimbursedOf(e))} de {fmtFull(expenseBRL(e))}</span>}
+                    </div>
+                  </div>
+                  <span style={{ fontSize:12, fontWeight:700, color:on?TX:TX3, flexShrink:0 }}>{fmtFull(pend)}</span>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:14, padding:"8px 12px", background:B2, borderRadius:8 }}>
+            <span style={{ color:TX2 }}>{selected.size} de {pending.length} gasto{pending.length>1?"s":""} selecionado{selected.size!==1?"s":""}</span>
+            <strong style={{ color:RED }}>{fmtFull(selectedTotal)}</strong>
+          </div>
+        </>
+      )}
+
+      {mode==="valor" && (
+        <>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:10, alignItems:"end", marginBottom:10 }}>
+            <Field label={`Valor pago (pendente: ${fmtFull(totalPending)})`}>
+              <input type="number" min="0" step="0.01" style={inputStyle} value={amount} autoFocus
+                onChange={e=>setAmount(e.target.value)} placeholder="0,00"/>
+            </Field>
+            <button onClick={()=>setAmount(String(totalPending))}
+              style={{ padding:"9px 12px", fontSize:11, fontWeight:700, cursor:"pointer", borderRadius:8, background:`${BLU}10`, border:`1px solid ${BLU}30`, color:BLU, fontFamily:"inherit", whiteSpace:"nowrap" }}>
+              Tudo
+            </button>
+          </div>
+          {Number(amount) > totalPending && (
+            <div style={{ fontSize:11, color:AMB, marginBottom:10 }}>
+              ⚠ Valor acima do pendente — será limitado a {fmtFull(totalPending)}.
+            </div>
+          )}
+          {preview.length > 0 && (
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:ds.font.size.xs, fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", color:TX3, marginBottom:6 }}>
+                Como será abatido (do gasto mais antigo para o mais novo)
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                {preview.map(a => {
+                  const e = pending.find(x=>x.id===a.id);
+                  return (
+                    <div key={a.id} style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:12, padding:"6px 12px", background:B2, borderRadius:6 }}>
+                      <span style={{ color:TX, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                        {a.fully ? "✓" : "◐"} {e?.description}
+                      </span>
+                      <span style={{ flexShrink:0, color:a.fully?GRN:AMB, fontWeight:700 }}>
+                        {fmtFull(a.amount)}{!a.fully && <span style={{ color:TX3, fontWeight:400 }}> de {fmtFull(pendingOf(e))}</span>}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       <div style={{ fontSize:11, color:TX2, background:B2, border:`1px solid ${LN}`, borderRadius:8, padding:"8px 12px", marginBottom:14 }}>
-        Será criada uma saída no caixa (categoria "Reembolso de Projeto") na data escolhida — é ela que representa o dinheiro saindo da empresa.
+        Será criada uma saída no caixa (categoria "Reembolso de Projeto") no valor confirmado — é ela que representa o dinheiro saindo da empresa.
       </div>
       <Field label="Data do pagamento">
         <input type="date" style={inputStyle} value={date} onChange={e=>setDate(e.target.value)}/>
@@ -428,7 +594,7 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
                 </div>
               </div>
               {r.pendingBRL > 0 && (
-                <button onClick={()=>setSettle({ person:r.person, totalBRL:r.pendingBRL, count:r.pendingCount })}
+                <button onClick={()=>setSettle({ person:r.person })}
                   style={{ padding:"6px 12px", fontSize:11, fontWeight:700, cursor:"pointer", borderRadius:6, background:`${GRN}10`, border:`1px solid ${GRN}40`, color:GRN, fontFamily:"inherit", whiteSpace:"nowrap" }}>
                   ✓ Registrar reembolso
                 </button>
@@ -508,6 +674,8 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
                     {personal && (
                       e.reimbursed
                         ? <span style={{ color:GRN, fontWeight:700, fontSize:ds.font.size.xs, padding:"1px 8px", borderRadius:99, background:`${GRN}12`, border:`1px solid ${GRN}30` }} title={e.reimbursedAt?`Reembolsado em ${fmtDate(e.reimbursedAt)}`:"Reembolsado"}>✓ {e.paidBy} reembolsado</span>
+                        : reimbursedOf(e) > 0
+                        ? <span style={{ color:AMB, fontWeight:700, fontSize:ds.font.size.xs, padding:"1px 8px", borderRadius:99, background:`${AMB}12`, border:`1px solid ${AMB}30` }} title={`Já reembolsado ${hid(fmtBRL(reimbursedOf(e)))} de ${hid(fmtBRL(brl))}`}>◐ {e.paidBy} · falta {hid(fmtBRL(pendingOf(e)))}</span>
                         : <span style={{ color:AMB, fontWeight:700, fontSize:ds.font.size.xs, padding:"1px 8px", borderRadius:99, background:`${AMB}12`, border:`1px solid ${AMB}30` }}>↩ Reembolsar {e.paidBy}</span>
                     )}
                     {e.notes && <span style={{ color:TX3 }}>· {e.notes}</span>}
@@ -545,9 +713,9 @@ function ProjectDetail({ project, onBack, onUpdate, onDelete, onCreateReimbursem
         <ProjectModal initial={project} onClose={()=>setEditProj(false)} onSave={(p)=>{ onUpdate(p); setEditProj(false); }}/>
       )}
       {settle && (
-        <SettleModal project={project} person={settle.person} totalBRL={settle.totalBRL} count={settle.count}
+        <SettleModal project={project} person={settle.person}
           onClose={()=>setSettle(null)}
-          onConfirm={(date)=>{ onCreateReimbursementTx(project, settle.person, date); setSettle(null); }}/>
+          onConfirm={(payload)=>{ onCreateReimbursementTx(payload); setSettle(null); }}/>
       )}
     </div>
   );

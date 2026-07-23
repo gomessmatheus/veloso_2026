@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   expenseBRL, projectTotals, reimbursementSummary,
-  projectAggregateTx, settleReimbursement,
+  projectAggregateTx, settleExpenses, allocateReimbursement, pendingOf, reimbursedOf,
   categoryBreakdown, monthlySpend,
   PROJECT_CATEGORY, AGGREGATE_TX_PREFIX,
 } from "../projects.js";
@@ -159,23 +159,73 @@ describe("monthlySpend", () => {
   });
 });
 
-describe("settleReimbursement", () => {
-  it("marca pendentes da pessoa e retorna total", () => {
-    const project = {
-      id: "p1",
-      expenses: [
-        exp({ id: "a", amount: 100, paidBy: "Matheus" }),
-        exp({ id: "b", currency: "USD", amount: 10, fxRate: 5, paidBy: "Matheus" }),
-        exp({ id: "c", amount: 70, paidBy: "Lucas" }),
-        exp({ id: "d", amount: 30, paidBy: "Matheus", reimbursed: true, reimbursedAt: "2026-06-01" }),
-      ],
-    };
-    const { project: updated, totalBRL, count } = settleReimbursement(project, "Matheus", "2026-07-18");
-    expect(totalBRL).toBe(150);
+describe("reembolso por gasto e parcial", () => {
+  const project = () => ({
+    id: "p1",
+    expenses: [
+      exp({ id: "a", date: "2026-06-01", amount: 100, paidBy: "Matheus" }),
+      exp({ id: "b", date: "2026-06-10", currency: "USD", amount: 10, fxRate: 5, paidBy: "Matheus" }), // 50
+      exp({ id: "c", date: "2026-06-05", amount: 70, paidBy: "Lucas" }),
+      exp({ id: "d", date: "2026-05-01", amount: 30, paidBy: "Matheus", reimbursed: true, reimbursedAt: "2026-06-01" }),
+    ],
+  });
+
+  it("pendingOf/reimbursedOf com parcial", () => {
+    const e = exp({ amount: 100, paidBy: "Lucas", reimbursedAmountBRL: 40 });
+    expect(reimbursedOf(e)).toBe(40);
+    expect(pendingOf(e)).toBe(60);
+    expect(pendingOf(exp({ amount: 100, paidBy: "Empresa" }))).toBe(0);
+    expect(reimbursedOf(exp({ amount: 100, paidBy: "Lucas", reimbursed: true }))).toBe(100);
+    // parcial acima do valor é limitado ao valor do gasto
+    expect(reimbursedOf(exp({ amount: 100, paidBy: "Lucas", reimbursedAmountBRL: 999 }))).toBe(100);
+  });
+
+  it("settleExpenses liquida só os ids escolhidos", () => {
+    const { project: updated, totalBRL, count } = settleExpenses(project(), ["a", "c"], "2026-07-18");
+    expect(totalBRL).toBe(170);
     expect(count).toBe(2);
     expect(updated.expenses.find((e) => e.id === "a").reimbursed).toBe(true);
-    expect(updated.expenses.find((e) => e.id === "a").reimbursedAt).toBe("2026-07-18");
-    expect(updated.expenses.find((e) => e.id === "c").reimbursed).toBe(false);
-    expect(updated.expenses.find((e) => e.id === "d").reimbursedAt).toBe("2026-06-01");
+    expect(updated.expenses.find((e) => e.id === "c").reimbursed).toBe(true);
+    expect(updated.expenses.find((e) => e.id === "b").reimbursed).toBeFalsy();
+  });
+
+  it("settleExpenses desconta parcial já pago e limpa o campo", () => {
+    const p = { expenses: [exp({ id: "x", amount: 100, paidBy: "Lucas", reimbursedAmountBRL: 40 })] };
+    const { project: updated, totalBRL } = settleExpenses(p, ["x"], "2026-07-18");
+    expect(totalBRL).toBe(60);
+    const x = updated.expenses[0];
+    expect(x.reimbursed).toBe(true);
+    expect(x.reimbursedAmountBRL).toBeUndefined();
+  });
+
+  it("allocateReimbursement cobre FIFO e deixa parcial no último", () => {
+    const { project: updated, totalBRL, applied } = allocateReimbursement(project(), "Matheus", 120, "2026-07-18");
+    // FIFO por data: a (01/06, 100) integral; b (10/06, 50) parcial de 20
+    expect(totalBRL).toBe(120);
+    expect(applied).toEqual([
+      { id: "a", amount: 100, fully: true },
+      { id: "b", amount: 20, fully: false },
+    ]);
+    const b = updated.expenses.find((e) => e.id === "b");
+    expect(b.reimbursed).toBeFalsy();
+    expect(b.reimbursedAmountBRL).toBe(20);
+    expect(pendingOf(b)).toBe(30);
+    // resumo por pessoa reflete o parcial
+    const sum = reimbursementSummary(updated).find((s) => s.person === "Matheus");
+    expect(sum.pendingBRL).toBe(30);
+    expect(sum.reimbursedBRL).toBe(150); // 100 (a) + 20 (b parcial) + 30 (d)
+  });
+
+  it("allocateReimbursement limita ao pendente total", () => {
+    const { totalBRL, applied } = allocateReimbursement(project(), "Matheus", 9999, "2026-07-18");
+    expect(totalBRL).toBe(150); // a(100) + b(50); d já estava pago
+    expect(applied.every((x) => x.fully)).toBe(true);
+  });
+
+  it("projectTotals considera parciais", () => {
+    const { project: updated } = allocateReimbursement(project(), "Matheus", 120, "2026-07-18");
+    const t = projectTotals(updated);
+    expect(t.pendingBRL).toBe(100); // 30 (b) + 70 (c Lucas)
+    expect(t.reimbursedBRL).toBe(150);
   });
 });

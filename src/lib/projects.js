@@ -72,6 +72,28 @@ export function expenseBRL(e) {
  *   count: number,
  * }}
  */
+/**
+ * Quanto de um gasto pessoal já foi reembolsado (em BRL).
+ * Suporta reembolso PARCIAL via e.reimbursedAmountBRL.
+ * @param {object} e expense
+ */
+export function reimbursedOf(e) {
+  if (!e || !e.paidBy || e.paidBy === "Empresa") return 0;
+  const brl = expenseBRL(e);
+  if (e.reimbursed) return brl;
+  const partial = Number(e.reimbursedAmountBRL) || 0;
+  return round2(Math.min(Math.max(partial, 0), brl));
+}
+
+/**
+ * Quanto de um gasto pessoal ainda falta reembolsar (em BRL).
+ * @param {object} e expense
+ */
+export function pendingOf(e) {
+  if (!e || !e.paidBy || e.paidBy === "Empresa") return 0;
+  return round2(expenseBRL(e) - reimbursedOf(e));
+}
+
 export function projectTotals(project) {
   const list = Array.isArray(project?.expenses) ? project.expenses : [];
   let totalBRL = 0, totalUSD = 0, companyBRL = 0, pendingBRL = 0, reimbursedBRL = 0;
@@ -81,10 +103,9 @@ export function projectTotals(project) {
     if (e.currency === "USD") totalUSD += toAmount(e.amount);
     if (!e.paidBy || e.paidBy === "Empresa") {
       companyBRL += brl;
-    } else if (e.reimbursed) {
-      reimbursedBRL += brl;
     } else {
-      pendingBRL += brl;
+      pendingBRL += pendingOf(e);
+      reimbursedBRL += reimbursedOf(e);
     }
   }
   return {
@@ -100,6 +121,7 @@ export function projectTotals(project) {
 
 /**
  * Resumo de reembolsos por pessoa (exclui "Empresa").
+ * Considera reembolsos parciais (reimbursedAmountBRL).
  * @param {object} project
  * @returns {Array<{person: string, pendingBRL: number, reimbursedBRL: number,
  *                  pendingCount: number, pendingIds: string[]}>}
@@ -111,11 +133,10 @@ export function reimbursementSummary(project) {
     const p = e.paidBy;
     if (!p || p === "Empresa") continue;
     if (!byPerson[p]) byPerson[p] = { person: p, pendingBRL: 0, reimbursedBRL: 0, pendingCount: 0, pendingIds: [] };
-    const brl = expenseBRL(e);
-    if (e.reimbursed) {
-      byPerson[p].reimbursedBRL = round2(byPerson[p].reimbursedBRL + brl);
-    } else {
-      byPerson[p].pendingBRL = round2(byPerson[p].pendingBRL + brl);
+    const pend = pendingOf(e);
+    byPerson[p].reimbursedBRL = round2(byPerson[p].reimbursedBRL + reimbursedOf(e));
+    if (pend > 0) {
+      byPerson[p].pendingBRL = round2(byPerson[p].pendingBRL + pend);
       byPerson[p].pendingCount += 1;
       byPerson[p].pendingIds.push(e.id);
     }
@@ -218,25 +239,75 @@ export function monthlySpend(project) {
 }
 
 /**
- * Marca como reembolsados os gastos pendentes de uma pessoa e devolve o
- * projeto atualizado + o valor total. NÃO cria a transação de caixa — o
- * chamador decide (para poder escolher data/descrição).
+ * Marca como TOTALMENTE reembolsados os gastos com os ids informados.
+ * O valor devolvido é a soma do que ainda estava pendente em cada um
+ * (desconta parciais já pagos). NÃO cria a transação de caixa.
  *
  * @param {object} project
- * @param {string} person
- * @param {string} dateIso "YYYY-MM-DD" do pagamento do reembolso
+ * @param {string[]} ids  ids dos gastos a liquidar
+ * @param {string} dateIso "YYYY-MM-DD" do pagamento
  * @returns {{project: object, totalBRL: number, count: number}}
  */
-export function settleReimbursement(project, person, dateIso) {
+export function settleExpenses(project, ids, dateIso) {
+  const idSet = new Set(ids || []);
   const list = Array.isArray(project?.expenses) ? project.expenses : [];
   let totalBRL = 0, count = 0;
   const expenses = list.map((e) => {
-    if (e.paidBy === person && !e.reimbursed) {
-      totalBRL = round2(totalBRL + expenseBRL(e));
-      count += 1;
-      return { ...e, reimbursed: true, reimbursedAt: dateIso };
-    }
-    return e;
+    if (!idSet.has(e.id)) return e;
+    const pend = pendingOf(e);
+    if (pend <= 0) return e;
+    totalBRL = round2(totalBRL + pend);
+    count += 1;
+    const { reimbursedAmountBRL, ...rest } = e;
+    return { ...rest, reimbursed: true, reimbursedAt: dateIso };
   });
   return { project: { ...project, expenses }, totalBRL, count };
+}
+
+/**
+ * Aloca um VALOR PERSONALIZADO de reembolso nos gastos pendentes da
+ * pessoa, do mais antigo para o mais novo (FIFO). Gastos cobertos
+ * integralmente ficam reimbursed; o que sobrar vira parcial
+ * (reimbursedAmountBRL) no gasto seguinte.
+ *
+ * @param {object} project
+ * @param {string} person
+ * @param {number} amountBRL  valor pago (será limitado ao pendente total)
+ * @param {string} dateIso
+ * @returns {{project: object, totalBRL: number, count: number,
+ *            applied: Array<{id:string, amount:number, fully:boolean}>}}
+ *          totalBRL = valor efetivamente alocado; count = gastos tocados
+ */
+export function allocateReimbursement(project, person, amountBRL, dateIso) {
+  const list = Array.isArray(project?.expenses) ? project.expenses : [];
+  let remaining = round2(Math.max(0, Number(amountBRL) || 0));
+  const applied = [];
+
+  const orderedPending = list
+    .filter((e) => e.paidBy === person && pendingOf(e) > 0)
+    .sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"));
+
+  const updates = new Map();
+  for (const e of orderedPending) {
+    if (remaining <= 0) break;
+    const pend = pendingOf(e);
+    if (remaining >= pend) {
+      const { reimbursedAmountBRL, ...rest } = e;
+      updates.set(e.id, { ...rest, reimbursed: true, reimbursedAt: dateIso });
+      applied.push({ id: e.id, amount: pend, fully: true });
+      remaining = round2(remaining - pend);
+    } else {
+      updates.set(e.id, {
+        ...e,
+        reimbursedAmountBRL: round2(reimbursedOf(e) + remaining),
+        reimbursedAt: dateIso,
+      });
+      applied.push({ id: e.id, amount: remaining, fully: false });
+      remaining = 0;
+    }
+  }
+
+  const expenses = list.map((e) => updates.get(e.id) || e);
+  const totalBRL = round2(applied.reduce((s, a) => s + a.amount, 0));
+  return { project: { ...project, expenses }, totalBRL, count: applied.length, applied };
 }
